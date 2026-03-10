@@ -203,9 +203,7 @@ impl LanguageServer for Backend {
             };
 
             // Find the symbol at the cursor position
-            let Some(symbol) =
-                symbol_lookup::find_symbol_at_offset(ir_model, &current_model_path, offset)
-            else {
+            let Some(symbol) = symbol_lookup::find_symbol_at_offset(ir_model, offset) else {
                 break 'complete (Ok(None), Some("No symbol found at position".to_string()));
             };
 

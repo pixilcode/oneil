@@ -125,7 +125,7 @@ fn print_model(
     }
 
     if sections.show_submodels() {
-        let submodels = model_ref.submodels();
+        let submodels = model_ref.submodel_models();
         if !submodels.is_empty() {
             section_list.push(("Submodels", submodels.len(), SectionTag::Submodels));
         }
@@ -139,7 +139,7 @@ fn print_model(
     }
 
     if sections.show_references() {
-        let references = model_ref.references();
+        let references = model_ref.reference_models();
         if !references.is_empty() {
             section_list.push(("References", references.len(), SectionTag::References));
         }
@@ -167,9 +167,9 @@ fn print_model(
             SectionTag::PythonImports => {
                 print_python_imports(model_ref.python_imports(), indent + 2);
             }
-            SectionTag::Submodels => print_submodels(&model_ref.submodels(), indent + 2),
+            SectionTag::Submodels => print_submodels(&model_ref.submodel_models(), indent + 2),
             SectionTag::Parameters => print_parameters(&model_ref.parameters(), indent + 2, config),
-            SectionTag::References => print_references(&model_ref.references(), indent + 2),
+            SectionTag::References => print_references(&model_ref.reference_models(), indent + 2),
             SectionTag::Tests => print_tests(&model_ref.tests(), indent + 2, config),
         }
     }
@@ -177,7 +177,7 @@ fn print_model(
     if config.recursive {
         // Get all the references that have valid IR
         let refs_to_print: Vec<_> = model_ref
-            .references()
+            .reference_models()
             .values()
             .filter_map(ReferenceImportReference::model)
             .collect();

@@ -125,14 +125,24 @@ impl<'runtime> ModelIrReference<'runtime> {
         self.model.get_path()
     }
 
-    /// Returns a map of submodel names to their IR model references or resolution errors.
+    /// Returns a map of submodel names to their `SubmodelImport`s.
+    ///
+    /// If you need the model reference itself, use `submodel_models` instead.
+    #[must_use]
+    pub fn submodel_imports(
+        &self,
+    ) -> IndexMap<&'runtime ir::SubmodelName, &'runtime ir::SubmodelImport> {
+        self.model.get_submodels().iter().collect()
+    }
+
+    /// Returns a map of submodel names to their IR model references.
     ///
     /// # Panics
     ///
     /// Panics if any submodel's reference has not been visited and
     /// added to the IR cache.
     #[must_use]
-    pub fn submodels(
+    pub fn submodel_models(
         &self,
     ) -> IndexMap<&'runtime ir::SubmodelName, SubmodelImportReference<'runtime>> {
         self.model
@@ -151,14 +161,24 @@ impl<'runtime> ModelIrReference<'runtime> {
             .collect()
     }
 
-    /// Returns a map of reference names to their IR model references or resolution errors.
+    /// Returns a map of reference names to their `ReferenceImport`s.
+    ///
+    /// If you need the model reference itself, use `reference_models` instead.
+    #[must_use]
+    pub fn reference_imports(
+        &self,
+    ) -> IndexMap<&'runtime ir::ReferenceName, &'runtime ir::ReferenceImport> {
+        self.model.get_references().iter().collect()
+    }
+
+    /// Returns a map of reference names to their IR model references
     ///
     /// # Panics
     ///
     /// Panics if any reference has not been visited and
     /// added to the IR cache.
     #[must_use]
-    pub fn references(
+    pub fn reference_models(
         &self,
     ) -> IndexMap<&'runtime ir::ReferenceName, ReferenceImportReference<'runtime>> {
         self.model

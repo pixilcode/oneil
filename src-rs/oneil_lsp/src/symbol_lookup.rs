@@ -10,71 +10,118 @@ use tower_lsp_server::lsp_types::{Location, Position, Range, Uri};
 #[derive(Debug, Clone)]
 pub enum SymbolAtPosition {
     /// A parameter definition (cursor is on the parameter name in its declaration)
-    ParameterDefinition { name: ir::ParameterName, span: Span },
+    ParameterDefinition { span: Span },
     /// A parameter reference (cursor is on a parameter used in an expression)
-    ParameterReference { name: ir::ParameterName, span: Span },
-    /// An external variable reference (e.g., `x.model_name`)
-    ExternalReference {
-        model_name: String,
-        model_span: Span,
+    ParameterReference { name: ir::ParameterName },
+    /// An external parameter reference (e.g., `x.model_name`)
+    ///
+    /// This occurs when the cursor is on the parameter name part (e.g., `x`)
+    ExternalParameterReference {
+        model_path: ir::ModelPath,
         parameter_name: ir::ParameterName,
-        parameter_span: Span,
     },
     /// A submodel or reference import name
-    ModelImport {
-        name: String,
-        span: Span,
-        path: ir::ModelPath,
+    ModelImportDefinition { name: String, path: ir::ModelPath },
+    /// A reference to a model import (e.g., `x.model_name`)
+    ///
+    /// This occurs when the cursor is on the model name part (e.g., `model_name`)
+    ModelImportReference { reference_name: ir::ReferenceName },
+    /// A python import (e.g., `import math`)
+    PythonImport { path: ir::PythonPath },
+    /// A python function reference
+    PythonFunctionReference {
+        python_path: ir::PythonPath,
+        name: ir::Identifier,
     },
+    /// A builtin function reference
+    BuiltinFunctionReference { name: ir::Identifier },
 }
 
 /// Finds the symbol at a given byte offset in a model
 pub fn find_symbol_at_offset(
     model: oneil_runtime::output::reference::ModelIrReference<'_>,
-    _model_path: &ir::ModelPath,
     offset: usize,
 ) -> Option<SymbolAtPosition> {
-    // Check if cursor is on a parameter definition
-    for (param_name, param) in model.parameters() {
+    // Check if cursor is on a parameter definition or in the parameter expressions
+    for param in model.parameters().values() {
+        // Check if cursor is on the parameter name
         if span_contains_offset(param.name_span(), offset) {
             return Some(SymbolAtPosition::ParameterDefinition {
-                name: param_name.clone(),
                 span: param.name_span(),
             });
+        }
+
+        // Check if cursor is on the parameter value
+        if let Some(symbol) = find_symbol_in_parameter_value(param.value(), offset) {
+            return Some(symbol);
+        }
+
+        // Check if the cursor is on the parameter limits
+        if let Some(value) = find_symbol_in_limits(param.limits(), offset) {
+            return Some(value);
         }
     }
 
     // Check if cursor is on a submodel import name
-    for (submodel_name, submodel_import) in model.submodels() {
+    for (submodel_name, submodel_import) in model.submodel_models() {
         if span_contains_offset(*submodel_import.name_span(), offset) {
             let submodel_path = submodel_import.reference_import().path().clone();
 
-            return Some(SymbolAtPosition::ModelImport {
+            return Some(SymbolAtPosition::ModelImportDefinition {
                 name: submodel_name.to_string(),
-                span: *submodel_import.name_span(),
                 path: submodel_path,
             });
         }
     }
 
     // Check if cursor is on a reference import name
-    for (reference_name, reference_import) in model.references() {
+    for (reference_name, reference_import) in model.reference_models() {
         if span_contains_offset(*reference_import.name_span(), offset) {
-            return Some(SymbolAtPosition::ModelImport {
+            return Some(SymbolAtPosition::ModelImportDefinition {
                 name: reference_name.to_string(),
-                span: *reference_import.name_span(),
                 path: reference_import.path().clone(),
             });
         }
     }
 
-    // Check if cursor is on a variable reference in parameter expressions
-    for param in model.parameters().values() {
-        if let Some(symbol) = find_symbol_in_parameter_value(param.value(), offset) {
-            return Some(symbol);
+    // Check if cursor is on a python import
+    for (python_path, python_import) in model.python_imports() {
+        if span_contains_offset(*python_import.import_path_span(), offset) {
+            return Some(SymbolAtPosition::PythonImport {
+                path: python_path.clone(),
+            });
         }
     }
 
+    None
+}
+
+fn find_symbol_in_limits(limits: &ir::Limits, offset: usize) -> Option<SymbolAtPosition> {
+    match limits {
+        ir::Limits::Default => {}
+        ir::Limits::Continuous {
+            min,
+            max,
+            limit_expr_span: _,
+        } => {
+            if let Some(symbol) = find_symbol_in_expr(min, offset) {
+                return Some(symbol);
+            }
+            if let Some(symbol) = find_symbol_in_expr(max, offset) {
+                return Some(symbol);
+            }
+        }
+        ir::Limits::Discrete {
+            values,
+            limit_expr_span: _,
+        } => {
+            for value in values {
+                if let Some(symbol) = find_symbol_in_expr(value, offset) {
+                    return Some(symbol);
+                }
+            }
+        }
+    }
     None
 }
 
@@ -114,7 +161,6 @@ fn find_symbol_in_expr(expr: &ir::Expr, offset: usize) -> Option<SymbolAtPositio
                 } => span_contains_offset(*parameter_span, offset).then(|| {
                     SymbolAtPosition::ParameterReference {
                         name: parameter_name.clone(),
-                        span: *parameter_span,
                     }
                 }),
                 ir::Variable::External {
@@ -127,18 +173,14 @@ fn find_symbol_in_expr(expr: &ir::Expr, offset: usize) -> Option<SymbolAtPositio
                     // Check if cursor is on the model name or parameter name
                     if span_contains_offset(*reference_span, offset) {
                         // Cursor is on the model name part
-                        Some(SymbolAtPosition::ModelImport {
-                            name: reference_name.to_string(),
-                            span: *reference_span,
-                            path: model_path.clone(),
+                        Some(SymbolAtPosition::ModelImportReference {
+                            reference_name: reference_name.clone(),
                         })
                     } else if span_contains_offset(*parameter_span, offset) {
                         // Cursor is on the parameter name part
-                        Some(SymbolAtPosition::ExternalReference {
-                            model_name: reference_name.to_string(),
-                            model_span: *reference_span,
+                        Some(SymbolAtPosition::ExternalParameterReference {
+                            model_path: model_path.clone(),
                             parameter_name: parameter_name.clone(),
-                            parameter_span: *parameter_span,
                         })
                     } else {
                         None
@@ -175,8 +217,34 @@ fn find_symbol_in_expr(expr: &ir::Expr, offset: usize) -> Option<SymbolAtPositio
         ir::Expr::UnaryOp { expr, .. } | ir::Expr::UnitCast { expr, .. } => {
             find_symbol_in_expr(expr, offset)
         }
-        ir::Expr::FunctionCall { args, .. } => {
-            // TODO: Handle function name span
+        ir::Expr::FunctionCall {
+            span: _,
+            name_span,
+            name,
+            args,
+        } => {
+            // Check if cursor is on the function name
+            if span_contains_offset(*name_span, offset) {
+                match name {
+                    ir::FunctionName::Builtin(name, _name_span) => {
+                        return Some(SymbolAtPosition::BuiltinFunctionReference {
+                            name: name.clone(),
+                        });
+                    }
+                    ir::FunctionName::Imported {
+                        python_path,
+                        name,
+                        name_span: _,
+                    } => {
+                        return Some(SymbolAtPosition::PythonFunctionReference {
+                            python_path: python_path.clone(),
+                            name: name.clone(),
+                        });
+                    }
+                }
+            }
+
+            // Check if cursor is on an argument
             for arg in args {
                 if let Some(symbol) = find_symbol_in_expr(arg, offset) {
                     return Some(symbol);
@@ -195,11 +263,11 @@ pub fn resolve_definition(
     current_model_path: &ir::ModelPath,
 ) -> Option<Location> {
     match symbol {
-        SymbolAtPosition::ParameterDefinition { span, .. } => {
+        SymbolAtPosition::ParameterDefinition { span } => {
             // Already at the definition
             Some(span_to_location(current_model_path, *span))
         }
-        SymbolAtPosition::ParameterReference { name, .. } => {
+        SymbolAtPosition::ParameterReference { name } => {
             // Find the parameter in the current model
             let (model, _errors) = runtime.load_ir(current_model_path);
             let model = model?;
@@ -208,47 +276,18 @@ pub fn resolve_definition(
 
             Some(span_to_location(current_model_path, param.name_span()))
         }
-        SymbolAtPosition::ExternalReference {
+        SymbolAtPosition::ExternalParameterReference {
+            model_path,
             parameter_name,
-            model_name,
-            ..
         } => {
             // Find the parameter in the external model
-            // First, resolve the model name to a ModelPath through imports
-            let (current_model, _errors) = runtime.load_ir(current_model_path);
-            let current_model = current_model?;
+            let (external_model, _errors) = runtime.load_ir(model_path);
+            let external_model = external_model?;
 
-            // Check submodels
-            if let Some(submodel) = current_model
-                .submodels()
-                .get(&ir::SubmodelName::new(model_name.clone()))
-            {
-                let submodel_path = submodel.reference_import().path().clone();
-
-                let (external_model, _errors) = runtime.load_ir(&submodel_path);
-                let external_model = external_model?;
-
-                let param = external_model.get_parameter(parameter_name)?;
-                return Some(span_to_location(&submodel_path, param.name_span()));
-            }
-
-            // Check references
-            if let Some(reference) = current_model
-                .references()
-                .get(&ir::ReferenceName::new(model_name.clone()))
-            {
-                let path = reference.path().clone();
-
-                let (external_model, _errors) = runtime.load_ir(&path);
-                let external_model = external_model?;
-
-                let param = external_model.get_parameter(parameter_name)?;
-                return Some(span_to_location(&path, param.name_span()));
-            }
-
-            None
+            let param = external_model.get_parameter(parameter_name)?;
+            Some(span_to_location(model_path, param.name_span()))
         }
-        SymbolAtPosition::ModelImport { path, .. } => {
+        SymbolAtPosition::ModelImportDefinition { path, .. } => {
             // Navigate to the imported model file
             let uri = Uri::from_file_path(path.as_ref())?;
             Some(Location {
@@ -264,6 +303,52 @@ pub fn resolve_definition(
                     },
                 },
             })
+        }
+        SymbolAtPosition::ModelImportReference { reference_name } => {
+            // Find the reference in the current model
+            let (model, _errors) = runtime.load_ir(current_model_path);
+            let model = model?;
+
+            let reference_imports = model.reference_imports();
+            let reference = reference_imports.get(reference_name)?;
+            Some(span_to_location(current_model_path, *reference.name_span()))
+        }
+        SymbolAtPosition::PythonImport { path } => {
+            // Navigate to the python import file
+            let uri = Uri::from_file_path(path.as_ref())?;
+            Some(Location {
+                uri,
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 0,
+                    },
+                },
+            })
+        }
+        SymbolAtPosition::PythonFunctionReference {
+            python_path,
+            name: _,
+        } => {
+            // For now, we don't have a way to send them to the exact location
+            // of the function definition, so we just send them to the python import
+            let (model, _errors) = runtime.load_ir(current_model_path);
+            let model = model?;
+
+            let python_imports = model.python_imports();
+            let python_import = python_imports.get(python_path)?;
+            Some(span_to_location(
+                current_model_path,
+                *python_import.import_path_span(),
+            ))
+        }
+        SymbolAtPosition::BuiltinFunctionReference { .. } => {
+            // For now at least, we don't have builtin function definitions
+            None
         }
     }
 }
