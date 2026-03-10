@@ -17,9 +17,8 @@ use oneil_runtime::output::ir;
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverContents,
-    HoverParams, HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams,
-    MarkedString, MessageType, Position, PositionEncodingKind, Range, ServerCapabilities,
+    DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, InitializeParams,
+    InitializeResult, InitializedParams, MessageType, PositionEncodingKind, ServerCapabilities,
     ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
     TextDocumentSyncSaveOptions,
 };
@@ -57,7 +56,6 @@ impl LanguageServer for Backend {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 // VS Code currently expects UTF-16 unless explicitly configured, so advertise UTF-16.
-                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Options(
                     TextDocumentSyncOptions {
                         change: Some(TextDocumentSyncKind::INCREMENTAL),
@@ -90,33 +88,6 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> Result<()> {
         Ok(())
-    }
-
-    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        self.client
-            .log_message(MessageType::INFO, "hovering time!")
-            .await;
-
-        let params_string = format!("{params:#?}");
-        self.client
-            .log_message(MessageType::INFO, params_string)
-            .await;
-
-        let position = params.text_document_position_params.position;
-
-        Ok(Some(Hover {
-            contents: HoverContents::Scalar(MarkedString::String("You're *hovering*!".to_string())),
-            range: Some(Range {
-                start: Position {
-                    line: position.line,
-                    character: position.character,
-                },
-                end: Position {
-                    line: position.line,
-                    character: position.character + 4,
-                },
-            }),
-        }))
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
