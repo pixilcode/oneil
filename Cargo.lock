@@ -767,7 +767,6 @@ dependencies = [
 name = "oneil_shared"
 version = "0.15.0"
 dependencies = [
- "indexmap",
  "rand",
 ]
 
