@@ -6,6 +6,7 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(dead_code)]
 
+mod diagnostics;
 mod doc_store;
 mod symbol_lookup;
 
@@ -20,13 +21,13 @@ use tower_lsp_server::lsp_types::{
     DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, InitializeParams,
     InitializeResult, InitializedParams, MessageType, PositionEncodingKind, ServerCapabilities,
     ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions,
+    TextDocumentSyncSaveOptions, Uri,
 };
-use tower_lsp_server::{Client, LanguageServer, LspService, Server};
+use tower_lsp_server::{Client, LanguageServer, LspService, Server, UriExt};
 
+use diagnostics::diagnostics_from_runtime_errors;
 use doc_store::DocumentStore;
 
-#[derive(Debug)]
 struct Backend {
     client: Client,
     docs: Arc<DocumentStore>,
@@ -36,8 +37,74 @@ struct Backend {
     runtime: Mutex<OneilRuntime>,
 }
 
+impl Backend {
+    /// Evaluates the model at the given URI and publishes any errors as LSP diagnostics.
+    async fn publish_diagnostics_for_uri(&self, uri: &Uri, version: Option<i32>) {
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("publish_diagnostics_for_uri: {uri:?}, version: {version:?}"),
+            )
+            .await;
+
+        let path = PathBuf::from(uri.path().as_str());
+        let model_path = ir::ModelPath::new(&path);
+
+        let (successful_models, diagnostics) = {
+            let mut runtime = self.runtime.lock().expect("runtime mutex poisoned");
+            let (result, errors) = runtime.eval_model(&model_path);
+
+            let successful_models = result
+                .map(|result| result.all_model_paths())
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(Uri::from_file_path);
+
+            let diagnostics = diagnostics_from_runtime_errors(&errors);
+
+            (successful_models, diagnostics)
+        };
+
+        for uri in successful_models {
+            self.client
+                .log_message(
+                    MessageType::INFO,
+                    format!("clearing diagnostics for successful model: {uri:?}"),
+                )
+                .await;
+
+            // clear diagnostics for successful models
+            self.client
+                .publish_diagnostics(uri.clone(), vec![], version)
+                .await;
+        }
+
+        // publish new diagnostics
+        for (uri, diagnostics) in diagnostics {
+            self.client
+                .log_message(
+                    MessageType::INFO,
+                    format!("publishing diagnostics for {uri:?}: {diagnostics:?}"),
+                )
+                .await;
+
+            self.client
+                .publish_diagnostics(uri, diagnostics, version)
+                .await;
+
+            self.client
+                .log_message(MessageType::INFO, "diagnostics published".to_string())
+                .await;
+        }
+    }
+}
+
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        self.client
+            .log_message(MessageType::INFO, "initialize called")
+            .await;
+
         // let params_string = format!("{params:#?}");
         // self.client
         //     .log_message(MessageType::INFO, params_string)
@@ -75,31 +142,38 @@ impl LanguageServer for Backend {
         })
     }
 
-    async fn initialized(&self, params: InitializedParams) {
+    async fn initialized(&self, _params: InitializedParams) {
         self.client
-            .log_message(MessageType::INFO, "server initialized!")
-            .await;
-
-        let params_string = format!("{params:#?}");
-        self.client
-            .log_message(MessageType::INFO, params_string)
+            .log_message(MessageType::INFO, "initialized called")
             .await;
     }
 
     async fn shutdown(&self) -> Result<()> {
+        self.client
+            .log_message(MessageType::INFO, "shutdown called")
+            .await;
+
         Ok(())
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        self.client.log_message(MessageType::INFO, "opened").await;
+        self.client
+            .log_message(MessageType::INFO, "did_open called")
+            .await;
 
-        let params_str = format!("{params:#?}");
-        self.client.log_message(MessageType::INFO, params_str).await;
+        let uri = params.text_document.uri.clone();
+        let version = params.text_document.version;
 
         self.docs.open(params.text_document).await;
+
+        self.publish_diagnostics_for_uri(&uri, Some(version)).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        self.client
+            .log_message(MessageType::INFO, "did_change called")
+            .await;
+
         let result = self
             .docs
             .apply_changes(params.text_document, params.content_changes)
@@ -113,50 +187,31 @@ impl LanguageServer for Backend {
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        self.client
+            .log_message(MessageType::INFO, "did_close called")
+            .await;
+
         self.docs.close(params.text_document).await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        self.client.log_message(MessageType::INFO, "opened").await;
+        self.client
+            .log_message(MessageType::INFO, "did_save called")
+            .await;
 
-        let params_str = format!("{params:#?}");
-        self.client.log_message(MessageType::INFO, params_str).await;
+        let uri = params.text_document.uri.clone();
+
+        self.publish_diagnostics_for_uri(&uri, None).await;
     }
-
-    // text_document_position_params: TextDocumentPositionParams {
-    //     text_document: TextDocumentIdentifier {
-    //         uri: Uri(
-    //             Uri {
-    //                 scheme: Some(
-    //                     "file",
-    //                 ),
-    //                 authority: Some(
-    //                     Authority {
-    //                         userinfo: None,
-    //                         host: Host {
-    //                             text: "",
-    //                             data: RegName(
-    //                                 "",
-    //                             ),
-    //                         },
-    //                         port: None,
-    //                     },
-    //                 ),
-    //                 path: "/home/pgattic/work/oneil/test/unit_error.on",
-    //                 query: None,
-    //                 fragment: None,
-    //             },
-    //         ),
-    //     },
-    //     position: Position {
-    //         line: 4,
-    //         character: 15,
-    //     },
 
     async fn goto_definition(
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
+        self.client
+            .log_message(MessageType::INFO, "goto_definition called")
+            .await;
+
         let position = params.text_document_position_params.position;
         let uri = params.text_document_position_params.text_document.uri;
 
@@ -235,12 +290,14 @@ pub async fn run() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let runtime = Mutex::new(OneilRuntime::new());
     let docs = Arc::new(DocumentStore::new());
+    let runtime = Mutex::new(OneilRuntime::new());
+
     let (service, socket) = LspService::new(|client| Backend {
         client,
-        docs: Arc::clone(&docs),
+        docs,
         runtime,
     });
+
     Server::new(stdin, stdout, socket).serve(service).await;
 }

@@ -62,6 +62,20 @@ impl RuntimeErrors {
             .collect()
     }
 
+    /// Converts the errors to a map of model paths to errors.
+    #[must_use]
+    pub fn to_map(&self) -> IndexMap<PathBuf, Vec<OneilError>> {
+        self.errors
+            .iter()
+            .map(|(path, error)| {
+                (
+                    path.clone(),
+                    error.get_all_errors().into_iter().cloned().collect(),
+                )
+            })
+            .collect()
+    }
+
     /// Returns true if there are no errors.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -85,4 +99,25 @@ pub enum ModelError {
         /// Errors from model tests.
         test_errors: Vec<OneilError>,
     },
+}
+
+impl ModelError {
+    /// Returns all Oneil errors in this model error as a vector of references.
+    #[must_use]
+    pub fn get_all_errors(&self) -> Vec<&OneilError> {
+        match self {
+            Self::FileError(errors) => errors.iter().collect(),
+            Self::EvalErrors {
+                model_import_errors,
+                python_import_errors,
+                parameter_errors,
+                test_errors,
+            } => model_import_errors
+                .values()
+                .chain(python_import_errors.values())
+                .chain(parameter_errors.values().flatten())
+                .chain(test_errors.iter())
+                .collect(),
+        }
+    }
 }

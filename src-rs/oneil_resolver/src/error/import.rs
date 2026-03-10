@@ -55,6 +55,12 @@ impl PythonImportResolutionError {
             python_path,
         }
     }
+
+    /// Creates a new import resolution error indicating that Python is not supported.
+    #[must_use]
+    pub const fn python_unsupported(span: Span) -> Self {
+        Self::PythonNotEnabled { span }
+    }
 }
 
 impl Display for PythonImportResolutionError {
@@ -116,9 +122,5 @@ impl AsOneilError for PythonImportResolutionError {
             }
             Self::PythonNotEnabled { .. } | Self::FailedValidation { .. } => vec![],
         }
-    }
-
-    fn is_internal_error(&self) -> bool {
-        matches!(self, Self::FailedValidation { .. })
     }
 }

@@ -5,7 +5,7 @@
 //! [`ModelIrReference`] for navigating resolved IR models, and
 //! [`ResolutionErrorReference`] for inspecting resolution failures.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::output;
 use indexmap::IndexMap;
@@ -99,6 +99,22 @@ impl<'runtime> ModelReference<'runtime> {
     #[must_use]
     pub fn tests(&self) -> Vec<&'runtime output::Test> {
         self.model.tests.iter().collect()
+    }
+
+    /// Returns the list of model paths that were successfully evaluated.
+    #[must_use]
+    pub fn all_model_paths(&self) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        self.all_model_paths_internal(&mut paths);
+        paths
+    }
+
+    fn all_model_paths_internal(&self, paths: &mut Vec<PathBuf>) {
+        paths.push(self.model.path.clone());
+
+        for reference_model in self.references().values() {
+            reference_model.all_model_paths_internal(paths);
+        }
     }
 }
 

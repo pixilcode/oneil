@@ -88,7 +88,7 @@ impl Runtime {
     ) -> &LoadResult<output::Model, eval::EvalErrors> {
         // make sure the IR is loaded for the model and its dependencies
         // TODO: once caching works, evaluating the model should load the IR as it goes
-        let _ir_results = self.load_ir(&path);
+        let _ir_results = self.load_ir_internal(&path);
 
         // evaluate the model and its dependencies
         let eval_result = eval::eval_model(&path, self);

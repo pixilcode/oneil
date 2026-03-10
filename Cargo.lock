@@ -692,6 +692,7 @@ dependencies = [
 name = "oneil_lsp"
 version = "0.15.0"
 dependencies = [
+ "indexmap",
  "oneil_runtime",
  "oneil_shared",
  "tokio",
