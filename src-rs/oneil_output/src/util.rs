@@ -2,8 +2,16 @@
 
 use crate::{MeasuredNumber, Number};
 
-const RELATIVE_TOLERANCE: f64 = 1e-15;
-const ABSOLUTE_TOLERANCE: f64 = 32.0 * f64::MIN_POSITIVE;
+const DEFAULT_RELATIVE_TOLERANCE: f64 = 1e-15;
+const DEFAULT_ABSOLUTE_TOLERANCE: f64 = 32.0 * f64::MIN_POSITIVE;
+
+/// Checks if two floating point numbers are close to each other using
+/// a default relative tolerance of `1e-15` and a default absolute tolerance of
+/// `32.0 * f64::MIN_POSITIVE`.
+#[must_use]
+pub const fn is_close(a: f64, b: f64) -> bool {
+    is_close_with_tolerances(a, b, DEFAULT_RELATIVE_TOLERANCE, DEFAULT_ABSOLUTE_TOLERANCE)
+}
 
 /// Checks if two floating point numbers are close to each other.
 ///
@@ -14,11 +22,13 @@ const ABSOLUTE_TOLERANCE: f64 = 32.0 * f64::MIN_POSITIVE;
 ///
 /// In the future, we may want to implement other methods
 /// from the `is_close` crate.
-///
-/// The relative tolerance is fixed at `1e-15`. The absolute tolerance is
-/// fixed at `32.0 * f64::MIN_POSITIVE`.
 #[must_use]
-pub const fn is_close(a: f64, b: f64) -> bool {
+pub const fn is_close_with_tolerances(
+    a: f64,
+    b: f64,
+    relative_tolerance: f64,
+    absolute_tolerance: f64,
+) -> bool {
     #[expect(
         clippy::float_cmp,
         reason = "this is a part of implementing better floating point comparison"
@@ -36,8 +46,7 @@ pub const fn is_close(a: f64, b: f64) -> bool {
     }
 
     let difference = (a - b).abs();
-    let relative_tolerance = RELATIVE_TOLERANCE * f64::min(a.abs(), b.abs());
-    let absolute_tolerance = ABSOLUTE_TOLERANCE;
+    let relative_tolerance = relative_tolerance * f64::min(a.abs(), b.abs());
 
     difference <= relative_tolerance || difference <= absolute_tolerance
 }
