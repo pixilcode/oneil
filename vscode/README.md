@@ -24,6 +24,10 @@ We are actively working on expanding the capabilities of this extension. Upcomin
 ## Requirements
 
 - Visual Studio Code version 1.0.0 or higher
+- Oneil installed on your PATH, or set **Oneil: Server Path** in settings
+
+>![NOTE]
+> If the language server is not on PATH (for example when using a local build), set `oneil.serverPath` to the full path to the `oneil` executable.
 
 ## Known Issues
 
