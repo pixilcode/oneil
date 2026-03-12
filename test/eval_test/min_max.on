@@ -1,3 +1,0 @@
-X: x = (1 | 2) * (3 | 4)
-X min: x_min = min(x)
-X max: x_max = max(x)

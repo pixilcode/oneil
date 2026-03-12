@@ -1,0 +1,20 @@
+[package]
+name = "oneil_snapshot_tests"
+description = "Snapshot tests for Oneil evaluation output and errors"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+oneil_runtime = { path = "../oneil_runtime" }
+insta = "1.40"
+
+[lints]
+workspace = true
