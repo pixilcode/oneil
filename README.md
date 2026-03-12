@@ -52,7 +52,7 @@ cargo run -- path/to/your/model.on
 ```
 -->
 
-<!-- TODO: when ready, add instructions for installation -->
+See [Installation](docs/installation.md) for installing the `oneil` binary from a release or from source.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more details on how to work on Oneil code.
 
