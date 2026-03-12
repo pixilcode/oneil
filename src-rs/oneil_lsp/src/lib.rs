@@ -10,11 +10,10 @@ mod diagnostics;
 mod doc_store;
 mod symbol_lookup;
 
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use oneil_runtime::Runtime as OneilRuntime;
-use oneil_runtime::output::ir;
+use oneil_shared::paths::ModelPath;
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
@@ -47,8 +46,7 @@ impl Backend {
             )
             .await;
 
-        let path = PathBuf::from(uri.path().as_str());
-        let model_path = ir::ModelPath::new(&path);
+        let model_path = ModelPath::from_src_with_ext(uri.path().as_str());
 
         let (successful_models, diagnostics) = {
             let mut runtime = self.runtime.lock().expect("runtime mutex poisoned");
@@ -58,6 +56,7 @@ impl Backend {
                 .map(|result| result.all_model_paths())
                 .unwrap_or_default()
                 .into_iter()
+                .map(ModelPath::into_path_buf)
                 .filter_map(Uri::from_file_path);
 
             let diagnostics = diagnostics_from_runtime_errors(&errors);
@@ -234,10 +233,7 @@ impl LanguageServer for Backend {
             )
             .await;
 
-        // Load and resolve the model. Keep the mutex guard in a block so it is
-        // dropped before any .await; MutexGuard is !Send and cannot be held across await.
-        let current_model_path = PathBuf::from(uri.path().as_str());
-        let current_model_path = ir::ModelPath::new(&current_model_path);
+        let current_model_path = ModelPath::from_src_with_ext(uri.path().as_str());
 
         // To avoid async problems with holding a mutex guard across an await,
         // we return a tuple of the result and maybe a log message.

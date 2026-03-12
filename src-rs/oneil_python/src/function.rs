@@ -1,10 +1,11 @@
 use indexmap::IndexMap;
+use oneil_shared::symbols::PyFunctionName;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
 #[derive(Debug, Default)]
 pub struct PythonFunctionMap {
-    entries: IndexMap<String, PythonFunction>,
+    entries: IndexMap<PyFunctionName, PythonFunction>,
 }
 
 impl PythonFunctionMap {
@@ -14,22 +15,22 @@ impl PythonFunctionMap {
         }
     }
 
-    pub fn get_function(&self, identifier: &str) -> Option<&PythonFunction> {
+    pub fn get_function(&self, identifier: &PyFunctionName) -> Option<&PythonFunction> {
         self.entries.get(identifier)
     }
 
-    pub fn get_function_names(&self) -> impl Iterator<Item = &str> {
-        self.entries.keys().map(|key| key.as_str())
+    pub fn get_function_names(&self) -> impl Iterator<Item = &PyFunctionName> {
+        self.entries.keys()
     }
 }
 
-impl From<IndexMap<String, PythonFunction>> for PythonFunctionMap {
-    fn from(entries: IndexMap<String, PythonFunction>) -> Self {
+impl From<IndexMap<PyFunctionName, PythonFunction>> for PythonFunctionMap {
+    fn from(entries: IndexMap<PyFunctionName, PythonFunction>) -> Self {
         Self { entries }
     }
 }
 
-impl From<PythonFunctionMap> for IndexMap<String, PythonFunction> {
+impl From<PythonFunctionMap> for IndexMap<PyFunctionName, PythonFunction> {
     fn from(map: PythonFunctionMap) -> Self {
         map.entries
     }

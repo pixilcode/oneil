@@ -7,7 +7,7 @@ use nom::{
     multi::many0,
 };
 
-use oneil_ast::{IdentifierNode, Node, UnitExponent, UnitExpr, UnitExprNode, UnitOp};
+use oneil_ast::{Node, UnitExponent, UnitExpr, UnitExprNode, UnitIdentifierNode, UnitOp};
 use oneil_shared::span::Span;
 
 use crate::{
@@ -73,7 +73,7 @@ fn unit_expr(input: InputSpan<'_>) -> Result<'_, UnitExprNode, ParserError> {
 fn unit_term(input: InputSpan<'_>) -> Result<'_, UnitExprNode, ParserError> {
     let parse_unit = |input| {
         let (rest, id_token) = unit_identifier.convert_errors().parse(input)?;
-        let id_node = IdentifierNode::from(id_token);
+        let id_node = UnitIdentifierNode::from(id_token);
 
         let (rest, exp) = opt(|input| {
             let (rest, caret_token) = caret.convert_errors().parse(input)?;
@@ -160,14 +160,14 @@ mod tests {
             let (_, unit) = parse(input).expect("should parse unit");
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = unit.take_value()
             else {
                 panic!("expected unit");
             };
 
-            assert_eq!(identifier.as_str(), "kg");
+            assert_eq!(name.as_str(), "kg");
             assert_eq!(exponent, None);
         }
 
@@ -201,14 +201,14 @@ mod tests {
             assert_eq!(left.take_value(), UnitExpr::UnitOne);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = right.take_value()
             else {
                 panic!("expected unit");
             };
 
-            assert_eq!(identifier.as_str(), "s");
+            assert_eq!(name.as_str(), "s");
             assert_eq!(exponent, None);
         }
 
@@ -234,13 +234,13 @@ mod tests {
             assert_eq!(*op, UnitOp::Multiply);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = left_left.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "kg");
+            assert_eq!(name.as_str(), "kg");
             assert_eq!(exponent, None);
 
             let UnitExpr::UnitOne = left_right.take_value() else {
@@ -248,13 +248,13 @@ mod tests {
             };
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = right.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "s");
+            assert_eq!(name.as_str(), "s");
             assert_eq!(exponent.as_ref().map(|e| e.value()), Some(2.0));
         }
 
@@ -264,13 +264,13 @@ mod tests {
             let (_, unit) = parse(input).expect("should parse unit");
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = unit.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "m");
+            assert_eq!(name.as_str(), "m");
             assert_eq!(exponent.as_ref().map(|e| e.value()), Some(2.0));
         }
 
@@ -285,23 +285,23 @@ mod tests {
             assert_eq!(*op, UnitOp::Multiply);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = left.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "kg");
+            assert_eq!(name.as_str(), "kg");
             assert_eq!(exponent, None);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = right.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "m");
+            assert_eq!(name.as_str(), "m");
             assert_eq!(exponent, None);
         }
 
@@ -316,23 +316,23 @@ mod tests {
             assert_eq!(*op, UnitOp::Divide);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = left.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "m");
+            assert_eq!(name.as_str(), "m");
             assert_eq!(exponent, None);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = right.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "s");
+            assert_eq!(name.as_str(), "s");
             assert_eq!(exponent, None);
         }
 
@@ -357,33 +357,33 @@ mod tests {
             assert_eq!(*op, UnitOp::Multiply);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = left_left.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "m");
+            assert_eq!(name.as_str(), "m");
             assert_eq!(exponent.as_ref().map(|e| e.value()), Some(2.0));
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = left_right.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "kg");
+            assert_eq!(name.as_str(), "kg");
             assert_eq!(exponent, None);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = right.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "s");
+            assert_eq!(name.as_str(), "s");
             assert_eq!(exponent.as_ref().map(|e| e.value()), Some(2.0));
         }
 
@@ -393,13 +393,13 @@ mod tests {
             let (_, unit) = parse(input).expect("should parse unit");
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = unit.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "k$");
+            assert_eq!(name.as_str(), "k$");
             assert_eq!(exponent, None);
         }
 
@@ -409,13 +409,13 @@ mod tests {
             let (_, unit) = parse(input).expect("should parse unit");
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = unit.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "%");
+            assert_eq!(name.as_str(), "%");
             assert_eq!(exponent, None);
         }
 
@@ -425,14 +425,14 @@ mod tests {
             let (_, unit) = parse(input).expect("should parse unit");
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = unit.take_value()
             else {
                 panic!("expected unit");
             };
 
-            assert_eq!(identifier.as_str(), "k$");
+            assert_eq!(name.as_str(), "k$");
             assert_eq!(exponent.as_ref().map(|e| e.value()), Some(2.0));
         }
 
@@ -461,35 +461,35 @@ mod tests {
             assert_eq!(*op, UnitOp::Multiply);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = left_left.take_value()
             else {
                 panic!("expected unit");
             };
 
-            assert_eq!(identifier.as_str(), "kg");
+            assert_eq!(name.as_str(), "kg");
             assert_eq!(exponent, None);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = left_right.take_value()
             else {
                 panic!("expected unit");
             };
 
-            assert_eq!(identifier.as_str(), "m");
+            assert_eq!(name.as_str(), "m");
             assert_eq!(exponent, None);
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = right.take_value()
             else {
                 panic!("expected unit");
             };
-            assert_eq!(identifier.as_str(), "s");
+            assert_eq!(name.as_str(), "s");
             assert_eq!(exponent.as_ref().map(|e| e.value()), Some(2.0));
         }
 
@@ -499,14 +499,14 @@ mod tests {
             let (rest, unit) = parse_complete(input).expect("should parse unit");
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = unit.take_value()
             else {
                 panic!("expected unit");
             };
 
-            assert_eq!(identifier.as_str(), "kg");
+            assert_eq!(name.as_str(), "kg");
             assert_eq!(exponent, None);
 
             assert_eq!(rest.fragment(), &"");
@@ -522,14 +522,14 @@ mod tests {
             let (rest, unit) = parse_complete(input).expect("should parse unit");
 
             let UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             } = unit.take_value()
             else {
                 panic!("expected unit");
             };
 
-            assert_eq!(identifier.as_str(), "kg");
+            assert_eq!(name.as_str(), "kg");
             assert_eq!(exponent, None);
 
             assert_eq!(rest.fragment(), &"");

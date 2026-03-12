@@ -1,9 +1,7 @@
 //! AST loading for the runtime.
 
-use std::path::Path;
-
 use oneil_parser::{self as parser, error::ParserError};
-use oneil_shared::load_result::LoadResult;
+use oneil_shared::{load_result::LoadResult, paths::ModelPath};
 
 use super::Runtime;
 use crate::output::{ast, error::RuntimeErrors};
@@ -14,8 +12,7 @@ impl Runtime {
     /// # Errors
     ///
     /// Returns a list of Oneil errors if the AST could not be loaded.
-    pub fn load_ast(&mut self, path: impl AsRef<Path>) -> (Option<&ast::ModelNode>, RuntimeErrors) {
-        let path = path.as_ref();
+    pub fn load_ast(&mut self, path: &ModelPath) -> (Option<&ast::ModelNode>, RuntimeErrors) {
         self.load_ast_internal(path);
 
         // doesn't matter for AST loading since we only touch one file
@@ -29,15 +26,13 @@ impl Runtime {
 
     pub(super) fn load_ast_internal(
         &mut self,
-        path: impl AsRef<Path>,
+        path: &ModelPath,
     ) -> &LoadResult<ast::ModelNode, Vec<ParserError>> {
-        let path = path.as_ref();
-        let source_result = self.load_source_internal(path);
+        let source_result = self.load_source_internal(&path.into());
 
         let Ok(source) = source_result else {
             // if the source file could not be loaded, we return a parse error
-            self.ast_cache
-                .insert(path.to_path_buf(), LoadResult::failure());
+            self.ast_cache.insert(path.clone(), LoadResult::failure());
 
             return self
                 .ast_cache
@@ -49,7 +44,7 @@ impl Runtime {
         match parser::parse_model(source, None).into_result() {
             Ok(ast) => {
                 self.ast_cache
-                    .insert(path.to_path_buf(), LoadResult::success(ast));
+                    .insert(path.clone(), LoadResult::success(ast));
 
                 self.ast_cache
                     .get_entry(path)
@@ -63,7 +58,7 @@ impl Runtime {
                 let errors = e.error_collection;
 
                 self.ast_cache
-                    .insert(path.to_path_buf(), LoadResult::partial(partial_ast, errors));
+                    .insert(path.clone(), LoadResult::partial(partial_ast, errors));
 
                 self.ast_cache
                     .get_entry(path)

@@ -15,7 +15,7 @@ pub fn values(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let builtins = BuiltinRef::new();
 
     for (name, value) in builtins.builtin_values() {
-        m.add(name, value_to_py_any(value.clone(), m.py()))?;
+        m.add(name.as_str(), value_to_py_any(value.clone(), m.py()))?;
     }
 
     Ok(())
@@ -34,7 +34,7 @@ pub fn functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
         let py_wrapper = Py::new(m.py(), wrapper)?;
 
-        m.add(name, py_wrapper)?;
+        m.add(name.as_str(), py_wrapper)?;
     }
 
     Ok(())
@@ -51,15 +51,17 @@ pub fn units(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let prefixes: Vec<_> = builtins.builtin_prefixes().collect();
 
     for (alias, unit) in builtins.builtin_units() {
-        let python_alias = alias.replace('%', "percent").replace('$', "dollar");
+        let alias_str = alias.as_str();
+        let python_alias_str = alias_str.replace('%', "percent").replace('$', "dollar");
 
         let py_unit = PyUnit::from(unit.clone());
-        m.add(&python_alias, py_unit)?;
+        m.add(&python_alias_str, py_unit)?;
 
         if builtins.unit_supports_si_prefixes(alias) {
             for &(prefix, multiplier) in &prefixes {
-                let prefixed_name = format!("{prefix}{alias}");
-                let python_prefixed_name = format!("{prefix}{python_alias}");
+                let prefix_str = prefix.as_str();
+                let prefixed_name = format!("{prefix_str}{alias_str}");
+                let python_prefixed_name = format!("{prefix_str}{python_alias_str}");
 
                 let prefixed_display = DisplayUnit::Unit {
                     name: prefixed_name.clone(),

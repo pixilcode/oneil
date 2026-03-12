@@ -6,7 +6,7 @@ use indexmap::{IndexMap, IndexSet};
 
 use oneil_ast as ast;
 use oneil_ir as ir;
-use oneil_shared::span::Span;
+use oneil_shared::{labels::ParameterLabel, span::Span, symbols::ParameterName};
 
 use crate::{
     ExternalResolutionContext, ResolutionContext,
@@ -30,7 +30,7 @@ pub fn resolve_parameters<E>(
 
     // collect all parameters and check for duplicates
     for parameter in parameters {
-        let ident = ir::ParameterName::new(parameter.ident().as_str().to_string());
+        let ident = ParameterName::from(parameter.ident().as_str());
         let ident_span = parameter.ident().span();
 
         let maybe_original_parameter = parameter_map.get(&ident);
@@ -62,13 +62,11 @@ pub fn resolve_parameters<E>(
 
     let mut parameters_visited = IndexSet::new();
 
-    for parameter_identifier in parameter_ast_map.keys() {
-        let parameter_identifier = ir::Identifier::new(parameter_identifier.as_str().to_string());
-
+    for parameter_name in parameter_ast_map.keys() {
         let mut parameter_stack = Stack::new();
 
         try_resolve_identifier_as_parameter(
-            &parameter_identifier.clone(),
+            parameter_name,
             &parameter_ast_map,
             &dependencies,
             &mut parameter_stack,
@@ -83,8 +81,8 @@ pub fn resolve_parameters<E>(
 /// Note that the dependencies are both parameter names and builtins, which
 /// is why we use identifiers instead of parameter names.
 fn get_all_parameter_internal_dependencies<'a>(
-    parameter_map: &'a IndexMap<ir::ParameterName, &'a ast::ParameterNode>,
-) -> IndexMap<&'a ir::ParameterName, IndexMap<ir::Identifier, Span>> {
+    parameter_map: &'a IndexMap<ParameterName, &'a ast::ParameterNode>,
+) -> IndexMap<&'a ParameterName, IndexMap<ast::Identifier, Span>> {
     let mut dependencies = IndexMap::new();
 
     for identifier in parameter_map.keys() {
@@ -103,7 +101,7 @@ fn get_all_parameter_internal_dependencies<'a>(
 /// Extracts internal dependencies from a single parameter.
 fn get_parameter_internal_dependencies(
     parameter: &ast::Parameter,
-) -> IndexMap<ir::Identifier, Span> {
+) -> IndexMap<ast::Identifier, Span> {
     let mut dependencies = IndexMap::new();
 
     let limits = parameter.limits().map(ast::Node::deref);
@@ -150,19 +148,17 @@ fn get_parameter_internal_dependencies(
 /// Otherwise, the error will show up later when attempting to resolve the identifier as
 /// a "parameter not found" error.
 fn try_resolve_identifier_as_parameter<E>(
-    parameter_identifier: &ir::Identifier,
-    parameter_ast_map: &IndexMap<ir::ParameterName, &ast::ParameterNode>,
-    dependencies: &IndexMap<&ir::ParameterName, IndexMap<ir::Identifier, Span>>,
-    parameter_stack: &mut Stack<ir::ParameterName>,
-    parameters_visited: &mut IndexSet<ir::ParameterName>,
+    parameter_name: &ParameterName,
+    parameter_ast_map: &IndexMap<ParameterName, &ast::ParameterNode>,
+    dependencies: &IndexMap<&ParameterName, IndexMap<ast::Identifier, Span>>,
+    parameter_stack: &mut Stack<ParameterName>,
+    parameters_visited: &mut IndexSet<ParameterName>,
     resolution_context: &mut ResolutionContext<'_, E>,
 ) where
     E: ExternalResolutionContext,
 {
-    let parameter_name = ir::ParameterName::new(parameter_identifier.as_str().to_string());
-
     // check that the parameter exists
-    let Some(param) = parameter_ast_map.get(&parameter_name) else {
+    let Some(param) = parameter_ast_map.get(parameter_name) else {
         // This is technically a resolution error. However, this error will
         // be caught later when the variable is resolved. In order to avoid
         // duplicate errors, we return Ok(()) and let the variable resolution
@@ -176,21 +172,21 @@ fn try_resolve_identifier_as_parameter<E>(
 
     assert!(
         dependencies.contains_key(&parameter_name),
-        "parameter dependencies for '{parameter_identifier:?}' not found",
+        "parameter dependencies for '{parameter_name:?}' not found",
     );
 
     // check for circular dependencies
-    if let Some(circular_dependency) = parameter_stack.find_circular_dependency(&parameter_name) {
+    if let Some(circular_dependency) = parameter_stack.find_circular_dependency(parameter_name) {
         let reference_span = parameter_identifier_span;
         resolution_context.add_parameter_error_to_active_model(
-            parameter_name,
+            parameter_name.clone(),
             ParameterResolutionError::circular_dependency(circular_dependency, reference_span),
         );
         return;
     }
 
     // check if the parameter has already been visited
-    if parameters_visited.contains(&parameter_name) {
+    if parameters_visited.contains(parameter_name) {
         return;
     }
     parameters_visited.insert(parameter_name.clone());
@@ -205,8 +201,9 @@ fn try_resolve_identifier_as_parameter<E>(
 
     // resolve the parameter dependencies
     for dependency_identifier in parameter_dependencies.keys() {
+        let dependency_name = ParameterName::from(dependency_identifier.as_str());
         try_resolve_identifier_as_parameter(
-            dependency_identifier,
+            &dependency_name,
             parameter_ast_map,
             dependencies,
             parameter_stack,
@@ -220,10 +217,10 @@ fn try_resolve_identifier_as_parameter<E>(
 
     // resolve the parameter
     let parameter = parameter_ast_map
-        .get(&parameter_name)
+        .get(parameter_name)
         .expect("parameter should exist");
 
-    let label = ir::Label::new(parameter.label().as_str().to_string());
+    let label = ParameterLabel::from(parameter.label().as_str());
 
     let value = resolve_parameter_value(parameter.value(), resolution_context);
 
@@ -251,7 +248,7 @@ fn try_resolve_identifier_as_parameter<E>(
             );
 
             // add the parameter to the parameter builder
-            resolution_context.add_parameter_to_active_model(parameter_name, parameter);
+            resolution_context.add_parameter_to_active_model(parameter_name.clone(), parameter);
         }
         Err(errors) => {
             // add the errors to the parameter builder
@@ -396,7 +393,7 @@ mod tests {
         error::VariableResolutionError,
         test::{
             external_context::TestExternalContext, resolution_context::ResolutionContextBuilder,
-            test_ast,
+            test_ast, test_model_path,
         },
     };
 
@@ -404,8 +401,8 @@ mod tests {
     use oneil_ast as ast;
     use oneil_ir as ir;
 
-    fn param_name(s: &str) -> ir::ParameterName {
-        ir::ParameterName::new(s.to_string())
+    fn param_name(s: &str) -> ParameterName {
+        ParameterName::from(s)
     }
 
     #[test]
@@ -414,7 +411,7 @@ mod tests {
         let parameters: Vec<&ast::ParameterNode> = vec![];
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -449,7 +446,7 @@ mod tests {
         let parameters: Vec<&ast::ParameterNode> = vec![&param_a, &param_b];
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -493,7 +490,7 @@ mod tests {
         let parameters: Vec<&ast::ParameterNode> = vec![&param_a, &param_b];
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -542,7 +539,7 @@ mod tests {
         let parameters: Vec<&ast::ParameterNode> = vec![&param_a, &param_b];
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -625,7 +622,7 @@ mod tests {
 
         // check the dependencies
         assert_eq!(dependencies.len(), 1);
-        assert!(dependencies.contains_key(&ir::Identifier::new("b".to_string())));
+        assert!(dependencies.contains_key(&ast::Identifier::from("b".to_string())));
     }
 
     #[test]
@@ -642,8 +639,8 @@ mod tests {
 
         // check the dependencies
         assert_eq!(dependencies.len(), 2);
-        assert!(dependencies.contains_key(&ir::Identifier::new("min_val".to_string())));
-        assert!(dependencies.contains_key(&ir::Identifier::new("max_val".to_string())));
+        assert!(dependencies.contains_key(&ast::Identifier::from("min_val".to_string())));
+        assert!(dependencies.contains_key(&ast::Identifier::from("max_val".to_string())));
     }
 
     #[test]
@@ -669,7 +666,7 @@ mod tests {
 
         // check the dependencies
         assert_eq!(result.len(), 1);
-        assert!(result.contains_key(&ir::Identifier::new("test_var".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("test_var".to_string())));
     }
 
     #[test]
@@ -690,8 +687,8 @@ mod tests {
 
         // check the dependencies
         assert_eq!(result.len(), 2);
-        assert!(result.contains_key(&ir::Identifier::new("a".to_string())));
-        assert!(result.contains_key(&ir::Identifier::new("b".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("a".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("b".to_string())));
     }
 
     #[test]
@@ -711,8 +708,8 @@ mod tests {
 
         // check the dependencies
         assert_eq!(result.len(), 2);
-        assert!(result.contains_key(&ir::Identifier::new("arg1".to_string())));
-        assert!(result.contains_key(&ir::Identifier::new("arg2".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("arg1".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("arg2".to_string())));
     }
 
     #[test]
@@ -735,7 +732,7 @@ mod tests {
         let value_node = test_ast::simple_parameter_value_node(expr);
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -752,7 +749,7 @@ mod tests {
     #[test]
     fn resolve_limits_none() {
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -770,7 +767,7 @@ mod tests {
     fn resolve_limits_continuous() {
         // build the limits node and context
         let limits_node = test_ast::continuous_limits_node(0.0, 100.0);
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -788,7 +785,7 @@ mod tests {
     fn resolve_limits_discrete() {
         // build the limits node and context
         let limits_node = test_ast::discrete_limits_node([1.0, 2.0, 3.0]);
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -816,7 +813,7 @@ mod tests {
         let parameters: Vec<&ast::ParameterNode> = vec![&param_a1, &param_a2];
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -869,7 +866,7 @@ mod tests {
             vec![&param_foo1, &param_bar1, &param_foo2, &param_bar2];
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -933,7 +930,7 @@ mod tests {
         let parameters: Vec<&ast::ParameterNode> = vec![&param_a1, &param_b, &param_a2, &param_c];
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -986,7 +983,7 @@ mod tests {
         let parameters: Vec<&ast::ParameterNode> = vec![&param_a1, &param_b, &param_a2, &param_c];
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -1054,8 +1051,8 @@ mod tests {
 
         // check the dependencies
         assert_eq!(result.len(), 2);
-        assert!(result.contains_key(&ir::Identifier::new("a".to_string())));
-        assert!(result.contains_key(&ir::Identifier::new("b".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("a".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("b".to_string())));
     }
 
     #[test]
@@ -1080,9 +1077,9 @@ mod tests {
 
         // check the dependencies
         assert_eq!(result.len(), 3);
-        assert!(result.contains_key(&ir::Identifier::new("a".to_string())));
-        assert!(result.contains_key(&ir::Identifier::new("b".to_string())));
-        assert!(result.contains_key(&ir::Identifier::new("c".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("a".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("b".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("c".to_string())));
     }
 
     #[test]
@@ -1101,7 +1098,7 @@ mod tests {
 
         // check the dependencies - should only contain the variable
         assert_eq!(result.len(), 1);
-        assert!(result.contains_key(&ir::Identifier::new("x".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("x".to_string())));
     }
 
     #[test]
@@ -1135,10 +1132,10 @@ mod tests {
 
         // check the dependencies
         assert_eq!(result.len(), 4);
-        assert!(result.contains_key(&ir::Identifier::new("a".to_string())));
-        assert!(result.contains_key(&ir::Identifier::new("b".to_string())));
-        assert!(result.contains_key(&ir::Identifier::new("c".to_string())));
-        assert!(result.contains_key(&ir::Identifier::new("d".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("a".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("b".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("c".to_string())));
+        assert!(result.contains_key(&ast::Identifier::from("d".to_string())));
     }
 
     #[test]
@@ -1168,7 +1165,7 @@ mod tests {
 
         // check the dependencies
         assert_eq!(dependencies.len(), 2);
-        assert!(dependencies.contains_key(&ir::Identifier::new("x".to_string())));
-        assert!(dependencies.contains_key(&ir::Identifier::new("threshold".to_string())));
+        assert!(dependencies.contains_key(&ast::Identifier::from("x".to_string())));
+        assert!(dependencies.contains_key(&ast::Identifier::from("threshold".to_string())));
     }
 }

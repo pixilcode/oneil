@@ -22,7 +22,10 @@ pub use expression::{
     LiteralNode, UnaryOp, UnaryOpNode, Variable, VariableNode,
 };
 pub use model::{Model, ModelNode, Section, SectionHeader, SectionHeaderNode, SectionNode};
-pub use naming::{Directory, DirectoryNode, Identifier, IdentifierNode, Label, LabelNode};
+pub use naming::{
+    Directory, DirectoryNode, Identifier, IdentifierNode, ParameterLabelNode, ParameterNameNode,
+    ReferenceNameNode, SectionLabelNode,
+};
 pub use node::Node;
 pub use note::{Note, NoteNode};
 pub use parameter::{
@@ -30,4 +33,7 @@ pub use parameter::{
     PerformanceMarker, PerformanceMarkerNode, PiecewisePart, PiecewisePartNode,
 };
 pub use test::{Test, TestNode};
-pub use unit::{UnitExponent, UnitExponentNode, UnitExpr, UnitExprNode, UnitOp, UnitOpNode};
+pub use unit::{
+    UnitExponent, UnitExponentNode, UnitExpr, UnitExprNode, UnitIdentifier, UnitIdentifierNode,
+    UnitOp, UnitOpNode,
+};

@@ -2,13 +2,13 @@
 
 use oneil_eval::EvalError;
 use oneil_output::Value;
-use oneil_shared::span::Span;
+use oneil_shared::{span::Span, symbols::BuiltinFunctionName};
 
 /// Information about a builtin function.
 #[derive(Debug, Clone)]
 pub struct BuiltinFunction {
     /// The name of the function.
-    pub name: &'static str,
+    pub name: BuiltinFunctionName,
     /// The arguments of the function.
     pub args: &'static [&'static str],
     /// The description of the function.
@@ -22,131 +22,132 @@ pub type BuiltinFunctionFn = fn(Span, Vec<(Value, Span)>) -> Result<Value, Vec<E
 
 #[expect(clippy::too_many_lines, reason = "this is a list of builtin functions")]
 /// Returns an iterator over all standard builtin functions.
-pub fn builtin_functions_complete() -> impl Iterator<Item = (&'static str, BuiltinFunction)> {
+pub fn builtin_functions_complete() -> impl Iterator<Item = (BuiltinFunctionName, BuiltinFunction)>
+{
     [
         BuiltinFunction {
-            name: "min",
+            name: BuiltinFunctionName::from("min"),
             args: &["n", "..."],
             description: fns::MIN_DESCRIPTION,
             function: fns::min as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "max",
+            name: BuiltinFunctionName::from("max"),
             args: &["n", "..."],
             description: fns::MAX_DESCRIPTION,
             function: fns::max as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "sin",
+            name: BuiltinFunctionName::from("sin"),
             args: &["x"],
             description: fns::SIN_DESCRIPTION,
             function: fns::sin as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "cos",
+            name: BuiltinFunctionName::from("cos"),
             args: &["x"],
             description: fns::COS_DESCRIPTION,
             function: fns::cos as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "tan",
+            name: BuiltinFunctionName::from("tan"),
             args: &["x"],
             description: fns::TAN_DESCRIPTION,
             function: fns::tan as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "asin",
+            name: BuiltinFunctionName::from("asin"),
             args: &["x"],
             description: fns::ASIN_DESCRIPTION,
             function: fns::asin as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "acos",
+            name: BuiltinFunctionName::from("acos"),
             args: &["x"],
             description: fns::ACOS_DESCRIPTION,
             function: fns::acos as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "atan",
+            name: BuiltinFunctionName::from("atan"),
             args: &["x"],
             description: fns::ATAN_DESCRIPTION,
             function: fns::atan as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "sqrt",
+            name: BuiltinFunctionName::from("sqrt"),
             args: &["x"],
             description: fns::SQRT_DESCRIPTION,
             function: fns::sqrt as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "ln",
+            name: BuiltinFunctionName::from("ln"),
             args: &["x"],
             description: fns::LN_DESCRIPTION,
             function: fns::ln as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "log2",
+            name: BuiltinFunctionName::from("log2"),
             args: &["x"],
             description: fns::LOG2_DESCRIPTION,
             function: fns::log2 as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "log10",
+            name: BuiltinFunctionName::from("log10"),
             args: &["x"],
             description: fns::LOG10_DESCRIPTION,
             function: fns::log10 as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "floor",
+            name: BuiltinFunctionName::from("floor"),
             args: &["x"],
             description: fns::FLOOR_DESCRIPTION,
             function: fns::floor as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "ceiling",
+            name: BuiltinFunctionName::from("ceiling"),
             args: &["x"],
             description: fns::CEILING_DESCRIPTION,
             function: fns::ceiling as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "range",
+            name: BuiltinFunctionName::from("range"),
             args: &["x", "y?"],
             description: fns::RANGE_DESCRIPTION,
             function: fns::range as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "abs",
+            name: BuiltinFunctionName::from("abs"),
             args: &["x"],
             description: fns::ABS_DESCRIPTION,
             function: fns::abs as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "sign",
+            name: BuiltinFunctionName::from("sign"),
             args: &["x"],
             description: fns::SIGN_DESCRIPTION,
             function: fns::sign as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "mid",
+            name: BuiltinFunctionName::from("mid"),
             args: &["x", "y?"],
             description: fns::MID_DESCRIPTION,
             function: fns::mid as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "strip",
+            name: BuiltinFunctionName::from("strip"),
             args: &["x"],
             description: fns::STRIP_DESCRIPTION,
             function: fns::strip as BuiltinFunctionFn,
         },
         BuiltinFunction {
-            name: "mnmx",
+            name: BuiltinFunctionName::from("mnmx"),
             args: &["n", "..."],
             description: fns::MNMX_DESCRIPTION,
             function: fns::mnmx as BuiltinFunctionFn,
         },
     ]
     .into_iter()
-    .map(|function| (function.name, function))
+    .map(|function| (function.name.clone(), function))
 }
 
 mod fns {
@@ -155,7 +156,7 @@ mod fns {
         error::{ExpectedArgumentCount, ExpectedType, convert::binary_eval_error_to_eval_error},
     };
     use oneil_output::{MeasuredNumber, Number, NumberType, Unit, Value};
-    use oneil_shared::span::Span;
+    use oneil_shared::{span::Span, symbols::BuiltinFunctionName};
 
     use super::helper;
 
@@ -168,7 +169,7 @@ mod fns {
     pub fn min(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
         if args.is_empty() {
             return Err(vec![EvalError::InvalidArgumentCount {
-                function_name: "min".to_string(),
+                function_name: BuiltinFunctionName::from("min"),
                 function_name_span: identifier_span,
                 expected_argument_count: ExpectedArgumentCount::AtLeast(1),
                 actual_argument_count: args.len(),
@@ -240,7 +241,7 @@ mod fns {
     pub fn max(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
         if args.is_empty() {
             return Err(vec![EvalError::InvalidArgumentCount {
-                function_name: "max".to_string(),
+                function_name: BuiltinFunctionName::from("max"),
                 function_name_span: identifier_span,
                 expected_argument_count: ExpectedArgumentCount::AtLeast(1),
                 actual_argument_count: args.len(),
@@ -585,7 +586,7 @@ mod fns {
                 })
             }
             _ => Err(vec![EvalError::InvalidArgumentCount {
-                function_name: "range".to_string(),
+                function_name: BuiltinFunctionName::from("range"),
                 function_name_span: identifier_span,
                 expected_argument_count: ExpectedArgumentCount::Between(1, 2),
                 actual_argument_count: args.len(),
@@ -693,7 +694,7 @@ mod fns {
                     })
             }
             _ => Err(vec![EvalError::InvalidArgumentCount {
-                function_name: "mid".to_string(),
+                function_name: BuiltinFunctionName::from("mid"),
                 function_name_span: identifier_span,
                 expected_argument_count: ExpectedArgumentCount::Between(1, 2),
                 actual_argument_count: args.len(),
@@ -732,7 +733,7 @@ mod fns {
     pub fn mnmx(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
         if args.is_empty() {
             return Err(vec![EvalError::InvalidArgumentCount {
-                function_name: "mnmx".to_string(),
+                function_name: BuiltinFunctionName::from("mnmx"),
                 function_name_span: identifier_span,
                 expected_argument_count: ExpectedArgumentCount::AtLeast(1),
                 actual_argument_count: args.len(),
@@ -768,7 +769,7 @@ mod fns {
 }
 
 mod helper {
-    use oneil_shared::span::Span;
+    use oneil_shared::{span::Span, symbols::BuiltinFunctionName};
 
     use oneil_eval::{
         EvalError,
@@ -789,7 +790,7 @@ mod helper {
     {
         if args.len() != 1 {
             return Err(vec![EvalError::InvalidArgumentCount {
-                function_name: name.to_string(),
+                function_name: BuiltinFunctionName::from(name),
                 function_name_span: identifier_span,
                 expected_argument_count: ExpectedArgumentCount::Exact(1),
                 actual_argument_count: args.len(),
@@ -824,7 +825,7 @@ mod helper {
     {
         if args.len() != 1 {
             return Err(vec![EvalError::InvalidArgumentCount {
-                function_name: name.to_string(),
+                function_name: BuiltinFunctionName::from(name),
                 function_name_span: identifier_span,
                 expected_argument_count: ExpectedArgumentCount::Exact(1),
                 actual_argument_count: args.len(),

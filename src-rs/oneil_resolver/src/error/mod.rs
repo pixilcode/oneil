@@ -16,18 +16,18 @@
 
 mod circular_dependency;
 mod errors;
-mod import;
+mod model_import;
 mod parameter;
-mod submodel;
+mod python_import;
 mod unit;
 mod util;
 mod variable;
 
 pub use circular_dependency::CircularDependencyError;
 pub use errors::ResolutionErrorCollection;
-pub use import::PythonImportResolutionError;
+pub use model_import::ModelImportResolutionError;
 pub use parameter::ParameterResolutionError;
-pub use submodel::ModelImportResolutionError;
+pub use python_import::PythonImportResolutionError;
 pub use unit::UnitResolutionError;
 pub use util::{combine_error_list, combine_errors, convert_errors, split_ok_and_errors};
 pub use variable::VariableResolutionError;

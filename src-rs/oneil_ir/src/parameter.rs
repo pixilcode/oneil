@@ -2,47 +2,14 @@
 
 use indexmap::IndexMap;
 
-use oneil_shared::span::Span;
-
-use crate::{
-    Identifier, ModelPath, ReferenceName, debug_info::TraceLevel, expr::Expr, unit::CompositeUnit,
+use oneil_shared::{
+    labels::ParameterLabel,
+    paths::ModelPath,
+    span::Span,
+    symbols::{BuiltinValueName, ParameterName, ReferenceName},
 };
 
-/// A name for a parameter.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ParameterName(String);
-
-impl ParameterName {
-    /// Creates a new parameter name with the given name.
-    #[must_use]
-    pub const fn new(name: String) -> Self {
-        Self(name)
-    }
-
-    /// Returns the parameter name as a string slice.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// A label for a parameter.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Label(String);
-
-impl Label {
-    /// Creates a new label with the given name.
-    #[must_use]
-    pub const fn new(name: String) -> Self {
-        Self(name)
-    }
-
-    /// Returns the label as a string slice.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
+use crate::{debug_info::TraceLevel, expr::Expr, unit::CompositeUnit};
 
 /// Represents a single parameter in an Oneil model.
 #[derive(Debug, Clone, PartialEq)]
@@ -51,7 +18,7 @@ pub struct Parameter {
     name: ParameterName,
     name_span: Span,
     span: Span,
-    label: Label,
+    label: ParameterLabel,
     value: ParameterValue,
     limits: Limits,
     is_performance: bool,
@@ -67,7 +34,7 @@ impl Parameter {
         name: ParameterName,
         name_span: Span,
         span: Span,
-        label: Label,
+        label: ParameterLabel,
         value: ParameterValue,
         limits: Limits,
         is_performance: bool,
@@ -112,7 +79,7 @@ impl Parameter {
 
     /// Returns the label of this parameter.
     #[must_use]
-    pub const fn label(&self) -> &Label {
+    pub const fn label(&self) -> &ParameterLabel {
         &self.label
     }
 
@@ -145,7 +112,7 @@ impl Parameter {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dependencies {
     /// The dependencies on builtin variables.
-    builtin: IndexMap<Identifier, Span>,
+    builtin: IndexMap<BuiltinValueName, Span>,
     /// The dependencies on parameters defined in the current model.
     parameter: IndexMap<ParameterName, Span>,
     /// The dependencies on parameters defined in other models.
@@ -165,7 +132,7 @@ impl Dependencies {
 
     /// Returns the dependencies on builtin variables.
     #[must_use]
-    pub const fn builtin(&self) -> &IndexMap<Identifier, Span> {
+    pub const fn builtin(&self) -> &IndexMap<BuiltinValueName, Span> {
         &self.builtin
     }
 
@@ -182,7 +149,7 @@ impl Dependencies {
     }
 
     /// Inserts a dependency on a builtin variable.
-    pub fn insert_builtin(&mut self, ident: Identifier, span: Span) {
+    pub fn insert_builtin(&mut self, ident: BuiltinValueName, span: Span) {
         self.builtin.insert(ident, span);
     }
 

@@ -1,11 +1,11 @@
 //! Context types for tree traversal and analysis.
 
-use std::path::{Path, PathBuf};
-
 use indexmap::IndexMap;
 use oneil_ir as ir;
 use oneil_output::{DependencySet, Model, Parameter, Value};
 use oneil_shared::load_result::LoadResult;
+use oneil_shared::paths::ModelPath;
+use oneil_shared::symbols::{BuiltinValueName, ParameterName};
 
 use crate::dep_graph::{DependencyGraph, ReferenceSet};
 use crate::output::error::{GetValueError, ModelEvalHasErrors};
@@ -13,10 +13,10 @@ use crate::output::error::{GetValueError, ModelEvalHasErrors};
 /// External context provided to tree operations.
 pub trait ExternalAnalysisContext {
     /// Returns the full map of model paths to their IR models.
-    fn get_all_model_ir(&self) -> IndexMap<&PathBuf, &ir::Model>;
+    fn get_all_model_ir(&self) -> IndexMap<&ModelPath, &ir::Model>;
 
     /// Returns the value of a builtin variable by identifier, if defined.
-    fn lookup_builtin_variable(&self, identifier: &ir::Identifier) -> Option<&Value>;
+    fn lookup_builtin_variable(&self, identifier: &BuiltinValueName) -> Option<&Value>;
 
     /// Looks up the evaluated model at the given path.
     ///
@@ -25,7 +25,7 @@ pub trait ExternalAnalysisContext {
     /// [`ModelEvalHasErrors`], or failure.
     fn get_evaluated_model(
         &self,
-        model_path: &Path,
+        model_path: &ModelPath,
     ) -> Option<LoadResult<&Model, ModelEvalHasErrors>>;
 
     /// Looks up an evaluated parameter by model path and parameter name.
@@ -34,8 +34,8 @@ pub trait ExternalAnalysisContext {
     /// or `Some(Ok(parameter))` when the parameter is found.
     fn lookup_parameter_value(
         &self,
-        model_path: &Path,
-        parameter_name: &str,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
     ) -> Option<Result<Parameter, GetValueError>>;
 }
 
@@ -59,9 +59,8 @@ impl<'external, E: ExternalAnalysisContext> TreeContext<'external, E> {
 
     /// Returns the value of a builtin variable by identifier, delegating to the external context.
     #[must_use]
-    pub fn lookup_builtin_variable(&self, identifier: &str) -> Option<&Value> {
-        let identifier = ir::Identifier::new(identifier.to_string());
-        self.external.lookup_builtin_variable(&identifier)
+    pub fn lookup_builtin_variable(&self, name: &BuiltinValueName) -> Option<&Value> {
+        self.external.lookup_builtin_variable(name)
     }
 
     /// Returns the dependents of the given parameter, from the dependency graph.
@@ -69,7 +68,11 @@ impl<'external, E: ExternalAnalysisContext> TreeContext<'external, E> {
     /// If the parameter is not found, it is assumed that there are no dependents, so
     /// an empty [`DependencySet`] is returned.
     #[must_use]
-    pub fn dependents(&self, model_path: &Path, parameter_name: &str) -> DependencySet {
+    pub fn dependents(
+        &self,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
+    ) -> DependencySet {
         self.dependency_graph
             .dependents(model_path, parameter_name)
             .cloned()
@@ -78,7 +81,11 @@ impl<'external, E: ExternalAnalysisContext> TreeContext<'external, E> {
 
     /// Returns the parameters that reference the given parameter, from the dependency graph.
     #[must_use]
-    pub fn references(&self, model_path: &Path, parameter_name: &str) -> ReferenceSet {
+    pub fn references(
+        &self,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
+    ) -> ReferenceSet {
         self.dependency_graph
             .references(model_path, parameter_name)
             .cloned()
@@ -89,8 +96,8 @@ impl<'external, E: ExternalAnalysisContext> TreeContext<'external, E> {
     #[must_use]
     pub fn lookup_parameter_value(
         &self,
-        model_path: &Path,
-        parameter_name: &str,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
     ) -> Option<Result<Parameter, GetValueError>> {
         self.external
             .lookup_parameter_value(model_path, parameter_name)

@@ -1,14 +1,16 @@
 //! Model structures and collections for the Oneil programming language.
 
 use indexmap::IndexMap;
+use oneil_shared::{
+    paths::{ModelPath, PythonPath},
+    symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex},
+};
 
 use crate::{
-    ModelPath,
-    model_import::{ReferenceImport, ReferenceName, SubmodelImport, SubmodelName},
-    parameter::{Parameter, ParameterName},
+    model_import::{ReferenceImport, SubmodelImport},
+    parameter::Parameter,
     python_import::PythonImport,
-    reference::PythonPath,
-    test::{Test, TestIndex},
+    test::Test,
 };
 
 /// Represents a single Oneil model containing parameters, tests, submodels, and imports.

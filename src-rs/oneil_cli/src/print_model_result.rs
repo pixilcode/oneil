@@ -1,11 +1,9 @@
-use std::path::Path;
-
 use anstream::{eprintln, print, println};
 use indexmap::{IndexMap, IndexSet};
 use oneil_runtime::output::{
     DebugInfo, Parameter, PrintLevel, TestResult, Value, reference::ModelReference,
 };
-use oneil_shared::span::Span;
+use oneil_shared::{paths::ModelPath, span::Span};
 
 use crate::{
     command::{PrintMode, Variable, VariableList},
@@ -100,7 +98,7 @@ pub fn print_test_results(eval_result: ModelReference<'_>, test_config: &TestPri
 struct TestInfo<'runtime> {
     pub test_count: usize,
     pub passed_count: usize,
-    pub failed_tests: IndexMap<&'runtime Path, Vec<(Span, &'runtime DebugInfo)>>,
+    pub failed_tests: IndexMap<&'runtime ModelPath, Vec<(Span, &'runtime DebugInfo)>>,
 }
 
 fn get_model_tests<'runtime>(
@@ -111,7 +109,7 @@ fn get_model_tests<'runtime>(
     let tests = model_ref.tests();
     let test_count = tests.len();
     let failed_tests = tests
-        .iter()
+        .values()
         .filter_map(|test| match &test.result {
             TestResult::Failed { debug_info } => Some((test.expr_span, &**debug_info)),
             TestResult::Passed => None,
@@ -160,8 +158,8 @@ fn print_failing_tests(test_info: &TestInfo<'_>) {
     println!("{divider_line}");
 }
 
-fn print_model_failing_tests(model_path: &Path, failing_tests: &[(Span, &DebugInfo)]) {
-    let file_contents = std::fs::read_to_string(model_path);
+fn print_model_failing_tests(model_path: &ModelPath, failing_tests: &[(Span, &DebugInfo)]) {
+    let file_contents = std::fs::read_to_string(model_path.as_path());
 
     let file_contents = match file_contents {
         Ok(file_contents) => file_contents,
@@ -170,7 +168,7 @@ fn print_model_failing_tests(model_path: &Path, failing_tests: &[(Span, &DebugIn
 
             println!(
                 "{error_label}: couldn't read `{}` - {}",
-                model_path.display(),
+                model_path.as_path().display(),
                 e
             );
 
@@ -204,7 +202,7 @@ fn print_model_failing_tests(model_path: &Path, failing_tests: &[(Span, &DebugIn
     }
 }
 
-fn print_model_header(model_path: &Path, test_info: &TestInfo<'_>) {
+fn print_model_header(model_path: &ModelPath, test_info: &TestInfo<'_>) {
     let divider_line = divider_line();
     let model_label = stylesheet::MODEL_LABEL.style("Model");
     let tests_label = stylesheet::TESTS_LABEL.style("Tests");
@@ -218,13 +216,13 @@ fn print_model_header(model_path: &Path, test_info: &TestInfo<'_>) {
         stylesheet::TESTS_FAIL_COLOR.style("FAIL")
     };
 
-    println!("{model_label}: {}", model_path.display());
+    println!("{model_label}: {}", model_path.as_path().display());
     println!("{tests_label}: {passed_count}/{test_count} ({test_result_string})");
     println!("{divider_line}");
 }
 
-fn print_model_path_header(model_path: &Path) {
-    let header = stylesheet::MODEL_PATH_HEADER.style(model_path.display());
+fn print_model_path_header(model_path: &ModelPath) {
+    let header = stylesheet::MODEL_PATH_HEADER.style(model_path.as_path().display());
     println!("{header}");
 }
 
@@ -320,15 +318,22 @@ fn get_parameter_from_model<'runtime>(
         //       the submodel name might be different from the reference name
         let references = model_ref.references();
         let submodels = model_ref.submodels();
-        let model = references.get(submodel.as_str()).or_else(|| {
-            submodels.get(submodel.as_str()).map(|r| {
-                references
-                    .get(r)
-                    .expect("submodel reference should be found")
-            })
-        })?;
+        let model = references
+            .iter()
+            .find(|(name, _)| name.as_str() == submodel.as_str())
+            .map(|(_, m)| *m)
+            .or_else(|| {
+                let (_, ref_name) = submodels
+                    .iter()
+                    .find(|(name, _)| name.as_str() == submodel.as_str())?;
 
-        recurse(*model, parameter, param_vec)
+                references
+                    .iter()
+                    .find(|(name, _)| *name == ref_name)
+                    .map(|(_, m)| *m)
+            })?;
+
+        recurse(model, parameter, param_vec)
     }
 }
 
@@ -375,7 +380,7 @@ fn get_model_parameters_by_filter(
     model_ref: ModelReference<'_>,
     print_level: PrintMode,
     recursive: bool,
-) -> IndexMap<&Path, Vec<&Parameter>> {
+) -> IndexMap<&ModelPath, Vec<&Parameter>> {
     return recurse(model_ref, print_level, recursive, IndexMap::new());
 
     #[expect(
@@ -386,8 +391,8 @@ fn get_model_parameters_by_filter(
         model_ref: ModelReference<'runtime>,
         print_level: PrintMode,
         recursive: bool,
-        mut parameters: IndexMap<&'runtime Path, Vec<&'runtime Parameter>>,
-    ) -> IndexMap<&'runtime Path, Vec<&'runtime Parameter>> {
+        mut parameters: IndexMap<&'runtime ModelPath, Vec<&'runtime Parameter>>,
+    ) -> IndexMap<&'runtime ModelPath, Vec<&'runtime Parameter>> {
         let model_parameters = model_ref.parameters();
         let parameters_to_print: Vec<_> = match print_level {
             PrintMode::All => model_parameters
@@ -424,12 +429,12 @@ fn get_model_parameters_by_filter(
 }
 
 fn print_parameter(parameter: &Parameter, should_print_debug_info: bool) {
-    let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(&parameter.ident);
+    let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(parameter.ident.as_str());
     print!("{styled_ident} = ");
 
     print_utils::print_value(&parameter.value);
 
-    let styled_label = stylesheet::PARAMETER_LABEL.style(format!("# {}", parameter.label));
+    let styled_label = stylesheet::PARAMETER_LABEL.style(format!("# {}", parameter.label.as_str()));
     println!("  {styled_label}");
 
     if should_print_debug_info && let Some(debug_info) = &parameter.debug_info {
@@ -440,15 +445,15 @@ fn print_parameter(parameter: &Parameter, should_print_debug_info: bool) {
 fn print_debug_info(debug_info: &DebugInfo) {
     let indent = 2;
     for (dependency_name, dependency_value) in &debug_info.builtin_dependency_values {
-        print_variable_value(dependency_name, dependency_value, indent);
+        print_variable_value(dependency_name.as_str(), dependency_value, indent);
     }
     for (dependency_name, dependency_value) in &debug_info.parameter_dependency_values {
-        print_variable_value(dependency_name, dependency_value, indent);
+        print_variable_value(dependency_name.as_str(), dependency_value, indent);
     }
     for ((reference_name, parameter_name), dependency_value) in
         &debug_info.external_dependency_values
     {
-        let variable_name = format!("{parameter_name}.{reference_name}");
+        let variable_name = format!("{}.{}", parameter_name.as_str(), reference_name.as_str());
         print_variable_value(&variable_name, dependency_value, indent);
     }
 }
@@ -464,7 +469,7 @@ fn print_variable_value(name: &str, value: &Value, indent: usize) {
 fn print_all_tests<'runtime>(
     model_ref: ModelReference<'runtime>,
     recursive: bool,
-    visited: &mut IndexSet<&'runtime Path>,
+    visited: &mut IndexSet<&'runtime ModelPath>,
 ) {
     let model_path = model_ref.path();
     let tests = model_ref.tests();
@@ -479,7 +484,7 @@ fn print_all_tests<'runtime>(
         print_model_path_header(model_path);
     }
 
-    let file_contents = std::fs::read_to_string(model_path);
+    let file_contents = std::fs::read_to_string(model_path.as_path());
 
     let file_contents = match file_contents {
         Ok(file_contents) => file_contents,
@@ -488,7 +493,7 @@ fn print_all_tests<'runtime>(
 
             println!(
                 "{error_label}: couldn't read `{}` - {}",
-                model_path.display(),
+                model_path.as_path().display(),
                 e
             );
 
@@ -496,7 +501,7 @@ fn print_all_tests<'runtime>(
         }
     };
 
-    for test in &tests {
+    for test in tests.values() {
         let test_start_offset = test.expr_span.start().offset;
         let test_end_offset = test.expr_span.end().offset;
         let test_expr_str = file_contents.get(test_start_offset..test_end_offset);

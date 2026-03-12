@@ -1,8 +1,10 @@
 //! Dependency sets for parameters.
 
-use std::path::PathBuf;
-
 use indexmap::IndexSet;
+use oneil_shared::{
+    paths::ModelPath,
+    symbols::{BuiltinValueName, ParameterName, ReferenceName},
+};
 
 /// A set of dependencies for a parameter.
 ///
@@ -41,14 +43,14 @@ impl Default for DependencySet {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BuiltinDependency {
     /// The identifier (name) of the builtin value.
-    pub ident: String,
+    pub name: BuiltinValueName,
 }
 
 /// A dependency on another parameter within the same model.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParameterDependency {
     /// The name of the parameter that this depends on.
-    pub parameter_name: String,
+    pub parameter_name: ParameterName,
 }
 
 /// A dependency on a parameter from an external model.
@@ -58,9 +60,9 @@ pub struct ParameterDependency {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExternalDependency {
     /// The path to the external model containing the parameter.
-    pub model_path: PathBuf,
+    pub model_path: ModelPath,
     /// The reference name used to access the external model.
-    pub reference_name: String,
+    pub reference_name: ReferenceName,
     /// The name of the parameter in the external model.
-    pub parameter_name: String,
+    pub parameter_name: ParameterName,
 }

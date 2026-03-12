@@ -1,14 +1,12 @@
 use indexmap::IndexSet;
-use oneil_shared::span::Span;
-
-use crate::PythonPath;
+use oneil_shared::{paths::PythonPath, span::Span, symbols::PyFunctionName};
 
 /// A name for a Python import.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PythonImport {
     import_path: PythonPath,
     import_path_span: Span,
-    functions: IndexSet<String>,
+    functions: IndexSet<PyFunctionName>,
 }
 
 impl PythonImport {
@@ -17,7 +15,7 @@ impl PythonImport {
     pub const fn new(
         import_path: PythonPath,
         import_path_span: Span,
-        functions: IndexSet<String>,
+        functions: IndexSet<PyFunctionName>,
     ) -> Self {
         Self {
             import_path,
@@ -40,7 +38,7 @@ impl PythonImport {
 
     /// Returns the functions in the import.
     #[must_use]
-    pub const fn functions(&self) -> &IndexSet<String> {
+    pub const fn functions(&self) -> &IndexSet<PyFunctionName> {
         &self.functions
     }
 }

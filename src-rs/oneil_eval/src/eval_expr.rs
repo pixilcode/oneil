@@ -1,7 +1,7 @@
-use std::{iter, path::Path};
+use std::iter;
 
 use oneil_ir as ir;
-use oneil_shared::span::Span;
+use oneil_shared::{paths::ModelPath, span::Span};
 
 use oneil_output::{Number, Unit, UnitConversionError, Value};
 
@@ -24,11 +24,11 @@ use crate::{
 //       an IR expression
 pub fn eval_expr_in_model<E: ExternalEvaluationContext>(
     expr: &ir::Expr,
-    model_path: &Path,
+    model_path: &ModelPath,
     context: &mut E,
 ) -> Result<Value, Vec<EvalError>> {
     let mut eval_context = EvalContext::with_preloaded_models(context);
-    eval_context.push_active_model(model_path.to_path_buf());
+    eval_context.push_active_model(model_path.clone());
 
     eval_expr(expr, &eval_context).map(|(value, _span)| value)
 }

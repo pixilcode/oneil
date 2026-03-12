@@ -5,4 +5,4 @@ mod independents;
 mod tree;
 
 pub use independents::Independents;
-pub use tree::{DependencyTreeValue, ReferenceTreeValue, Tree};
+pub use tree::{DependencyName, DependencyTreeValue, ReferenceTreeValue, Tree};

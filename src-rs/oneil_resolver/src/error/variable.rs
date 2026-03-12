@@ -1,9 +1,10 @@
 use std::fmt;
 
-use oneil_ir as ir;
 use oneil_shared::{
     error::{AsOneilError, Context, ErrorLocation},
+    paths::{ModelPath, PythonPath},
     span::Span,
+    symbols::{ParameterName, ReferenceName},
 };
 
 use super::unit::UnitResolutionError;
@@ -14,37 +15,37 @@ pub enum VariableResolutionError {
     /// The model that should contain the variable has errors.
     ModelHasError {
         /// The path of the model that has errors
-        path: ir::ModelPath,
+        path: ModelPath,
         /// The span of where the model is referenced
         reference_span: Span,
     },
     /// The parameter that should contain the variable has errors.
     ParameterHasError {
         /// The identifier of the parameter that has errors
-        parameter_name: ir::ParameterName,
+        parameter_name: ParameterName,
         /// The span of where the parameter is referenced
         reference_span: Span,
     },
     /// The resolution of a submodel that is referenced by a variable has failed.
     ReferenceResolutionFailed {
         /// The identifier of the reference that has errors
-        identifier: ir::ReferenceName,
+        identifier: ReferenceName,
         /// The span of where the reference is referenced
         reference_span: Span,
     },
     /// The parameter is not defined in the current context.
     UndefinedParameter {
         /// The path of the model that contains the parameter (if None, the parameter is not defined in the current model)
-        model_path: Option<ir::ModelPath>,
+        model_path: Option<ModelPath>,
         /// The identifier of the parameter that is undefined
-        parameter_name: ir::ParameterName,
+        parameter_name: ParameterName,
         /// The span of where the parameter is referenced
         reference_span: Span,
     },
     /// The reference is not defined in the current model.
     UndefinedReference {
         /// The identifier of the reference that is undefined
-        reference: ir::ReferenceName,
+        reference: ReferenceName,
         /// The span of where the reference is referenced
         reference_span: Span,
     },
@@ -62,7 +63,7 @@ pub enum VariableResolutionError {
         /// The span of the function name in the source
         relevant_span: Span,
         /// The Python paths that export this function
-        python_paths: Vec<ir::PythonPath>,
+        python_paths: Vec<PythonPath>,
     },
     /// A unit resolution error occurred (e.g. in a unit cast expression).
     UnitResolution(UnitResolutionError),
@@ -71,7 +72,7 @@ pub enum VariableResolutionError {
 impl VariableResolutionError {
     /// Creates a new error indicating that the model has errors.
     #[must_use]
-    pub const fn model_has_error(model_path: ir::ModelPath, reference_span: Span) -> Self {
+    pub const fn model_has_error(model_path: ModelPath, reference_span: Span) -> Self {
         Self::ModelHasError {
             path: model_path,
             reference_span,
@@ -80,10 +81,7 @@ impl VariableResolutionError {
 
     /// Creates a new error indicating that the parameter has errors.
     #[must_use]
-    pub const fn parameter_has_error(
-        parameter_name: ir::ParameterName,
-        reference_span: Span,
-    ) -> Self {
+    pub const fn parameter_has_error(parameter_name: ParameterName, reference_span: Span) -> Self {
         Self::ParameterHasError {
             parameter_name,
             reference_span,
@@ -94,7 +92,7 @@ impl VariableResolutionError {
     /// referenced by a variable has failed.
     #[must_use]
     pub const fn reference_resolution_failed(
-        identifier: ir::ReferenceName,
+        identifier: ReferenceName,
         reference_span: Span,
     ) -> Self {
         Self::ReferenceResolutionFailed {
@@ -105,10 +103,7 @@ impl VariableResolutionError {
 
     /// Creates a new error indicating that the parameter is undefined in the current model.
     #[must_use]
-    pub const fn undefined_parameter(
-        parameter_name: ir::ParameterName,
-        reference_span: Span,
-    ) -> Self {
+    pub const fn undefined_parameter(parameter_name: ParameterName, reference_span: Span) -> Self {
         Self::UndefinedParameter {
             model_path: None,
             parameter_name,
@@ -119,8 +114,8 @@ impl VariableResolutionError {
     /// Creates a new error indicating that the parameter is undefined in a specific reference.
     #[must_use]
     pub const fn undefined_parameter_in_reference(
-        reference_path: ir::ModelPath,
-        parameter_name: ir::ParameterName,
+        reference_path: ModelPath,
+        parameter_name: ParameterName,
         reference_span: Span,
     ) -> Self {
         Self::UndefinedParameter {
@@ -132,7 +127,7 @@ impl VariableResolutionError {
 
     /// Creates a new error indicating that the submodel is undefined in the current model.
     #[must_use]
-    pub const fn undefined_reference(reference: ir::ReferenceName, reference_span: Span) -> Self {
+    pub const fn undefined_reference(reference: ReferenceName, reference_span: Span) -> Self {
         Self::UndefinedReference {
             reference,
             reference_span,
@@ -153,7 +148,7 @@ impl VariableResolutionError {
     pub const fn multiple_functions_found(
         function_name: String,
         relevant_span: Span,
-        python_paths: Vec<ir::PythonPath>,
+        python_paths: Vec<PythonPath>,
     ) -> Self {
         Self::MultipleFunctionsFound {
             function_name,
@@ -170,7 +165,7 @@ impl fmt::Display for VariableResolutionError {
                 path,
                 reference_span: _,
             } => {
-                let path = path.as_ref().display();
+                let path = path.as_path().display();
                 write!(f, "model `{path}` has errors")
             }
             Self::ParameterHasError {
@@ -196,7 +191,7 @@ impl fmt::Display for VariableResolutionError {
                 let identifier_str = parameter_name.as_str();
                 match model_path {
                     Some(path) => {
-                        let path = path.as_ref().display();
+                        let path = path.as_path().display();
                         write!(
                             f,
                             "parameter `{identifier_str}` is not defined in model `{path}`"
@@ -327,7 +322,7 @@ impl AsOneilError for VariableResolutionError {
                 .map(|path| {
                     Context::Note(format!(
                         "python import `{}` exports `{function_name}`",
-                        path.as_ref().display()
+                        path.as_path().display()
                     ))
                 })
                 .collect(),

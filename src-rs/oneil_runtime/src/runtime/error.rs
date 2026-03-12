@@ -1,7 +1,5 @@
 //! Error reporting for models and parameters.
 
-use std::path::{Path, PathBuf};
-
 use indexmap::{IndexMap, IndexSet};
 use oneil_eval::{EvalError, EvalErrors};
 use oneil_resolver::ResolutionErrorCollection;
@@ -11,6 +9,10 @@ use oneil_resolver::error::{
 };
 use oneil_shared::error::OneilError;
 use oneil_shared::load_result::LoadResult;
+use oneil_shared::paths::ModelPath;
+#[cfg(feature = "python")]
+use oneil_shared::paths::PythonPath;
+use oneil_shared::symbols::{ParameterName, ReferenceName, TestIndex};
 
 use super::Runtime;
 use crate::{
@@ -36,16 +38,16 @@ impl Runtime {
     #[must_use]
     pub(super) fn get_model_errors(
         &self,
-        model_path: &Path,
+        model_path: &ModelPath,
         include_indirect_errors: bool,
     ) -> RuntimeErrors {
-        let path_buf = model_path.to_path_buf();
+        let path_buf = model_path.clone().into_path_buf();
 
         // Handle source errors
         //
         // If the source failed to load, then there can be no
         // other errors, so we return early
-        let Some(source_entry) = self.source_cache.get_entry(model_path) else {
+        let Some(source_entry) = self.source_cache.get_entry(&model_path.into()) else {
             return RuntimeErrors::default();
         };
 
@@ -55,7 +57,7 @@ impl Runtime {
                 let mut errors = RuntimeErrors::default();
 
                 errors.add_model_error(
-                    path_buf.clone(),
+                    model_path.clone(),
                     ModelError::FileError(vec![OneilError::from_error(source_err, path_buf)]),
                 );
 
@@ -86,14 +88,14 @@ impl Runtime {
             .ir_cache
             .get_entry(model_path)
             .and_then(|entry| entry.error())
-            .map(|errors| collect_ir_errors(errors, &path_buf, source, include_indirect_errors));
+            .map(|errors| collect_ir_errors(errors, model_path, source, include_indirect_errors));
 
         // get the eval errors, if any
         let eval_errors = self
             .eval_cache
             .get_entry(model_path)
             .and_then(|entry| entry.error())
-            .map(|errors| collect_eval_errors(errors, &path_buf, source, include_indirect_errors));
+            .map(|errors| collect_eval_errors(errors, model_path, source, include_indirect_errors));
 
         // combine the IR and eval errors
         let MergedErrors {
@@ -122,7 +124,7 @@ impl Runtime {
 
         if let Some(ast_errors) = ast_errors {
             // if there are AST errors, add them as a file error
-            errors.add_model_error(path_buf, ModelError::FileError(ast_errors));
+            errors.add_model_error(model_path.clone(), ModelError::FileError(ast_errors));
         } else if !model_import_errors.is_empty()
             || !python_import_errors.is_empty()
             || !parameter_errors.is_empty()
@@ -130,12 +132,12 @@ impl Runtime {
         {
             // if there are other errors, add them as a model error
             errors.add_model_error(
-                path_buf,
+                model_path.clone(),
                 ModelError::EvalErrors {
                     model_import_errors: Box::new(model_import_errors),
                     python_import_errors: Box::new(python_import_errors),
                     parameter_errors: Box::new(parameter_errors),
-                    test_errors,
+                    test_errors: Box::new(test_errors),
                 },
             );
         }
@@ -149,23 +151,26 @@ impl Runtime {
     /// returns a [`RuntimeErrors`] with [`ModelError::FileError`] entries for each.
     #[must_use]
     #[cfg(feature = "python")]
-    pub(super) fn get_python_import_errors(&self, python_import_path: &Path) -> RuntimeErrors {
-        let path_buf = python_import_path.to_path_buf();
+    pub(super) fn get_python_import_errors(
+        &self,
+        python_import_path: &PythonPath,
+    ) -> RuntimeErrors {
+        let path_buf = python_import_path.clone().into_path_buf();
         let mut errors = RuntimeErrors::new();
 
-        if let Some(Err(source_err)) = self.source_cache.get_entry(python_import_path) {
-            errors.add_model_error(
-                path_buf.clone(),
-                ModelError::FileError(vec![OneilError::from_error(source_err, path_buf.clone())]),
+        if let Some(Err(source_err)) = self.source_cache.get_entry(&python_import_path.into()) {
+            errors.add_python_import_error(
+                python_import_path.clone(),
+                OneilError::from_error(source_err, path_buf.clone()),
             );
         }
 
         if let Some(Err(load_err)) = self.python_import_cache.get_entry(python_import_path)
             && let PythonImportError::LoadFailed(load_err) = load_err
         {
-            errors.add_model_error(
-                path_buf.clone(),
-                ModelError::FileError(vec![OneilError::from_error(load_err, path_buf)]),
+            errors.add_python_import_error(
+                python_import_path.clone(),
+                OneilError::from_error(load_err, path_buf),
             );
         }
 
@@ -181,17 +186,17 @@ impl Runtime {
 #[derive(Debug)]
 struct IrErrorsResult {
     /// Model paths that have errors (for recursive collection).
-    models_with_errors: IndexSet<PathBuf>,
+    models_with_errors: IndexSet<ModelPath>,
     /// Python import paths that have errors (for recursive collection).
-    python_imports_with_errors: IndexSet<PathBuf>,
+    python_imports_with_errors: IndexSet<PythonPath>,
     /// Model import resolution errors by reference name.
-    model_import_errors: IndexMap<String, OneilError>,
+    model_import_errors: IndexMap<ReferenceName, OneilError>,
     /// Python import resolution errors by path.
-    python_import_errors: IndexMap<PathBuf, OneilError>,
+    python_import_errors: IndexMap<PythonPath, OneilError>,
     /// Parameter resolution errors by parameter name.
-    parameter_errors: IndexMap<String, Vec<OneilError>>,
+    parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
     /// Test resolution errors.
-    test_errors: Vec<OneilError>,
+    test_errors: IndexMap<TestIndex, Vec<OneilError>>,
 }
 
 /// Collects resolution errors from IR into structured error data and model/python path sets.
@@ -199,10 +204,12 @@ struct IrErrorsResult {
 /// See [`Runtime::get_model_errors`] for more details on the `include_indirect_errors` parameter.
 fn collect_ir_errors(
     errors: &ResolutionErrorCollection,
-    path: &Path,
+    path: &ModelPath,
     source: &str,
     include_indirect_errors: bool,
 ) -> IrErrorsResult {
+    let path_buf = path.clone().into_path_buf();
+
     // collect model import errors
     let mut model_import_errors = IndexMap::new();
     let mut models_with_errors = IndexSet::new();
@@ -213,8 +220,8 @@ fn collect_ir_errors(
                 models_with_errors.insert(model_path);
             }
 
-            let error = OneilError::from_error_with_source(ref_error, path.to_path_buf(), source);
-            model_import_errors.insert(ref_name.to_string(), error);
+            let error = OneilError::from_error_with_source(ref_error, path_buf.clone(), source);
+            model_import_errors.insert(ref_name.clone(), error);
         }
     }
 
@@ -226,8 +233,8 @@ fn collect_ir_errors(
             python_imports_with_errors.insert(python_path);
         }
 
-        let error = OneilError::from_error_with_source(err, path.to_path_buf(), source);
-        python_import_errors.insert(python_path.as_ref().to_path_buf(), error);
+        let error = OneilError::from_error_with_source(err, path_buf.clone(), source);
+        python_import_errors.insert(python_path.clone(), error);
     }
 
     let has_python_import_errors = !python_import_errors.is_empty();
@@ -235,14 +242,14 @@ fn collect_ir_errors(
     // collect parameter errors
     let mut parameter_errors = IndexMap::new();
     for (param_name, param_errs) in errors.get_parameter_resolution_errors() {
-        let models_with_errors_in_param: IndexSet<PathBuf> = param_errs
+        let models_with_errors_in_param: IndexSet<_> = param_errs
             .iter()
             .filter_map(|error| {
                 if let ParameterResolutionError::VariableResolution(
                     VariableResolutionError::ModelHasError { path, .. },
                 ) = error
                 {
-                    Some(path.as_ref().to_path_buf())
+                    Some(path.clone())
                 } else {
                     None
                 }
@@ -253,19 +260,19 @@ fn collect_ir_errors(
         let oneil_errors: Vec<OneilError> = param_errs
             .iter()
             .filter(|e| !(has_python_import_errors && is_undefined_function_error(e)))
-            .map(|e| OneilError::from_error_with_source(e, path.to_path_buf(), source))
+            .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
             .collect();
-        parameter_errors.insert(param_name.as_str().to_string(), oneil_errors);
+        parameter_errors.insert(param_name.clone(), oneil_errors);
     }
 
     // collect test errors
-    let mut test_errors = Vec::new();
-    for (_, test_errs) in errors.get_test_resolution_errors() {
-        let models_with_errors_in_test: IndexSet<PathBuf> = test_errs
+    let mut test_errors = IndexMap::new();
+    for (test_index, test_errs) in errors.get_test_resolution_errors() {
+        let models_with_errors_in_test: IndexSet<_> = test_errs
             .iter()
             .filter_map(|error| {
                 if let VariableResolutionError::ModelHasError { path, .. } = error {
-                    Some(path.as_ref().to_path_buf())
+                    Some(path.clone())
                 } else {
                     None
                 }
@@ -275,9 +282,9 @@ fn collect_ir_errors(
 
         let oneil_errors: Vec<OneilError> = test_errs
             .iter()
-            .map(|e| OneilError::from_error_with_source(e, path.to_path_buf(), source))
+            .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
             .collect();
-        test_errors.extend(oneil_errors);
+        test_errors.insert(*test_index, oneil_errors);
     }
 
     IrErrorsResult {
@@ -307,11 +314,11 @@ const fn is_undefined_function_error(error: &ParameterResolutionError) -> bool {
 #[derive(Debug)]
 struct EvalErrorsResult {
     /// Model paths that have errors (for recursive collection).
-    models_with_errors: IndexSet<PathBuf>,
+    models_with_errors: IndexSet<ModelPath>,
     /// Parameter evaluation errors by parameter name.
-    parameter_errors: IndexMap<String, Vec<OneilError>>,
+    parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
     /// Test evaluation errors.
-    test_errors: Vec<OneilError>,
+    test_errors: IndexMap<TestIndex, Vec<OneilError>>,
 }
 
 /// Collects evaluation errors into structured error data and model path set.
@@ -319,10 +326,12 @@ struct EvalErrorsResult {
 /// See [`Runtime::get_model_errors`] for more details on the `include_indirect_errors` parameter.
 fn collect_eval_errors(
     errors: &EvalErrors,
-    path: &Path,
+    path: &ModelPath,
     source: &str,
     include_indirect_errors: bool,
 ) -> EvalErrorsResult {
+    let path_buf = path.clone().into_path_buf();
+
     let mut models_with_errors = IndexSet::new();
 
     if include_indirect_errors {
@@ -333,7 +342,7 @@ fn collect_eval_errors(
 
     let mut parameter_errors = IndexMap::new();
     for (name, param_errs) in &errors.parameters {
-        let models_with_errors_in_param: IndexSet<PathBuf> = param_errs
+        let models_with_errors_in_param: IndexSet<_> = param_errs
             .iter()
             .filter_map(|error| {
                 if let EvalError::ParameterHasError { model_path, .. } = error {
@@ -347,21 +356,27 @@ fn collect_eval_errors(
 
         let oneil_errors: Vec<OneilError> = param_errs
             .iter()
-            .map(|e| OneilError::from_error_with_source(e, path.to_path_buf(), source))
+            .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
             .collect();
         parameter_errors.insert(name.clone(), oneil_errors);
     }
 
-    let mut test_errors = Vec::new();
-    for test_err in &errors.tests {
-        if let EvalError::ParameterHasError { model_path, .. } = test_err
-            && let Some(p) = model_path
-        {
-            models_with_errors.insert(p.clone());
+    let mut test_errors = IndexMap::new();
+    for (test_index, test_errs) in &errors.tests {
+        let mut test_errors_in_test = Vec::new();
+
+        for test_err in test_errs {
+            if let EvalError::ParameterHasError { model_path, .. } = test_err
+                && let Some(p) = model_path
+            {
+                models_with_errors.insert(p.clone());
+            }
+
+            let error = OneilError::from_error_with_source(test_err, path_buf.clone(), source);
+            test_errors_in_test.push(error);
         }
 
-        let error = OneilError::from_error_with_source(test_err, path.to_path_buf(), source);
-        test_errors.push(error);
+        test_errors.insert(*test_index, test_errors_in_test);
     }
 
     EvalErrorsResult {
@@ -379,17 +394,17 @@ fn collect_eval_errors(
 #[derive(Debug)]
 struct MergedErrors {
     /// Model paths that have errors (for recursive collection).
-    pub models_with_errors: IndexSet<PathBuf>,
+    pub models_with_errors: IndexSet<ModelPath>,
     /// Python import paths that have errors (for recursive collection).
-    pub python_imports_with_errors: IndexSet<PathBuf>,
+    pub python_imports_with_errors: IndexSet<PythonPath>,
     /// Model import errors by reference name.
-    pub model_import_errors: IndexMap<String, OneilError>,
+    pub model_import_errors: IndexMap<ReferenceName, OneilError>,
     /// Python import errors by path.
-    pub python_import_errors: IndexMap<PathBuf, OneilError>,
+    pub python_import_errors: IndexMap<PythonPath, OneilError>,
     /// Parameter errors by parameter name.
-    pub parameter_errors: IndexMap<String, Vec<OneilError>>,
+    pub parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
     /// Test errors.
-    pub test_errors: Vec<OneilError>,
+    pub test_errors: IndexMap<TestIndex, Vec<OneilError>>,
 }
 
 /// Merges optional IR and eval error results into a single combined result.
@@ -443,21 +458,19 @@ fn merge_ir_and_eval_errors(
             model_import_errors: IndexMap::new(),
             python_import_errors: IndexMap::new(),
             parameter_errors: IndexMap::new(),
-            test_errors: Vec::new(),
+            test_errors: IndexMap::new(),
         },
     }
 }
 
 /// Returns the model path from a model import error when available.
-fn get_model_path_from_model_import_error(err: &ModelImportResolutionError) -> Option<PathBuf> {
+fn get_model_path_from_model_import_error(err: &ModelImportResolutionError) -> Option<ModelPath> {
     match err {
-        ModelImportResolutionError::ModelHasError { model_path, .. } => {
-            Some(model_path.as_ref().to_path_buf())
-        }
+        ModelImportResolutionError::ModelHasError { model_path, .. } => Some(model_path.clone()),
 
         ModelImportResolutionError::UndefinedSubmodel {
             parent_model_path, ..
-        } => Some(parent_model_path.as_ref().to_path_buf()),
+        } => Some(parent_model_path.clone()),
 
         ModelImportResolutionError::ParentModelHasError { .. }
         | ModelImportResolutionError::DuplicateSubmodel { .. }
@@ -466,10 +479,12 @@ fn get_model_path_from_model_import_error(err: &ModelImportResolutionError) -> O
 }
 
 /// Returns the Python path from a Python import error when available.
-fn get_python_path_from_python_import_error(err: &PythonImportResolutionError) -> Option<PathBuf> {
+fn get_python_path_from_python_import_error(
+    err: &PythonImportResolutionError,
+) -> Option<PythonPath> {
     match err {
         PythonImportResolutionError::FailedValidation { python_path, .. } => {
-            Some(python_path.as_ref().to_path_buf())
+            Some(python_path.clone())
         }
 
         PythonImportResolutionError::DuplicateImport { .. }

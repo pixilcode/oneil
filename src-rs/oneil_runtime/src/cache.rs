@@ -1,12 +1,15 @@
 //! Generic path-keyed cache using [`LoadResult`], and a source cache for raw file contents.
 
-use std::path::{Path, PathBuf};
-
 use indexmap::IndexMap;
 use oneil_eval as eval;
 use oneil_parser::error::ParserError;
 use oneil_resolver as resolver;
-use oneil_shared::load_result::LoadResult;
+#[cfg(feature = "python")]
+use oneil_shared::paths::PythonPath;
+use oneil_shared::{
+    load_result::LoadResult,
+    paths::{ModelPath, SourcePath},
+};
 
 use crate::{error::SourceError, output};
 
@@ -22,7 +25,7 @@ use crate::error::PythonImportError;
 /// there is no possible partial result.
 #[derive(Debug)]
 pub struct SourceCache {
-    entries: IndexMap<PathBuf, Result<String, SourceError>>,
+    entries: IndexMap<SourcePath, Result<String, SourceError>>,
 }
 
 impl Default for SourceCache {
@@ -42,29 +45,29 @@ impl SourceCache {
 
     /// Returns the full cached entry for `path`.
     #[must_use]
-    pub fn get_entry(&self, path: &Path) -> Option<&Result<String, SourceError>> {
+    pub fn get_entry(&self, path: &SourcePath) -> Option<&Result<String, SourceError>> {
         self.entries.get(path)
     }
 
     /// Inserts a result for `path`, replacing any existing entry.
-    pub fn insert(&mut self, path: PathBuf, result: Result<String, SourceError>) {
+    pub fn insert(&mut self, path: SourcePath, result: Result<String, SourceError>) {
         self.entries.insert(path, result);
     }
 
     /// Returns an iterator over path–result pairs.
-    pub fn iter(&self) -> indexmap::map::Iter<'_, PathBuf, Result<String, SourceError>> {
+    pub fn iter(&self) -> indexmap::map::Iter<'_, SourcePath, Result<String, SourceError>> {
         self.entries.iter()
     }
 }
 
 /// Cache for parsed AST models keyed by path.
-pub type AstCache = Cache<output::ast::ModelNode, Vec<ParserError>>;
+pub type AstCache = ModelCache<output::ast::ModelNode, Vec<ParserError>>;
 
 /// Cache for resolved IR models keyed by path.
-pub type IrCache = Cache<output::ir::Model, resolver::ResolutionErrorCollection>;
+pub type IrCache = ModelCache<output::ir::Model, resolver::ResolutionErrorCollection>;
 
 /// Cache for evaluated output models keyed by path.
-pub type EvalCache = Cache<output::Model, eval::EvalErrors>;
+pub type EvalCache = ModelCache<output::Model, eval::EvalErrors>;
 
 /// Cache for Python import function maps keyed by path.
 ///
@@ -74,7 +77,7 @@ pub type EvalCache = Cache<output::Model, eval::EvalErrors>;
 #[derive(Debug)]
 pub struct PythonImportCache {
     entries:
-        IndexMap<PathBuf, Result<oneil_python::function::PythonFunctionMap, PythonImportError>>,
+        IndexMap<PythonPath, Result<oneil_python::function::PythonFunctionMap, PythonImportError>>,
 }
 
 #[cfg(feature = "python")]
@@ -98,7 +101,7 @@ impl PythonImportCache {
     #[must_use]
     pub fn get_entry(
         &self,
-        path: &Path,
+        path: &PythonPath,
     ) -> Option<&Result<oneil_python::function::PythonFunctionMap, PythonImportError>> {
         self.entries.get(path)
     }
@@ -106,7 +109,7 @@ impl PythonImportCache {
     /// Inserts a result for `path`, replacing any existing entry.
     pub fn insert(
         &mut self,
-        path: PathBuf,
+        path: PythonPath,
         result: Result<oneil_python::function::PythonFunctionMap, PythonImportError>,
     ) {
         self.entries.insert(path, result);
@@ -118,11 +121,11 @@ impl PythonImportCache {
 /// Used to cache load outcomes (success, partial, or failure) for files or
 /// resources identified by path.
 #[derive(Debug)]
-pub struct Cache<T, E> {
-    entries: IndexMap<PathBuf, LoadResult<T, E>>,
+pub struct ModelCache<T, E> {
+    entries: IndexMap<ModelPath, LoadResult<T, E>>,
 }
 
-impl<T, E> Default for Cache<T, E> {
+impl<T, E> Default for ModelCache<T, E> {
     fn default() -> Self {
         Self {
             entries: IndexMap::new(),
@@ -130,7 +133,7 @@ impl<T, E> Default for Cache<T, E> {
     }
 }
 
-impl<T, E> Cache<T, E> {
+impl<T, E> ModelCache<T, E> {
     /// Creates an empty cache.
     #[must_use]
     pub fn new() -> Self {
@@ -139,30 +142,30 @@ impl<T, E> Cache<T, E> {
 
     /// Returns the full cached entry for `path`.
     #[must_use]
-    pub fn get_entry(&self, path: &Path) -> Option<&LoadResult<T, E>> {
+    pub fn get_entry(&self, path: &ModelPath) -> Option<&LoadResult<T, E>> {
         self.entries.get(path)
     }
 
     /// Returns the value for `path`, if present.
     #[must_use]
-    pub fn get_value(&self, path: &Path) -> Option<&T> {
+    pub fn get_value(&self, path: &ModelPath) -> Option<&T> {
         self.entries.get(path).and_then(LoadResult::value)
     }
 
     /// Returns the error for `path`, if present.
     #[must_use]
-    pub fn get_error(&self, path: &Path) -> Option<&E> {
+    pub fn get_error(&self, path: &ModelPath) -> Option<&E> {
         self.entries.get(path).and_then(LoadResult::error)
     }
 
     /// Inserts a [`LoadResult`] for `path`, replacing any existing entry.
-    pub fn insert(&mut self, path: PathBuf, result: LoadResult<T, E>) {
+    pub fn insert(&mut self, path: ModelPath, result: LoadResult<T, E>) {
         self.entries.insert(path, result);
     }
 
     /// Returns whether `path` has a cached entry.
     #[must_use]
-    pub fn contains(&self, path: &Path) -> bool {
+    pub fn contains(&self, path: &ModelPath) -> bool {
         self.entries.contains_key(path)
     }
 
@@ -179,7 +182,7 @@ impl<T, E> Cache<T, E> {
     }
 
     /// Returns an iterator over path–result pairs.
-    pub fn iter(&self) -> indexmap::map::Iter<'_, PathBuf, LoadResult<T, E>> {
+    pub fn iter(&self) -> indexmap::map::Iter<'_, ModelPath, LoadResult<T, E>> {
         self.entries.iter()
     }
 }

@@ -1,19 +1,19 @@
 use oneil_ast as ast;
-use oneil_ir as ir;
+use oneil_shared::paths::{ModelPath, PythonPath};
 
 use crate::{ExternalResolutionContext, ResolutionContext, error::PythonImportResolutionError};
 
 /// Validates a list of Python import declarations for a given model.
 pub fn resolve_python_imports<E>(
-    model_path: &ir::ModelPath,
+    model_path: &ModelPath,
     python_imports: Vec<&ast::ImportNode>,
     resolution_context: &mut ResolutionContext<'_, E>,
 ) where
     E: ExternalResolutionContext,
 {
     for import in python_imports {
-        let python_path = model_path.get_sibling_path(import.path().as_str());
-        let python_path = ir::PythonPath::new(python_path);
+        let python_path = PythonPath::from_str_no_ext(import.path().as_str());
+        let python_path = model_path.get_sibling_python_path(python_path);
         let python_path_span = import.path().span();
 
         #[cfg(feature = "python")]
@@ -50,26 +50,24 @@ pub fn resolve_python_imports<E>(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::*;
     use crate::test::{
         external_context::TestExternalContext, resolution_context::ResolutionContextBuilder,
-        test_ast,
+        test_ast, test_model_path,
     };
 
-    fn python_path(s: &str) -> ir::PythonPath {
-        ir::PythonPath::new(PathBuf::from(s))
+    fn python_path(s: &str) -> PythonPath {
+        PythonPath::from_str_no_ext(s)
     }
 
     #[test]
     fn resolve_python_imports_empty_list() {
         // build the imports
         let imports: Vec<&ast::ImportNode> = vec![];
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -99,10 +97,10 @@ mod tests {
         // build the imports
         let imports = [test_ast::ImportPythonNodeBuilder::build("my_python")];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context (external allows "my_python")
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external = TestExternalContext::new().with_python_imports_ok(["my_python"]);
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -130,10 +128,10 @@ mod tests {
         // build the imports (external allows nothing)
         let imports = [test_ast::ImportPythonNodeBuilder::build("nonexistent")];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -175,10 +173,10 @@ mod tests {
             test_ast::ImportPythonNodeBuilder::build("nonexistent"),
         ];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external = TestExternalContext::new().with_python_imports_ok(["my_python"]);
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -219,10 +217,10 @@ mod tests {
             test_ast::ImportPythonNodeBuilder::build("my_python3"),
         ];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external = TestExternalContext::new().with_python_imports_ok([
             "my_python1",
             "my_python2",
@@ -263,10 +261,10 @@ mod tests {
             test_ast::ImportPythonNodeBuilder::build("nonexistent2"),
         ];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -317,10 +315,10 @@ mod tests {
         // build the imports (invalid)
         let imports = [test_ast::ImportPythonNodeBuilder::build("nonexistent")];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -340,10 +338,10 @@ mod tests {
         // build the imports (model in subdir, import "my_python" -> subdir/my_python)
         let imports = [test_ast::ImportPythonNodeBuilder::build("my_python")];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new(PathBuf::from("subdir/test_model"));
+        let model_path = test_model_path("subdir/test_model");
 
         // build the context (allow subdir/my_python)
-        let active_path = ir::ModelPath::new(PathBuf::from("subdir/test_model"));
+        let active_path = test_model_path("subdir/test_model");
         let mut external = TestExternalContext::new().with_python_imports_ok(["subdir/my_python"]);
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -374,10 +372,10 @@ mod tests {
             test_ast::ImportPythonNodeBuilder::build("my_python"),
         ];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external = TestExternalContext::new().with_python_imports_ok(["my_python"]);
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -420,10 +418,10 @@ mod tests {
             test_ast::ImportPythonNodeBuilder::build("other_python"),
         ];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external =
             TestExternalContext::new().with_python_imports_ok(["my_python", "other_python"]);
         let mut resolution_context = ResolutionContextBuilder::new()
@@ -479,10 +477,10 @@ mod tests {
             test_ast::ImportPythonNodeBuilder::build("another_nonexistent"),
         ];
         let import_refs: Vec<&ast::ImportNode> = imports.iter().collect();
-        let model_path = ir::ModelPath::new("test_model");
+        let model_path = test_model_path("test_model");
 
         // build the context (only "my_python" allowed)
-        let active_path = ir::ModelPath::new("test_model");
+        let active_path = test_model_path("test_model");
         let mut external = TestExternalContext::new().with_python_imports_ok(["my_python"]);
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)

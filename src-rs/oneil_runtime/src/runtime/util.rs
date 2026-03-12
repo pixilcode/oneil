@@ -1,8 +1,7 @@
 //! Utility methods for the runtime.
 
-use std::path::PathBuf;
-
 use indexmap::IndexSet;
+use oneil_shared::paths::SourcePath;
 
 use super::Runtime;
 #[cfg(feature = "python")]
@@ -27,7 +26,7 @@ impl Runtime {
 
     /// Gets the paths to files that the runtime relies on.
     #[must_use]
-    pub fn get_watch_paths(&self) -> IndexSet<PathBuf> {
+    pub fn get_watch_paths(&self) -> IndexSet<SourcePath> {
         self.source_cache
             .iter()
             .map(|(path, _)| path.clone())

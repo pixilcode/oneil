@@ -1,15 +1,17 @@
 //! A dependency graph for the results of evaluating Oneil models.
 
-use std::path::{Path, PathBuf};
-
 use indexmap::{IndexMap, IndexSet};
 use oneil_output::{BuiltinDependency, DependencySet, ExternalDependency, ParameterDependency};
+use oneil_shared::{
+    paths::ModelPath,
+    symbols::{ParameterName, ReferenceName},
+};
 
 /// A dependency graph for the results of evaluating Oneil models.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DependencyGraph {
-    depends_on: IndexMap<PathBuf, IndexMap<String, DependencySet>>,
-    referenced_by: IndexMap<PathBuf, IndexMap<String, ReferenceSet>>,
+    depends_on: IndexMap<ModelPath, IndexMap<ParameterName, DependencySet>>,
+    referenced_by: IndexMap<ModelPath, IndexMap<ParameterName, ReferenceSet>>,
 }
 
 impl DependencyGraph {
@@ -25,8 +27,8 @@ impl DependencyGraph {
     /// Adds a builtin dependency to the graph.
     pub fn add_depends_on_builtin(
         &mut self,
-        param_path: PathBuf,
-        param_name: String,
+        param_path: ModelPath,
+        param_name: ParameterName,
         dependency: BuiltinDependency,
     ) {
         self.depends_on
@@ -41,8 +43,8 @@ impl DependencyGraph {
     /// Adds a parameter dependency to the graph.
     pub fn add_depends_on_parameter(
         &mut self,
-        param_path: PathBuf,
-        param_name: String,
+        param_path: ModelPath,
+        param_name: ParameterName,
         dependency: ParameterDependency,
     ) {
         self.depends_on
@@ -73,8 +75,8 @@ impl DependencyGraph {
     /// Adds an external dependency to the graph.
     pub fn add_depends_on_external(
         &mut self,
-        param_path: PathBuf,
-        param_name: String,
+        param_path: ModelPath,
+        param_name: ParameterName,
         dependency: ExternalDependency,
     ) {
         self.depends_on
@@ -108,14 +110,22 @@ impl DependencyGraph {
 
     /// Returns the parameters that a given parameter depends on.
     #[must_use]
-    pub fn dependents(&self, model_path: &Path, parameter_name: &str) -> Option<&DependencySet> {
+    pub fn dependents(
+        &self,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
+    ) -> Option<&DependencySet> {
         let model = self.depends_on.get(model_path)?;
         model.get(parameter_name)
     }
 
     /// Returns the parameters that reference a given parameter.
     #[must_use]
-    pub fn references(&self, model_path: &Path, parameter_name: &str) -> Option<&ReferenceSet> {
+    pub fn references(
+        &self,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
+    ) -> Option<&ReferenceSet> {
         let model = self.referenced_by.get(model_path)?;
         model.get(parameter_name)
     }
@@ -163,7 +173,7 @@ impl Default for ReferenceSet {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParameterReference {
     /// The name of the parameter that references this parameter.
-    pub parameter_name: String,
+    pub parameter_name: ParameterName,
 }
 
 /// A reference from an external model.
@@ -173,9 +183,9 @@ pub struct ParameterReference {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExternalReference {
     /// The path to the model that references this parameter.
-    pub model_path: PathBuf,
+    pub model_path: ModelPath,
     /// The name of the parameter in the external model that references this parameter.
-    pub parameter_name: String,
+    pub parameter_name: ParameterName,
     /// The reference name used by the external model to access this model.
-    pub using_reference_name: String,
+    pub using_reference_name: ReferenceName,
 }

@@ -2,6 +2,7 @@
 
 use oneil_ast as ast;
 use oneil_ir as ir;
+use oneil_shared::symbols::{BuiltinValueName, ParameterName};
 
 use crate::{
     ExternalResolutionContext, ResolutionContext,
@@ -19,7 +20,7 @@ where
 {
     match &**variable {
         ast::Variable::Identifier(identifier) => {
-            let var_identifier = ir::ParameterName::new(identifier.as_str().to_string());
+            let var_identifier = ParameterName::from(identifier.as_str());
             let variable_span = variable.span();
             let identifier_span = identifier.span();
 
@@ -37,8 +38,9 @@ where
                     identifier_span,
                 )),
                 ParameterResult::NotFound => {
-                    let builtin_identifier = ir::Identifier::new(identifier.as_str().to_string());
-                    if resolution_context.has_builtin_value(&builtin_identifier) {
+                    if resolution_context.has_builtin_value(identifier) {
+                        let builtin_identifier =
+                            BuiltinValueName::new(identifier.as_str().to_string());
                         let expr = ir::Expr::builtin_variable(
                             variable_span,
                             identifier_span,
@@ -58,7 +60,7 @@ where
             reference_model,
             parameter,
         } => {
-            let reference_name = ir::ReferenceName::new(reference_model.as_str().to_string());
+            let reference_name = reference_model.clone().take_value();
             let reference_name_span = reference_model.span();
             let variable_span = variable.span();
 
@@ -89,7 +91,7 @@ where
                 };
 
             // ensure that the parameter is defined in the reference model
-            let var_identifier = ir::ParameterName::new(parameter.as_str().to_string());
+            let var_identifier = parameter.clone().take_value();
             let var_identifier_span = parameter.span();
             if model.get_parameter(&var_identifier).is_none() {
                 return Err(VariableResolutionError::undefined_parameter_in_reference(
@@ -116,13 +118,14 @@ where
 mod tests {
     use crate::test::{
         external_context::TestExternalContext, resolution_context::ResolutionContextBuilder,
-        test_ast, test_ir,
+        test_ast, test_ir, test_model_path,
     };
 
     use super::*;
 
     use crate::error::ModelImportResolutionError;
     use oneil_ir as ir;
+    use oneil_shared::{paths::ModelPath, symbols::ReferenceName};
 
     macro_rules! assert_var_is_builtin {
         ($variable:expr, $expected_ident:expr $(,)?) => {
@@ -177,7 +180,7 @@ mod tests {
     macro_rules! assert_var_is_external {
         ($variable:expr, $expected_model_path:expr, $expected_parameter_name:expr $(,)?) => {
             let variable: ir::Expr = $variable;
-            let expected_model_path: ir::ModelPath = ir::ModelPath::new($expected_model_path);
+            let expected_model_path: ModelPath = test_model_path($expected_model_path);
             let expected_parameter_name: &str = $expected_parameter_name;
 
             let ir::Expr::Variable {
@@ -212,7 +215,7 @@ mod tests {
         let variable = test_ast::identifier_variable_node("pi");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new().with_builtin_variables(["pi"]);
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -233,7 +236,7 @@ mod tests {
         let variable = test_ast::identifier_variable_node("temperature");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let params = [test_ir::ParameterBuilder::new()
             .with_name_str("temperature")
             .with_simple_number_value(42.0)
@@ -259,7 +262,7 @@ mod tests {
         let variable = test_ast::identifier_variable_node("undefined_param");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -280,10 +283,7 @@ mod tests {
         };
 
         assert_eq!(model_path, None);
-        assert_eq!(
-            parameter_name,
-            ir::ParameterName::new("undefined_param".to_string())
-        );
+        assert_eq!(parameter_name, ParameterName::from("undefined_param"));
     }
 
     #[test]
@@ -292,9 +292,9 @@ mod tests {
         let variable = test_ast::identifier_variable_node("error_param");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
-        let parameter_errors = [ir::ParameterName::new("error_param".to_string())];
+        let parameter_errors = [ParameterName::from("error_param")];
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
             .with_parameter_errors(parameter_errors)
@@ -313,10 +313,7 @@ mod tests {
             panic!("expected parameter has error, got {result:?}");
         };
 
-        assert_eq!(
-            parameter_name,
-            ir::ParameterName::new("error_param".to_string())
-        );
+        assert_eq!(parameter_name, ParameterName::from("error_param"));
     }
 
     #[test]
@@ -325,7 +322,7 @@ mod tests {
         let variable = test_ast::model_parameter_variable_node("undefined_reference", "parameter");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -344,10 +341,7 @@ mod tests {
             panic!("expected undefined reference error, got {result:?}");
         };
 
-        assert_eq!(
-            reference,
-            ir::ReferenceName::new("undefined_reference".to_string())
-        );
+        assert_eq!(reference, ReferenceName::from("undefined_reference"));
     }
 
     #[test]
@@ -356,13 +350,13 @@ mod tests {
         let variable = test_ast::model_parameter_variable_node("error_reference", "parameter");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
-        let ref_name = ir::ReferenceName::new("error_reference".to_string());
+        let ref_name = ReferenceName::from("error_reference");
         let ref_errors = [(
             ref_name.clone(),
             ModelImportResolutionError::model_has_error(
-                ir::ModelPath::new("dummy"),
+                test_model_path("dummy"),
                 crate::test::unimportant_span(),
             ),
         )];
@@ -393,9 +387,9 @@ mod tests {
         let variable = test_ast::model_parameter_variable_node("reference", "parameter");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
-        let reference_path = ir::ModelPath::new("test_reference");
+        let reference_path = test_model_path("test_reference");
         let reference_name = test_ir::reference_name("reference");
         let reference_model = test_ir::ModelBuilder::new()
             .with_literal_number_parameter("parameter", 42.0)
@@ -421,9 +415,9 @@ mod tests {
         let variable = test_ast::model_parameter_variable_node("reference", "undefined_param");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
-        let reference_path = ir::ModelPath::new("test_reference");
+        let reference_path = test_model_path("test_reference");
         let reference_name = test_ir::reference_name("reference");
         let reference_model = test_ir::empty_model();
         let references = [(reference_name, reference_path.clone(), reference_model)];
@@ -447,10 +441,7 @@ mod tests {
         };
 
         assert_eq!(model_path, Some(reference_path));
-        assert_eq!(
-            parameter_name,
-            ir::ParameterName::new("undefined_param".to_string())
-        );
+        assert_eq!(parameter_name, ParameterName::from("undefined_param"));
     }
 
     #[test]
@@ -459,9 +450,9 @@ mod tests {
         let variable = test_ast::model_parameter_variable_node("reference", "parameter");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
-        let reference_path = ir::ModelPath::new("test_reference");
+        let reference_path = test_model_path("test_reference");
         let reference_name = test_ir::reference_name("reference");
         let reference_model = test_ir::empty_model();
         let references = [(reference_name, reference_path.clone(), reference_model)];
@@ -494,7 +485,7 @@ mod tests {
         let variable = test_ast::identifier_variable_node("conflict");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new().with_builtin_variables(["conflict"]);
         let params = [test_ir::ParameterBuilder::new()
             .with_name_str("conflict")

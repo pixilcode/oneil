@@ -8,8 +8,8 @@ use nom::{
 };
 
 use oneil_ast::{
-    BinaryOp, BinaryOpNode, ComparisonOp, Expr, ExprNode, IdentifierNode, Literal, Node, UnaryOp,
-    Variable,
+    BinaryOp, BinaryOpNode, ComparisonOp, Expr, ExprNode, IdentifierNode, Literal, Node,
+    ParameterNameNode, ReferenceNameNode, UnaryOp, Variable,
 };
 use oneil_shared::span::Span;
 
@@ -418,7 +418,6 @@ fn unit_cast(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
 /// Parses a variable name
 fn variable(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
     let (rest, parameter_id) = identifier.convert_errors().parse(input)?;
-    let parameter_id_node = IdentifierNode::from(parameter_id);
 
     let (rest, reference_model_id_node) = opt(|input| {
         let (rest, dot_token) = dot.convert_errors().parse(input)?;
@@ -428,14 +427,19 @@ fn variable(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
             ))
             .parse(rest)?;
 
-        let reference_model_id_node = IdentifierNode::from(reference_model_id);
+        let reference_model_id_node = ReferenceNameNode::from(reference_model_id);
 
         Ok((rest, reference_model_id_node))
     })
     .parse(rest)?;
 
-    let variable_node = match reference_model_id_node {
-        Some(reference_model_id_node) => {
+    let variable_node = reference_model_id_node.map_or_else(
+        || {
+            let parameter_id_node = IdentifierNode::from(parameter_id);
+            parameter_id_node.wrap(Variable::identifier)
+        },
+        |reference_model_id_node| {
+            let parameter_id_node = ParameterNameNode::from(parameter_id);
             let variable_span = Span::from_start_and_end(
                 &parameter_id_node.span(),
                 &reference_model_id_node.span(),
@@ -445,9 +449,8 @@ fn variable(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
             let variable = Variable::model_parameter(reference_model_id_node, parameter_id_node);
 
             Node::new(variable, variable_span, variable_whitespace_span)
-        }
-        None => parameter_id_node.wrap(Variable::identifier),
-    };
+        },
+    );
 
     let expr = variable_node.wrap(Expr::variable);
 

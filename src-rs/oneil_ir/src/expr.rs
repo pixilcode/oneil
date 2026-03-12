@@ -1,11 +1,14 @@
 //! Expression system for mathematical and logical operations in Oneil.
 
-use oneil_shared::span::Span;
-
-use crate::{
-    CompositeUnit, ParameterName, PythonPath, ReferenceName,
-    reference::{Identifier, ModelPath},
+use oneil_shared::{
+    paths::{ModelPath, PythonPath},
+    span::Span,
+    symbols::{
+        BuiltinFunctionName, BuiltinValueName, ParameterName, PyFunctionName, ReferenceName,
+    },
 };
+
+use crate::CompositeUnit;
 
 /// Abstract syntax tree for mathematical and logical expressions.
 #[derive(Debug, Clone, PartialEq)]
@@ -137,7 +140,7 @@ impl Expr {
 
     /// Creates a built-in variable reference.
     #[must_use]
-    pub const fn builtin_variable(span: Span, ident_span: Span, ident: Identifier) -> Self {
+    pub const fn builtin_variable(span: Span, ident_span: Span, ident: BuiltinValueName) -> Self {
         Self::Variable {
             span,
             variable: Variable::builtin(ident, ident_span),
@@ -399,13 +402,13 @@ pub enum UnaryOp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionName {
     /// Built-in mathematical function.
-    Builtin(Identifier, Span),
+    Builtin(BuiltinFunctionName, Span),
     /// Function imported from a Python module.
     Imported {
         /// The path to the Python module.
         python_path: PythonPath,
         /// The name of the function.
-        name: Identifier,
+        name: PyFunctionName,
         /// The span of the function name.
         name_span: Span,
     },
@@ -414,13 +417,13 @@ pub enum FunctionName {
 impl FunctionName {
     /// Creates a reference to a built-in function.
     #[must_use]
-    pub const fn builtin(name: Identifier, name_span: Span) -> Self {
+    pub const fn builtin(name: BuiltinFunctionName, name_span: Span) -> Self {
         Self::Builtin(name, name_span)
     }
 
     /// Creates a reference to an imported Python function.
     #[must_use]
-    pub const fn imported(python_path: PythonPath, name: Identifier, name_span: Span) -> Self {
+    pub const fn imported(python_path: PythonPath, name: PyFunctionName, name_span: Span) -> Self {
         Self::Imported {
             python_path,
             name,
@@ -435,7 +438,7 @@ pub enum Variable {
     /// Built-in variable
     Builtin {
         /// The identifier of the builtin.
-        ident: Identifier,
+        ident: BuiltinValueName,
         /// Span of the builtin identifier.
         ident_span: Span,
     },
@@ -464,7 +467,7 @@ pub enum Variable {
 impl Variable {
     /// Creates a built-in variable reference.
     #[must_use]
-    pub const fn builtin(ident: Identifier, ident_span: Span) -> Self {
+    pub const fn builtin(ident: BuiltinValueName, ident_span: Span) -> Self {
         Self::Builtin { ident, ident_span }
     }
 

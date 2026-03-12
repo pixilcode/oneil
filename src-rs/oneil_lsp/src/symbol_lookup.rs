@@ -1,10 +1,21 @@
 //! Symbol lookup utilities for finding definitions in Oneil models
 
-use oneil_runtime::Runtime;
-use oneil_runtime::output::ir;
-use oneil_shared::span::Span;
-use tower_lsp_server::UriExt;
-use tower_lsp_server::lsp_types::{Location, Position, Range, Uri};
+use oneil_runtime::{Runtime, output::ir};
+use oneil_shared::{
+    paths::{ModelPath, PythonPath},
+    span::Span,
+    symbols::{BuiltinFunctionName, ParameterName, PyFunctionName, ReferenceName, SubmodelName},
+};
+use tower_lsp_server::{
+    UriExt,
+    lsp_types::{Location, Position, Range, Uri},
+};
+
+#[derive(Debug, Clone)]
+pub enum ModelImportName {
+    Submodel(SubmodelName),
+    Reference(ReferenceName),
+}
 
 /// Represents a symbol found at a cursor position
 #[derive(Debug, Clone)]
@@ -12,29 +23,32 @@ pub enum SymbolAtPosition {
     /// A parameter definition (cursor is on the parameter name in its declaration)
     ParameterDefinition { span: Span },
     /// A parameter reference (cursor is on a parameter used in an expression)
-    ParameterReference { name: ir::ParameterName },
+    ParameterReference { name: ParameterName },
     /// An external parameter reference (e.g., `x.model_name`)
     ///
     /// This occurs when the cursor is on the parameter name part (e.g., `x`)
     ExternalParameterReference {
-        model_path: ir::ModelPath,
-        parameter_name: ir::ParameterName,
+        model_path: ModelPath,
+        parameter_name: ParameterName,
     },
     /// A submodel or reference import name
-    ModelImportDefinition { name: String, path: ir::ModelPath },
+    ModelImportDefinition {
+        name: ModelImportName,
+        path: ModelPath,
+    },
     /// A reference to a model import (e.g., `x.model_name`)
     ///
     /// This occurs when the cursor is on the model name part (e.g., `model_name`)
-    ModelImportReference { reference_name: ir::ReferenceName },
+    ModelImportReference { reference_name: ReferenceName },
     /// A python import (e.g., `import math`)
-    PythonImport { path: ir::PythonPath },
+    PythonImport { path: PythonPath },
     /// A python function reference
     PythonFunctionReference {
-        python_path: ir::PythonPath,
-        name: ir::Identifier,
+        python_path: PythonPath,
+        name: PyFunctionName,
     },
     /// A builtin function reference
-    BuiltinFunctionReference { name: ir::Identifier },
+    BuiltinFunctionReference { name: BuiltinFunctionName },
 }
 
 /// Finds the symbol at a given byte offset in a model
@@ -68,7 +82,7 @@ pub fn find_symbol_at_offset(
             let submodel_path = submodel_import.reference_import().path().clone();
 
             return Some(SymbolAtPosition::ModelImportDefinition {
-                name: submodel_name.to_string(),
+                name: ModelImportName::Submodel(submodel_name.clone()),
                 path: submodel_path,
             });
         }
@@ -78,7 +92,7 @@ pub fn find_symbol_at_offset(
     for (reference_name, reference_import) in model.reference_models() {
         if span_contains_offset(*reference_import.name_span(), offset) {
             return Some(SymbolAtPosition::ModelImportDefinition {
-                name: reference_name.to_string(),
+                name: ModelImportName::Reference(reference_name.clone()),
                 path: reference_import.path().clone(),
             });
         }
@@ -260,7 +274,7 @@ fn find_symbol_in_expr(expr: &ir::Expr, offset: usize) -> Option<SymbolAtPositio
 pub fn resolve_definition(
     symbol: &SymbolAtPosition,
     runtime: &mut Runtime,
-    current_model_path: &ir::ModelPath,
+    current_model_path: &ModelPath,
 ) -> Option<Location> {
     match symbol {
         SymbolAtPosition::ParameterDefinition { span } => {
@@ -289,7 +303,7 @@ pub fn resolve_definition(
         }
         SymbolAtPosition::ModelImportDefinition { path, .. } => {
             // Navigate to the imported model file
-            let uri = Uri::from_file_path(path.as_ref())?;
+            let uri = Uri::from_file_path(path.as_path())?;
             Some(Location {
                 uri,
                 range: Range {
@@ -315,7 +329,7 @@ pub fn resolve_definition(
         }
         SymbolAtPosition::PythonImport { path } => {
             // Navigate to the python import file
-            let uri = Uri::from_file_path(path.as_ref())?;
+            let uri = Uri::from_file_path(path.as_path())?;
             Some(Location {
                 uri,
                 range: Range {
@@ -359,11 +373,11 @@ const fn span_contains_offset(span: Span, offset: usize) -> bool {
 }
 
 /// Converts a Span to an LSP Location
-fn span_to_location(model_path: &ir::ModelPath, span: Span) -> Location {
-    let uri = Uri::from_file_path(model_path.as_ref()).unwrap_or_else(|| {
+fn span_to_location(model_path: &ModelPath, span: Span) -> Location {
+    let uri = Uri::from_file_path(model_path.as_path()).unwrap_or_else(|| {
         panic!(
             "Failed to convert model path to URI: {}",
-            model_path.as_ref().display()
+            model_path.as_path().display()
         )
     });
     Location {

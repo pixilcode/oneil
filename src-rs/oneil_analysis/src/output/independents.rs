@@ -1,9 +1,8 @@
 //! Type for the result of independent-parameter analysis.
 
-use std::path::{Path, PathBuf};
-
 use indexmap::IndexMap;
 use oneil_output::Value;
+use oneil_shared::{paths::ModelPath, symbols::ParameterName};
 
 /// Map of model path to independent parameter names and their evaluated values.
 ///
@@ -11,7 +10,7 @@ use oneil_output::Value;
 #[derive(Debug, Clone, Default)]
 pub struct Independents {
     /// Model path → parameter name → value.
-    inner: IndexMap<PathBuf, IndexMap<String, Value>>,
+    inner: IndexMap<ModelPath, IndexMap<ParameterName, Value>>,
 }
 
 impl Independents {
@@ -22,13 +21,13 @@ impl Independents {
     }
 
     /// Inserts a model path and its independent parameters into the map.
-    pub fn insert(&mut self, path: PathBuf, params: IndexMap<String, Value>) {
+    pub fn insert(&mut self, path: ModelPath, params: IndexMap<ParameterName, Value>) {
         self.inner.insert(path, params);
     }
 
     /// Returns the independent parameters for a model path, if any.
     #[must_use]
-    pub fn get(&self, path: &Path) -> Option<&IndexMap<String, Value>> {
+    pub fn get(&self, path: &ModelPath) -> Option<&IndexMap<ParameterName, Value>> {
         self.inner.get(path)
     }
 
@@ -47,7 +46,7 @@ impl Independents {
     }
 
     /// Returns an iterator over (model path, independent name → value) entries.
-    pub fn iter(&self) -> impl Iterator<Item = (&PathBuf, &IndexMap<String, Value>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&ModelPath, &IndexMap<ParameterName, Value>)> {
         self.inner.iter()
     }
 }

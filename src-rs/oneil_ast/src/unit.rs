@@ -1,6 +1,45 @@
 //! Unit expression constructs for the AST
 
-use crate::{naming::IdentifierNode, node::Node};
+use crate::node::Node;
+
+/// A unit identifier
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnitIdentifier(String);
+
+impl UnitIdentifier {
+    /// Creates a new unit identifier from a string
+    #[must_use]
+    pub const fn new(identifier: String) -> Self {
+        Self(identifier)
+    }
+
+    /// Returns the unit identifier as a string slice
+    #[must_use]
+    pub const fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// Returns this unit identifier as a string
+    #[must_use]
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for UnitIdentifier {
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<&str> for UnitIdentifier {
+    fn from(value: &str) -> Self {
+        Self::new(value.to_string())
+    }
+}
+
+/// A node containing a unit identifier
+pub type UnitIdentifierNode = Node<UnitIdentifier>;
 
 /// Represents a unit expression
 #[derive(Debug, Clone, PartialEq)]
@@ -24,7 +63,7 @@ pub enum UnitExpr {
     /// A unit with optional exponent
     Unit {
         /// The unit identifier
-        identifier: IdentifierNode,
+        identifier: UnitIdentifierNode,
         /// The optional exponent
         exponent: Option<UnitExponentNode>,
     },
@@ -54,7 +93,7 @@ impl UnitExpr {
 
     /// Creates a unit expression with optional exponent
     #[must_use]
-    pub const fn unit(identifier: IdentifierNode, exponent: Option<UnitExponentNode>) -> Self {
+    pub const fn unit(identifier: UnitIdentifierNode, exponent: Option<UnitExponentNode>) -> Self {
         Self::Unit {
             identifier,
             exponent,

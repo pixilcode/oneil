@@ -1,11 +1,13 @@
 //! Errors for the Oneil evaluator.
 
-use std::{error::Error, fmt, path::PathBuf};
+use std::{error::Error, fmt};
 
 use indexmap::{IndexMap, IndexSet};
 use oneil_shared::{
     error::{AsOneilError, Context as ErrorContext, ErrorLocation},
+    paths::ModelPath,
     span::Span,
+    symbols::{BuiltinFunctionName, ParameterName, PyFunctionName, TestIndex},
 };
 
 use oneil_output::{DisplayUnit, Interval, NumberType, Value, ValueType};
@@ -14,11 +16,11 @@ use oneil_output::{DisplayUnit, Interval, NumberType, Value, ValueType};
 #[derive(Debug, Clone)]
 pub struct EvalErrors {
     /// Errors that occurred during evaluation of the parameters.
-    pub parameters: IndexMap<String, Vec<EvalError>>,
+    pub parameters: IndexMap<ParameterName, Vec<EvalError>>,
     /// Errors that occurred during evaluation of the tests.
-    pub tests: Vec<EvalError>,
+    pub tests: IndexMap<TestIndex, Vec<EvalError>>,
     /// References that had errors.
-    pub references: IndexSet<PathBuf>,
+    pub references: IndexSet<ModelPath>,
 }
 
 /// Represents the expected type for type checking operations.
@@ -232,16 +234,16 @@ pub enum EvalError {
     /// is error propagation, not error reporting.
     ParameterHasError {
         /// The path of the model that contains the parameter.
-        model_path: Option<PathBuf>,
+        model_path: Option<ModelPath>,
         /// The name of the parameter that has errors.
-        parameter_name: String,
+        parameter_name: ParameterName,
         /// The source span of the parameter name.
         variable_span: Span,
     },
     /// An error indicating that a function was called with an invalid number of arguments.
     InvalidArgumentCount {
         /// The name of the function that was called incorrectly.
-        function_name: String,
+        function_name: BuiltinFunctionName,
         /// The source span of the function name.
         function_name_span: Span,
         /// The expected argument count specification.
@@ -285,7 +287,7 @@ pub enum EvalError {
     /// An error indicating that multiple piecewise branches match for a parameter.
     MultiplePiecewiseBranchesMatch {
         /// The name of the parameter being evaluated.
-        param_ident: String,
+        param_ident: ParameterName,
         /// The source span of the parameter identifier.
         param_ident_span: Span,
         /// The source spans of all matching branch conditions.
@@ -294,7 +296,7 @@ pub enum EvalError {
     /// An error indicating that no piecewise branch matches for a parameter.
     NoPiecewiseBranchMatch {
         /// The name of the parameter being evaluated.
-        param_ident: String,
+        param_ident: ParameterName,
         /// The source span of the parameter identifier.
         param_ident_span: Span,
     },
@@ -467,7 +469,7 @@ pub enum EvalError {
     /// An error indicating that a Python function evaluation failed.
     PythonEvalError {
         /// The name of the Python function that was called.
-        function_name: String,
+        function_name: PyFunctionName,
         /// The source span of the function call.
         function_call_span: Span,
         /// The error message from Python or from conversion.
@@ -478,7 +480,7 @@ pub enum EvalError {
     /// An invalid return value from a Python function.
     InvalidPythonReturnValue {
         /// The name of the Python function that returned the invalid value.
-        function_name: String,
+        function_name: PyFunctionName,
         /// The source span of the function call.
         function_call_span: Span,
         /// The value that was invalid.
@@ -612,8 +614,9 @@ impl fmt::Display for EvalError {
             } => {
                 let model_path = model_path.as_ref().map_or_else(
                     || "current model".to_string(),
-                    |path| format!("model `{}`", path.display()),
+                    |path| format!("model `{}`", path.as_path().display()),
                 );
+                let parameter_name = parameter_name.as_str();
 
                 write!(f, "parameter `{parameter_name}` in {model_path} has errors")
             }
@@ -623,9 +626,10 @@ impl fmt::Display for EvalError {
                 expected_argument_count,
                 actual_argument_count,
             } => {
+                let function_name = function_name.as_str();
                 write!(
                     f,
-                    "{function_name} expects {expected_argument_count}, but found {actual_argument_count}"
+                    "`{function_name}` expects {expected_argument_count}, but found {actual_argument_count}"
                 )
             }
             Self::ParameterMissingUnitAnnotation {
@@ -652,18 +656,24 @@ impl fmt::Display for EvalError {
                 param_ident,
                 param_ident_span: _,
                 matching_branche_spans,
-            } => write!(
-                f,
-                "parameter `{param_ident}` has {} matching piecewise branches",
-                matching_branche_spans.len()
-            ),
+            } => {
+                let param_ident = param_ident.as_str();
+                write!(
+                    f,
+                    "parameter `{param_ident}` has {} matching piecewise branches",
+                    matching_branche_spans.len()
+                )
+            }
             Self::NoPiecewiseBranchMatch {
                 param_ident,
                 param_ident_span: _,
-            } => write!(
-                f,
-                "parameter `{param_ident}` does not have a matching piecewise branch"
-            ),
+            } => {
+                let param_ident = param_ident.as_str();
+                write!(
+                    f,
+                    "parameter `{param_ident}` does not have a matching piecewise branch"
+                )
+            }
             Self::BooleanCannotHaveUnit {
                 expr_span: _,
                 unit_span: _,
@@ -800,15 +810,21 @@ impl fmt::Display for EvalError {
                 function_call_span: _,
                 message: _,
                 traceback: _,
-            } => write!(f, "python function `{function_name}` raised an error"),
+            } => {
+                let function_name = function_name.as_str();
+                write!(f, "python function `{function_name}` raised an error")
+            }
             Self::InvalidPythonReturnValue {
                 function_name,
                 function_call_span: _,
                 value_repr: _,
-            } => write!(
-                f,
-                "python function `{function_name}` returned an invalid value"
-            ),
+            } => {
+                let function_name = function_name.as_str();
+                write!(
+                    f,
+                    "python function `{function_name}` returned an invalid value"
+                )
+            }
             Self::Unsupported {
                 relevant_span: _,
                 feature_name,

@@ -7,7 +7,6 @@ mod model;
 mod model_import;
 mod parameter;
 mod python_import;
-mod reference;
 mod test;
 mod unit;
 
@@ -16,11 +15,8 @@ pub use expr::{
     BinaryOp, ComparisonOp, Expr, ExprVisitor, FunctionName, Literal, UnaryOp, Variable,
 };
 pub use model::Model;
-pub use model_import::{ReferenceImport, ReferenceName, SubmodelImport, SubmodelName};
-pub use parameter::{
-    Dependencies, Label, Limits, Parameter, ParameterName, ParameterValue, PiecewiseExpr,
-};
+pub use model_import::{ReferenceImport, SubmodelImport};
+pub use parameter::{Dependencies, Limits, Parameter, ParameterValue, PiecewiseExpr};
 pub use python_import::PythonImport;
-pub use reference::{Identifier, ModelPath, PythonPath};
-pub use test::{Test, TestIndex};
+pub use test::Test;
 pub use unit::{CompositeUnit, DisplayCompositeUnit, DisplayUnit, Unit, UnitInfo};

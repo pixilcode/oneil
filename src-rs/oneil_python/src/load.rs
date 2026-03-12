@@ -1,8 +1,9 @@
 //! Loading Python code and extracting callables.
 
-use std::{ffi::CString, path::Path};
+use std::ffi::CString;
 
 use indexmap::IndexMap;
+use oneil_shared::{paths::PythonPath, symbols::PyFunctionName};
 use pyo3::{prelude::*, types::PyDict, wrap_pymodule};
 
 use crate::{
@@ -12,11 +13,11 @@ use crate::{
 };
 
 pub fn load_python_import(
-    path: &Path,
+    path: &PythonPath,
     source: &str,
 ) -> Result<PythonFunctionMap, LoadPythonImportError> {
     // get the module name from the path
-    let path = path.to_string_lossy();
+    let path = path.as_path().to_string_lossy();
     let module_name = path.trim_end_matches(".py").replace('/', ".");
 
     // convert the path and module name to C strings
@@ -41,7 +42,12 @@ pub fn load_python_import(
             .dict()
             .iter()
             .filter(|(key, value)| !key.to_string().starts_with("__") && value.is_callable())
-            .map(|(key, value)| (key.to_string(), PythonFunction::new(value.unbind())))
+            .map(|(key, value)| {
+                (
+                    PyFunctionName::from(key.to_string()),
+                    PythonFunction::new(value.unbind()),
+                )
+            })
             .collect::<IndexMap<_, _>>();
 
         Ok::<_, PyErr>(functions)

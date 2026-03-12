@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 
 use oneil_ir as ir;
-use oneil_shared::span::Span;
+use oneil_shared::{span::Span, symbols::ParameterName};
 
 use oneil_output::{MeasuredNumber, Number, Unit, Value};
 
@@ -39,7 +39,7 @@ pub fn eval_parameter<E: ExternalEvaluationContext>(
             (value, expr_span, unit)
         }
         ir::ParameterValue::Piecewise(piecewise, unit) => {
-            let param_ident = parameter.name().as_str();
+            let param_ident = parameter.name().clone();
             let param_ident_span = parameter.name_span();
             let (value, expr_span) =
                 get_piecewise_result(piecewise, param_ident, param_ident_span, context)?;
@@ -106,7 +106,7 @@ pub fn eval_parameter<E: ExternalEvaluationContext>(
 
 fn get_piecewise_result<'a, E: ExternalEvaluationContext>(
     piecewise: &'a [ir::PiecewiseExpr],
-    param_ident: &str,
+    param_ident: ParameterName,
     param_ident_span: Span,
     context: &EvalContext<'_, E>,
 ) -> Result<(Value, &'a Span), Vec<EvalError>> {
@@ -160,7 +160,7 @@ fn get_piecewise_result<'a, E: ExternalEvaluationContext>(
             .collect();
 
         return Err(vec![EvalError::MultiplePiecewiseBranchesMatch {
-            param_ident: param_ident.to_string(),
+            param_ident,
             param_ident_span,
             matching_branche_spans,
         }]);
@@ -171,7 +171,7 @@ fn get_piecewise_result<'a, E: ExternalEvaluationContext>(
     let Some((matching_branch_result, matching_branch_expr_span, _)) = matching_branches.pop()
     else {
         return Err(vec![EvalError::NoPiecewiseBranchMatch {
-            param_ident: param_ident.to_string(),
+            param_ident,
             param_ident_span,
         }]);
     };
@@ -747,13 +747,12 @@ fn verify_value_is_within_string_discrete_limit(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use oneil_output::Dimension;
 
     use crate::{
-        assert_is_close, assert_units_dimensionally_eq, context::EvalContext,
-        test_context::TestExternalContext,
+        assert_is_close, assert_units_dimensionally_eq,
+        context::EvalContext,
+        test_context::{TestExternalContext, test_model_path},
     };
 
     use super::*;
@@ -764,7 +763,7 @@ mod tests {
         let parameter = helper::build_simple_parameter("x", 1.0, []);
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
 
         let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
 
@@ -791,7 +790,7 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
 
         let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
 
@@ -828,7 +827,7 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
 
         let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
 
@@ -868,7 +867,7 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
 
         let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
 
@@ -906,7 +905,7 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
 
         let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
 
@@ -944,7 +943,7 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
 
         let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
 
@@ -980,7 +979,7 @@ mod tests {
         // setup context with x = 1.0 m and y = 1.0 km
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1036,7 +1035,7 @@ mod tests {
         // setup context with x = 1.0 kg*m/s^2 and y = 1.0 N
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1100,7 +1099,7 @@ mod tests {
         // setup context with x = 1.0 dBW and y = 1.0 W
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1161,7 +1160,7 @@ mod tests {
         // setup context with x = 1.0 W
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
         helper::setup_context_with_parameters(
             &mut context,
             [(
@@ -1213,7 +1212,7 @@ mod tests {
         // setup context with x = 3.0 m and y = 2.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1268,7 +1267,7 @@ mod tests {
         // setup context with x = 6.0 m^2 and y = 2.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1323,7 +1322,7 @@ mod tests {
         // setup context with x = 6.0 m and y = 2.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1383,7 +1382,7 @@ mod tests {
         // setup context with x = 6.0 m and y = 2.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1440,7 +1439,7 @@ mod tests {
         // setup context with x = 7.0 m and y = 3.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
+        context.push_active_model(test_model_path("test"));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1490,375 +1489,6 @@ mod tests {
         assert!(!unit.is_db);
     }
 
-    #[test]
-    fn eval_sqrt_function() {
-        // setup context with x = 4.0 m^2
-        let mut external = TestExternalContext::new();
-        let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
-        helper::setup_context_with_parameters(
-            &mut context,
-            [(
-                "x",
-                4.0,
-                vec![helper::UnitSpec::new(Some("m"), None, false, 2.0)],
-            )],
-        );
-
-        // setup parameter y = sqrt(x) with unit m
-        let parameter = helper::build_function_call_parameter(
-            "y",
-            "sqrt",
-            ["x"],
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
-
-        let expected_dimensions = [(Dimension::Distance, 1.0)];
-
-        // check the parameter value
-        let Value::MeasuredNumber(number) = parameter_value.value else {
-            panic!("expected number");
-        };
-
-        let normalized_value = number.normalized_value();
-        let unit = number.unit();
-
-        let Number::Scalar(value) = *normalized_value.as_number() else {
-            panic!("expected scalar");
-        };
-
-        // y = sqrt(x) = sqrt(4.0 m^2) = 2.0 m
-        assert_is_close!(2.0, value);
-
-        // check the unit
-        assert_units_dimensionally_eq!(expected_dimensions, unit);
-        assert_is_close!(1.0, unit.magnitude);
-        assert!(!unit.is_db);
-    }
-
-    #[test]
-    fn eval_min_function() {
-        // setup context with x = 3.0 m and y = 5.0 m
-        let mut external = TestExternalContext::new();
-        let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
-        helper::setup_context_with_parameters(
-            &mut context,
-            [
-                (
-                    "x",
-                    3.0,
-                    vec![helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-                ),
-                (
-                    "y",
-                    5.0,
-                    vec![helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-                ),
-            ],
-        );
-
-        // setup parameter z = min(x, y) with unit m
-        let parameter = helper::build_function_call_parameter(
-            "z",
-            "min",
-            ["x", "y"],
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
-
-        let expected_dimensions = [(Dimension::Distance, 1.0)];
-
-        // check the parameter value
-        let Value::MeasuredNumber(number) = parameter_value.value else {
-            panic!("expected number");
-        };
-
-        let normalized_value = number.normalized_value();
-        let unit = number.unit();
-
-        let Number::Scalar(value) = *normalized_value.as_number() else {
-            panic!("expected scalar");
-        };
-
-        // z = min(x, y) = min(3.0 m, 5.0 m) = 3.0 m
-        assert_is_close!(3.0, value);
-
-        // check the unit
-        assert_units_dimensionally_eq!(expected_dimensions, unit);
-        assert_is_close!(1.0, unit.magnitude);
-        assert!(!unit.is_db);
-    }
-
-    #[test]
-    fn eval_min_function_with_interval() {
-        // setup context
-        let mut external = TestExternalContext::new();
-        let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
-
-        // add x as an interval parameter [2.0, 4.0] m
-        let x_parameter = helper::build_interval_parameter(
-            "x",
-            2.0,
-            4.0,
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-        let x_value = eval_parameter(&x_parameter, &context).expect("eval should succeed");
-        let parameter_result = helper::build_parameter_result("x", x_value.value);
-        context.add_parameter_result("x".to_string(), Ok(parameter_result));
-
-        // setup parameter z = min(x) with unit m
-        let parameter = helper::build_function_call_parameter(
-            "z",
-            "min",
-            ["x"],
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
-
-        let expected_dimensions = [(Dimension::Distance, 1.0)];
-
-        // check the parameter value
-        let Value::MeasuredNumber(number) = parameter_value.value else {
-            panic!("expected number");
-        };
-
-        let normalized_value = number.normalized_value();
-        let unit = number.unit();
-
-        let Number::Scalar(value) = *normalized_value.as_number() else {
-            panic!("expected scalar");
-        };
-
-        // x = [2.0, 4.0] m
-        // min(x) = min(2.0, 4.0) = 2.0 m
-        assert_is_close!(2.0, value);
-
-        // check the unit
-        assert_units_dimensionally_eq!(expected_dimensions, unit);
-        assert_is_close!(1.0, unit.magnitude);
-        assert!(!unit.is_db);
-    }
-
-    #[test]
-    fn eval_max_function() {
-        // setup context with x = 3.0 m and y = 5.0 m
-        let mut external = TestExternalContext::new();
-        let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
-        helper::setup_context_with_parameters(
-            &mut context,
-            [
-                (
-                    "x",
-                    3.0,
-                    vec![helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-                ),
-                (
-                    "y",
-                    5.0,
-                    vec![helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-                ),
-            ],
-        );
-
-        // setup parameter z = max(x, y) with unit m
-        let parameter = helper::build_function_call_parameter(
-            "z",
-            "max",
-            ["x", "y"],
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
-
-        let expected_dimensions = [(Dimension::Distance, 1.0)];
-
-        // check the parameter value
-        let Value::MeasuredNumber(number) = parameter_value.value else {
-            panic!("expected number");
-        };
-
-        let normalized_value = number.normalized_value();
-        let unit = number.unit();
-
-        let Number::Scalar(value) = *normalized_value.as_number() else {
-            panic!("expected scalar");
-        };
-
-        // z = max(x, y) = max(3.0 m, 5.0 m) = 5.0 m
-        assert_is_close!(5.0, value);
-
-        // check the unit
-        assert_units_dimensionally_eq!(expected_dimensions, unit);
-        assert_is_close!(1.0, unit.magnitude);
-        assert!(!unit.is_db);
-    }
-
-    #[test]
-    fn eval_max_function_with_interval() {
-        // setup context
-        let mut external = TestExternalContext::new();
-        let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
-
-        // add x as an interval parameter [2.0, 4.0] m
-        let x_parameter = helper::build_interval_parameter(
-            "x",
-            2.0,
-            4.0,
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-        let x_value = eval_parameter(&x_parameter, &context).expect("eval should succeed");
-        let parameter_result = helper::build_parameter_result("x", x_value.value);
-        context.add_parameter_result("x".to_string(), Ok(parameter_result));
-
-        // setup parameter z = max(x) with unit m
-        let parameter = helper::build_function_call_parameter(
-            "z",
-            "max",
-            ["x"],
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
-
-        let expected_dimensions = [(Dimension::Distance, 1.0)];
-
-        // check the parameter value
-        let Value::MeasuredNumber(number) = parameter_value.value else {
-            panic!("expected number");
-        };
-
-        let normalized_value = number.normalized_value();
-        let unit = number.unit();
-
-        let Number::Scalar(value) = *normalized_value.as_number() else {
-            panic!("expected scalar");
-        };
-
-        // x = [2.0, 4.0] m
-        // max(x) = max(2.0, 4.0) = 4.0 m
-        assert_is_close!(4.0, value);
-
-        // check the unit
-        assert_units_dimensionally_eq!(expected_dimensions, unit);
-        assert_is_close!(1.0, unit.magnitude);
-        assert!(!unit.is_db);
-    }
-
-    #[test]
-    fn eval_range_function() {
-        // setup context
-        let mut external = TestExternalContext::new();
-        let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
-
-        // add x as an interval parameter [2.0, 4.0] m
-        let x_parameter = helper::build_interval_parameter(
-            "x",
-            2.0,
-            4.0,
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-        let x_value = eval_parameter(&x_parameter, &context).expect("eval should succeed");
-        let parameter_result = helper::build_parameter_result("x", x_value.value);
-        context.add_parameter_result("x".to_string(), Ok(parameter_result));
-
-        // setup parameter z = range(x) with unit m
-        let parameter = helper::build_function_call_parameter(
-            "z",
-            "range",
-            ["x"],
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
-
-        let expected_dimensions = [(Dimension::Distance, 1.0)];
-
-        // check the parameter value
-        let Value::MeasuredNumber(number) = parameter_value.value else {
-            panic!("expected number");
-        };
-
-        let normalized_value = number.normalized_value();
-        let unit = number.unit();
-
-        let Number::Scalar(value) = *normalized_value.as_number() else {
-            panic!("expected scalar");
-        };
-
-        // x = [2.0, 4.0] m
-        // range(x) = max(2.0, 4.0) - min(2.0, 4.0) = 4.0 - 2.0 = 2.0 m
-        assert_is_close!(2.0, value);
-
-        // check the unit
-        assert_units_dimensionally_eq!(expected_dimensions, unit);
-        assert_is_close!(1.0, unit.magnitude);
-        assert!(!unit.is_db);
-    }
-
-    #[test]
-    fn eval_mid_function() {
-        // setup context with x = 2.0 m and y = 4.0 m
-        let mut external = TestExternalContext::new();
-        let mut context = EvalContext::new(&mut external);
-        context.push_active_model(PathBuf::from("test"));
-        helper::setup_context_with_parameters(
-            &mut context,
-            [
-                (
-                    "x",
-                    2.0,
-                    vec![helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-                ),
-                (
-                    "y",
-                    4.0,
-                    vec![helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-                ),
-            ],
-        );
-
-        // setup parameter z = mid(x, y) with unit m
-        let parameter = helper::build_function_call_parameter(
-            "z",
-            "mid",
-            ["x", "y"],
-            [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
-        );
-
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
-
-        let expected_dimensions = [(Dimension::Distance, 1.0)];
-
-        // check the parameter value
-        let Value::MeasuredNumber(number) = parameter_value.value else {
-            panic!("expected number");
-        };
-
-        let normalized_value = number.normalized_value();
-        let unit = number.unit();
-
-        let Number::Scalar(value) = *normalized_value.as_number() else {
-            panic!("expected scalar");
-        };
-
-        // z = mid(x, y) = (x + y) / 2 = (2.0 m + 4.0 m) / 2 = 3.0 m
-        assert_is_close!(3.0, value);
-
-        // check the unit
-        assert_units_dimensionally_eq!(expected_dimensions, unit);
-        assert_is_close!(1.0, unit.magnitude);
-        assert!(!unit.is_db);
-    }
-
     mod helper {
         use super::*;
 
@@ -1867,9 +1497,10 @@ mod tests {
         use oneil_output as output;
 
         use oneil_ir::DisplayCompositeUnit;
+        use oneil_shared::labels::ParameterLabel;
         use oneil_shared::span::SourceLocation;
-
         use oneil_shared::span::Span;
+        use oneil_shared::symbols::{ParameterName, UnitBaseName, UnitName, UnitPrefix};
 
         /// Returns a dummy span for use in test parameters.
         ///
@@ -1924,13 +1555,13 @@ mod tests {
             }
         }
 
-        fn build_full_name(base_name: Option<&str>, prefix: Option<&str>, is_db: bool) -> String {
-            format!(
+        fn build_full_name(base_name: Option<&str>, prefix: Option<&str>, is_db: bool) -> UnitName {
+            UnitName::new(format!(
                 "{}{}{}",
                 if is_db { "dB" } else { "" },
                 prefix.unwrap_or(""),
                 base_name.unwrap_or("")
-            )
+            ))
         }
 
         fn build_unit_info(
@@ -1940,13 +1571,15 @@ mod tests {
         ) -> ir::UnitInfo {
             if is_db {
                 ir::UnitInfo::Db {
-                    prefix: prefix.map(String::from),
-                    base_name: base_name.map(String::from),
+                    prefix: prefix.map(|s| UnitPrefix::new(s.to_string())),
+                    base_name: base_name.map(|s| UnitBaseName::new(s.to_string())),
                 }
             } else {
                 ir::UnitInfo::Standard {
-                    prefix: prefix.map(String::from),
-                    base_name: base_name.unwrap_or("").to_string(),
+                    prefix: prefix.map(|s| UnitPrefix::new(s.to_string())),
+                    base_name: UnitBaseName::new(
+                        base_name.expect("base name should be provided").to_string(),
+                    ),
                 }
             }
         }
@@ -2006,60 +1639,10 @@ mod tests {
 
             ir::Parameter::new(
                 ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
+                ParameterName::from(name),
                 random_span(),
                 random_span(),
-                ir::Label::new(name.to_string()),
-                ir::ParameterValue::simple(expr, units),
-                ir::Limits::default(),
-                false,
-                ir::TraceLevel::None,
-            )
-        }
-
-        /// Builds a parameter with an interval value (min-max expression).
-        ///
-        /// # Arguments
-        ///
-        /// * `name` - The name of the parameter
-        /// * `value_a` - The minimum value of the interval
-        /// * `value_b` - The maximum value of the interval
-        /// * `units` - An iterator of `UnitSpec` values
-        ///
-        /// # Returns
-        ///
-        /// A parameter with a min-max binary operation that creates an interval value.
-        pub fn build_interval_parameter(
-            name: &str,
-            value_a: f64,
-            value_b: f64,
-            units: impl IntoIterator<Item = UnitSpec>,
-        ) -> ir::Parameter {
-            let expr_a = ir::Expr::Literal {
-                span: random_span(),
-                value: ir::Literal::Number(value_a),
-            };
-
-            let expr_b = ir::Expr::Literal {
-                span: random_span(),
-                value: ir::Literal::Number(value_b),
-            };
-
-            let expr = ir::Expr::BinaryOp {
-                span: random_span(),
-                op: ir::BinaryOp::MinMax,
-                left: Box::new(expr_a),
-                right: Box::new(expr_b),
-            };
-
-            let units = build_resolved_units(units);
-
-            ir::Parameter::new(
-                ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
-                random_span(),
-                random_span(),
-                ir::Label::new(name.to_string()),
+                ParameterLabel::from(name),
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
@@ -2087,18 +1670,12 @@ mod tests {
         ) -> ir::Parameter {
             let expr_a = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_a.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_a), random_span()),
             };
 
             let expr_b = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_b.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_b), random_span()),
             };
 
             let expr = ir::Expr::BinaryOp {
@@ -2112,10 +1689,10 @@ mod tests {
 
             ir::Parameter::new(
                 ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
+                ParameterName::from(name),
                 random_span(),
                 random_span(),
-                ir::Label::new(name.to_string()),
+                ParameterLabel::from(name),
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
@@ -2143,18 +1720,12 @@ mod tests {
         ) -> ir::Parameter {
             let expr_a = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_a.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_a), random_span()),
             };
 
             let expr_b = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_b.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_b), random_span()),
             };
 
             let expr = ir::Expr::BinaryOp {
@@ -2168,10 +1739,10 @@ mod tests {
 
             ir::Parameter::new(
                 ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
+                ParameterName::from(name),
                 random_span(),
                 random_span(),
-                ir::Label::new(name.to_string()),
+                ParameterLabel::from(name),
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
@@ -2199,18 +1770,12 @@ mod tests {
         ) -> ir::Parameter {
             let expr_a = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_a.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_a), random_span()),
             };
 
             let expr_b = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_b.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_b), random_span()),
             };
 
             let expr = ir::Expr::BinaryOp {
@@ -2224,10 +1789,10 @@ mod tests {
 
             ir::Parameter::new(
                 ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
+                ParameterName::from(name),
                 random_span(),
                 random_span(),
-                ir::Label::new(name.to_string()),
+                ParameterLabel::from(name),
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
@@ -2258,18 +1823,12 @@ mod tests {
         ) -> ir::Parameter {
             let expr_a = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_a.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_a), random_span()),
             };
 
             let expr_b = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_b.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_b), random_span()),
             };
 
             let expr = ir::Expr::BinaryOp {
@@ -2283,10 +1842,10 @@ mod tests {
 
             ir::Parameter::new(
                 ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
+                ParameterName::from(name),
                 random_span(),
                 random_span(),
-                ir::Label::new(name.to_string()),
+                ParameterLabel::from(name),
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
@@ -2317,18 +1876,12 @@ mod tests {
         ) -> ir::Parameter {
             let expr_a = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_a.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_a), random_span()),
             };
 
             let expr_b = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_b.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_b), random_span()),
             };
 
             let expr = ir::Expr::BinaryOp {
@@ -2342,10 +1895,10 @@ mod tests {
 
             ir::Parameter::new(
                 ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
+                ParameterName::from(name),
                 random_span(),
                 random_span(),
-                ir::Label::new(name.to_string()),
+                ParameterLabel::from(name),
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
@@ -2373,18 +1926,12 @@ mod tests {
         ) -> ir::Parameter {
             let expr_a = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_a.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_a), random_span()),
             };
 
             let expr_b = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(value_b.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(value_b), random_span()),
             };
 
             let expr = ir::Expr::BinaryOp {
@@ -2398,10 +1945,10 @@ mod tests {
 
             ir::Parameter::new(
                 ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
+                ParameterName::from(name),
                 random_span(),
                 random_span(),
-                ir::Label::new(name.to_string()),
+                ParameterLabel::from(name),
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
@@ -2429,10 +1976,7 @@ mod tests {
         ) -> ir::Parameter {
             let expr_base = ir::Expr::Variable {
                 span: random_span(),
-                variable: ir::Variable::parameter(
-                    ir::ParameterName::new(base.to_string()),
-                    random_span(),
-                ),
+                variable: ir::Variable::parameter(ParameterName::from(base), random_span()),
             };
 
             let expr_exponent = ir::Expr::Literal {
@@ -2451,64 +1995,10 @@ mod tests {
 
             ir::Parameter::new(
                 ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
+                ParameterName::from(name),
                 random_span(),
                 random_span(),
-                ir::Label::new(name.to_string()),
-                ir::ParameterValue::simple(expr, units),
-                ir::Limits::default(),
-                false,
-                ir::TraceLevel::None,
-            )
-        }
-
-        /// Builds a parameter with a builtin function call expression.
-        ///
-        /// # Arguments
-        ///
-        /// * `name` - The name of the parameter
-        /// * `function` - The name of the builtin function to call
-        /// * `args` - An iterator of parameter names to pass as arguments
-        /// * `units` - An iterator of `UnitSpec` values
-        ///
-        /// # Returns
-        ///
-        /// A parameter with a function call expression: `function(arg1, arg2, ...)`.
-        pub fn build_function_call_parameter(
-            name: &str,
-            function: &str,
-            args: impl IntoIterator<Item = &'static str>,
-            units: impl IntoIterator<Item = UnitSpec>,
-        ) -> ir::Parameter {
-            let args = args
-                .into_iter()
-                .map(|arg| ir::Expr::Variable {
-                    span: random_span(),
-                    variable: ir::Variable::parameter(
-                        ir::ParameterName::new(arg.to_string()),
-                        random_span(),
-                    ),
-                })
-                .collect();
-
-            let expr = ir::Expr::FunctionCall {
-                span: random_span(),
-                name_span: random_span(),
-                name: ir::FunctionName::Builtin(
-                    ir::Identifier::new(function.to_string()),
-                    random_span(),
-                ),
-                args,
-            };
-
-            let units = build_resolved_units(units);
-
-            ir::Parameter::new(
-                ir::Dependencies::new(),
-                ir::ParameterName::new(name.to_string()),
-                random_span(),
-                random_span(),
-                ir::Label::new(name.to_string()),
+                ParameterLabel::from(name),
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
@@ -2519,7 +2009,7 @@ mod tests {
         /// Loads pre-defined parameters into an existing evaluation context.
         ///
         /// The context must already have an active model pushed (e.g. via
-        /// `context.push_active_model(PathBuf::from("test"))`).
+        /// `context.push_active_model(test_model_path("test"))`).
         ///
         /// # Arguments
         ///
@@ -2538,15 +2028,15 @@ mod tests {
                 let parameter_value =
                     eval_parameter(&parameter, context).expect("eval should succeed");
                 let parameter_result = build_parameter_result(name, parameter_value.value);
-                context.add_parameter_result(name.to_string(), Ok(parameter_result));
+                context.add_parameter_result(ParameterName::from(name), Ok(parameter_result));
             }
         }
 
         pub fn build_parameter_result(name: &str, value: Value) -> output::Parameter {
             output::Parameter {
                 value,
-                ident: name.to_string(),
-                label: name.to_string(),
+                ident: ParameterName::from(name),
+                label: ParameterLabel::from(name),
                 print_level: output::PrintLevel::None,
                 debug_info: None,
                 dependencies: output::DependencySet::default(),

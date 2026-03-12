@@ -1,29 +1,34 @@
-use std::{io::Error as IoError, path::PathBuf};
+use std::io::Error as IoError;
 
 use oneil_output::UnitConversionError;
 use oneil_shared::{
     error::{AsOneilError, Context, ErrorLocation},
+    paths::SourcePath,
     span::Span,
 };
 
 /// Error type for source loading failures.
 #[derive(Debug)]
 pub struct SourceError {
-    path: PathBuf,
+    path: SourcePath,
     error: IoError,
 }
 
 impl SourceError {
     /// Creates a new source error from a path and I/O error.
     #[must_use]
-    pub const fn new(path: PathBuf, error: IoError) -> Self {
+    pub const fn new(path: SourcePath, error: IoError) -> Self {
         Self { path, error }
     }
 }
 
 impl AsOneilError for SourceError {
     fn message(&self) -> String {
-        format!("couldn't read `{}` - {}", self.path.display(), self.error)
+        format!(
+            "couldn't read `{}` - {}",
+            self.path.as_path().display(),
+            self.error
+        )
     }
 }
 

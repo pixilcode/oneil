@@ -12,7 +12,7 @@
 //!
 
 use oneil_ast as ast;
-use oneil_ir as ir;
+use oneil_shared::paths::ModelPath;
 
 use crate::{ExternalResolutionContext, ResolutionContext, error::CircularDependencyError};
 
@@ -29,7 +29,7 @@ pub use resolve_expr::resolve_expr;
 pub use resolve_unit::resolve_unit;
 
 /// Loads a model and all its dependencies, building a complete model collection.
-pub fn load_model<E>(model_path: &ir::ModelPath, resolution_context: &mut ResolutionContext<'_, E>)
+pub fn load_model<E>(model_path: &ModelPath, resolution_context: &mut ResolutionContext<'_, E>)
 where
     E: ExternalResolutionContext,
 {
@@ -40,7 +40,7 @@ where
     if resolution_context.is_model_active(model_path) {
         // find the circular dependency path (stack from model_path to top, then model_path again to close the cycle)
         let active_models = resolution_context.active_models();
-        let mut circular_dependency: Vec<ir::ModelPath> = active_models
+        let mut circular_dependency: Vec<ModelPath> = active_models
             .iter()
             .skip_while(|m| *m != model_path)
             .cloned()
@@ -185,7 +185,7 @@ fn split_model_ast(
 /// Use model paths are resolved relative to the current model path using
 /// `model_path.get_sibling_path(&use_model.model_name)`.
 fn load_model_imports<E>(
-    model_path: &ir::ModelPath,
+    model_path: &ModelPath,
     model_imports: &[&ast::UseModelNode],
     resolution_context: &mut ResolutionContext<'_, E>,
 ) where
@@ -194,8 +194,7 @@ fn load_model_imports<E>(
     for model_import in model_imports {
         // get the use model path
         let model_import_relative_path = model_import.get_model_relative_path();
-        let model_import_path = model_path.get_sibling_path(&model_import_relative_path);
-        let model_import_path = ir::ModelPath::new(model_import_path);
+        let model_import_path = model_path.get_sibling_model_path(model_import_relative_path);
 
         // load the use model (and its submodels)
         load_model(&model_import_path, resolution_context);
@@ -206,11 +205,12 @@ fn load_model_imports<E>(
 mod tests {
     use oneil_ast as ast;
     use oneil_ir as ir;
+    use oneil_shared::symbols::{ParameterName, ReferenceName};
 
     use super::*;
     use crate::{
         error::ModelImportResolutionError,
-        test::{external_context::TestExternalContext, test_ast},
+        test::{external_context::TestExternalContext, test_ast, test_model_path},
     };
 
     #[test]
@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn load_model_success() {
-        let model_path = ir::ModelPath::new("test");
+        let model_path = test_model_path("test");
         let mut external =
             TestExternalContext::new().with_model_asts([("test.on", test_ast::empty_model_node())]);
         let mut resolution_context = ResolutionContext::new(&mut external);
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn load_model_parse_error() {
         // Path "nonexistent" has no AST in context -> load_ast fails
-        let model_path = ir::ModelPath::new("nonexistent");
+        let model_path = test_model_path("nonexistent");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContext::new(&mut external);
 
@@ -302,8 +302,8 @@ mod tests {
     #[test]
     fn load_model_circular_dependency() {
         // create a circular dependency: main.on -> sub.on -> main.on
-        let main_path = ir::ModelPath::new("main");
-        let sub_path = ir::ModelPath::new("sub");
+        let main_path = test_model_path("main");
+        let sub_path = test_model_path("sub");
         let main_test_model = test_ast::ModelBuilder::new().with_submodel("sub").build();
         let sub_test_model = test_ast::ModelBuilder::new().with_submodel("main").build();
         let mut external = TestExternalContext::new().with_model_asts([
@@ -326,7 +326,7 @@ mod tests {
             let main_errors = main_result.model_errors();
             let (_sub_model_name, sub_error) = main_errors
                 .get_model_import_resolution_errors()
-                .get(&ir::ReferenceName::new("sub".to_string()))
+                .get(&ReferenceName::from("sub"))
                 .expect("sub reference error should exist");
 
             let ModelImportResolutionError::ModelHasError { model_path, .. } = sub_error else {
@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn load_model_already_visited() {
         // Load the same model twice
-        let model_path = ir::ModelPath::new("test");
+        let model_path = test_model_path("test");
         let mut external =
             TestExternalContext::new().with_model_asts([("test.on", test_ast::empty_model_node())]);
         let mut resolution_context = ResolutionContext::new(&mut external);
@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn load_use_models_empty() {
         // Load a model with no use/ref declarations (only parent in context).
-        let model_path = ir::ModelPath::new("parent");
+        let model_path = test_model_path("parent");
         let mut external = TestExternalContext::new()
             .with_model_asts([("parent.on", test_ast::empty_model_node())]);
         let mut resolution_context = ResolutionContext::new(&mut external);
@@ -393,7 +393,7 @@ mod tests {
     #[test]
     fn load_use_models_with_existing_models() {
         // Load parent that uses child1 and child2; all three ASTs in context.
-        let parent_path = ir::ModelPath::new("parent");
+        let parent_path = test_model_path("parent");
         let parent_ast = test_ast::ModelBuilder::new()
             .with_submodel("child1")
             .with_submodel("child2")
@@ -412,8 +412,8 @@ mod tests {
         // check the models generated
         assert_eq!(results.len(), 3);
         assert!(results.contains_key(&parent_path));
-        assert!(results.contains_key(&ir::ModelPath::new("child1")));
-        assert!(results.contains_key(&ir::ModelPath::new("child2")));
+        assert!(results.contains_key(&test_model_path("child1")));
+        assert!(results.contains_key(&test_model_path("child2")));
 
         // check the model errors
         assert!(results.values().all(|r| r.model_errors().is_empty()));
@@ -422,7 +422,7 @@ mod tests {
     #[test]
     fn load_use_models_with_parse_errors() {
         // Parent uses "nonexistent"; that path has no AST in context.
-        let parent_path = ir::ModelPath::new("parent");
+        let parent_path = test_model_path("parent");
         let parent_ast = test_ast::ModelBuilder::new()
             .with_submodel("nonexistent")
             .build();
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     fn load_model_complex_dependency_chain() {
         // Dependency chain: root.on -> level1.on -> level2.on
-        let root_path = ir::ModelPath::new("root");
+        let root_path = test_model_path("root");
         let root_model = test_ast::ModelBuilder::new()
             .with_submodel("level1")
             .build();
@@ -464,8 +464,8 @@ mod tests {
         // check the models generated
         assert_eq!(results.len(), 3);
         assert!(results.contains_key(&root_path));
-        assert!(results.contains_key(&ir::ModelPath::new("level1")));
-        assert!(results.contains_key(&ir::ModelPath::new("level2")));
+        assert!(results.contains_key(&test_model_path("level1")));
+        assert!(results.contains_key(&test_model_path("level2")));
 
         // check the model errors
         assert!(results.values().all(|r| r.model_errors().is_empty()));
@@ -474,7 +474,7 @@ mod tests {
     #[test]
     fn load_model_with_sections() {
         // Model with a section that declares a use submodel
-        let test_path = ir::ModelPath::new("test");
+        let test_path = test_model_path("test");
         let submodel_node = test_ast::empty_model();
         let use_model_decl = test_ast::ImportModelNodeBuilder::new()
             .with_top_component("submodel")
@@ -497,7 +497,7 @@ mod tests {
         // check the models generated
         assert_eq!(results.len(), 2);
         assert!(results.contains_key(&test_path));
-        assert!(results.contains_key(&ir::ModelPath::new("submodel")));
+        assert!(results.contains_key(&test_model_path("submodel")));
 
         // check the model errors
         assert!(results.values().all(|r| r.model_errors().is_empty()));
@@ -506,8 +506,8 @@ mod tests {
     #[test]
     fn load_model_with_reference() {
         // Main model has ref "reference" and parameter y = reference.x
-        let test_path = ir::ModelPath::new("test");
-        let reference_path = ir::ModelPath::new("reference");
+        let test_path = test_model_path("test");
+        let reference_path = test_model_path("reference");
         let reference_node = test_ast::ModelBuilder::new()
             .with_number_parameter("x", 1.0)
             .build();
@@ -533,7 +533,7 @@ mod tests {
             .expect("main model should be present")
             .model();
         let y_parameter = main_model
-            .get_parameter(&ir::ParameterName::new("y".to_string()))
+            .get_parameter(&ParameterName::from("y"))
             .expect("y parameter should be present");
 
         let ir::ParameterValue::Simple(y_parameter_value, _) = y_parameter.value() else {
@@ -568,7 +568,7 @@ mod tests {
     fn load_model_with_submodel_with_error() {
         // Main model has ref "reference"; reference model not provided (or has error).
         // Submodel "submodel" exists but has use "nonexistent" (error).
-        let test_path = ir::ModelPath::new("test");
+        let test_path = test_model_path("test");
         let submodel_node = test_ast::ModelBuilder::new()
             .with_submodel("nonexistent")
             .build();

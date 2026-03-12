@@ -1,5 +1,6 @@
 use oneil_ast as ast;
 use oneil_ir as ir;
+use oneil_shared::symbols::{UnitBaseName, UnitName, UnitPrefix};
 
 use crate::{ExternalResolutionContext, ResolutionContext, error::UnitResolutionError};
 
@@ -67,13 +68,12 @@ fn resolve_unit_recursive<E: ExternalResolutionContext>(
                 exponent_value
             };
 
-            let full_name = identifier.as_str();
-
-            match resolve_unit_info(full_name, context) {
+            match resolve_unit_info(identifier.as_str(), context) {
                 Some(info) => {
+                    let full_name = UnitName::new(identifier.as_str().to_string());
                     let ir_unit = ir::Unit::new(
                         unit_span,
-                        full_name.to_string(),
+                        full_name,
                         name_span,
                         exponent_value,
                         exponent_span,
@@ -84,7 +84,10 @@ fn resolve_unit_recursive<E: ExternalResolutionContext>(
                 }
 
                 None => {
-                    errors.push(UnitResolutionError::new(full_name.to_string(), unit_span));
+                    errors.push(UnitResolutionError::new(
+                        identifier.clone().take_value(),
+                        unit_span,
+                    ));
                 }
             }
 
@@ -119,32 +122,38 @@ fn resolve_unit_info<E: ExternalResolutionContext>(
     }
 
     let make_unit_info = if is_db {
-        |prefix: Option<String>, base_name: String| ir::UnitInfo::Db {
+        |prefix: Option<UnitPrefix>, base_name: UnitBaseName| ir::UnitInfo::Db {
             prefix,
             base_name: Some(base_name),
         }
     } else {
-        |prefix: Option<String>, base_name: String| ir::UnitInfo::Standard { prefix, base_name }
+        |prefix: Option<UnitPrefix>, base_name: UnitBaseName| ir::UnitInfo::Standard {
+            prefix,
+            base_name,
+        }
     };
 
     // if the name matches a builtin unit, return appropriate unit type
     if context.has_builtin_unit(name) {
-        let unit_info = make_unit_info(None, name.to_string());
+        let base_name = UnitBaseName::from(name);
+        let unit_info = make_unit_info(None, base_name);
         return Some(unit_info);
     }
 
     // try to match a prefix and look up the stripped unit
     for (prefix, _magnitude) in context.available_prefixes() {
-        let Some(stripped_name) = name.strip_prefix(prefix) else {
+        let Some(stripped_name) = name.strip_prefix(prefix.as_str()) else {
             continue;
         };
 
-        if !context.unit_supports_si_prefixes(stripped_name) {
+        let base_name = UnitBaseName::from(stripped_name);
+
+        if !context.unit_supports_si_prefixes(&base_name) {
             continue;
         }
 
-        if context.has_builtin_unit(stripped_name) {
-            let unit_info = make_unit_info(Some(prefix.to_string()), stripped_name.to_string());
+        if context.has_builtin_unit(base_name.as_str()) {
+            let unit_info = make_unit_info(Some(prefix.clone()), base_name);
             return Some(unit_info);
         }
     }
@@ -184,7 +193,7 @@ mod tests {
     use crate::test::{
         external_context::{TestBuiltinUnit, TestExternalContext},
         resolution_context::ResolutionContextBuilder,
-        test_ast,
+        test_ast, test_model_path,
     };
 
     use super::*;
@@ -205,7 +214,7 @@ mod tests {
         ($actual_units:expr, $expected_units:expr $(,)?) => {
             let mut actual_units: Vec<(&str, f64)> = $actual_units
                 .into_iter()
-                .map(|u| (u.name(), u.exponent()))
+                .map(|u| (u.name().as_str(), u.exponent()))
                 .collect();
 
             let mut expected_units: Vec<(&str, f64)> = $expected_units.into_iter().collect();
@@ -276,7 +285,7 @@ mod tests {
         let unit_expr = test_ast::unit_node("m");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -297,7 +306,7 @@ mod tests {
         let unit_expr = test_ast::unit_node("kg");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -318,7 +327,7 @@ mod tests {
         let unit_expr = test_ast::unit_with_exponent_node("m", 2.0);
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -343,7 +352,7 @@ mod tests {
         );
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -368,7 +377,7 @@ mod tests {
         );
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -401,7 +410,7 @@ mod tests {
         );
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -433,7 +442,7 @@ mod tests {
         );
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -466,7 +475,7 @@ mod tests {
         );
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -494,7 +503,7 @@ mod tests {
         );
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -531,7 +540,7 @@ mod tests {
         );
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -562,7 +571,7 @@ mod tests {
         let unit_expr = test_ast::unit_with_exponent_node("m", 0.5);
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -588,7 +597,7 @@ mod tests {
         let unit_expr = test_ast::parenthesized_unit_node(inner_expr);
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -620,7 +629,7 @@ mod tests {
         let unit_expr = test_ast::parenthesized_unit_node(division_expr);
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -643,7 +652,7 @@ mod tests {
         let unit_expr = test_ast::parenthesized_unit_node(first_parentheses);
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -664,7 +673,7 @@ mod tests {
         let unit_expr = test_ast::unit_one_node();
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -693,7 +702,7 @@ mod tests {
         );
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -718,7 +727,7 @@ mod tests {
         );
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -739,7 +748,7 @@ mod tests {
         let unit_expr = test_ast::unit_node("unknown_unit");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -752,7 +761,7 @@ mod tests {
 
         // check the result - should have an error
         assert_eq!(errors.len(), 1);
-        assert_eq!(errors[0].unit_name(), "unknown_unit");
+        assert_eq!(errors[0].unit_name().as_str(), "unknown_unit");
     }
 
     #[test]
@@ -761,7 +770,7 @@ mod tests {
         let unit_expr = test_ast::unit_node("km");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -781,8 +790,8 @@ mod tests {
             panic!("unit should be a standard unit");
         };
 
-        assert_eq!(prefix.as_deref(), Some("k"));
-        assert_eq!(base_name, "m");
+        assert_eq!(prefix.as_ref().map(UnitPrefix::as_str), Some("k"));
+        assert_eq!(base_name.as_str(), "m");
     }
 
     #[test]
@@ -791,7 +800,7 @@ mod tests {
         let unit_expr = test_ast::unit_node("dB");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -821,7 +830,7 @@ mod tests {
         let unit_expr = test_ast::unit_node("dBm");
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = test_external_context_with_common_units();
         let resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -842,6 +851,6 @@ mod tests {
         };
 
         assert_eq!(prefix.as_ref(), None);
-        assert_eq!(base_name.as_deref(), Some("m"));
+        assert_eq!(base_name.as_ref().map(UnitBaseName::as_str), Some("m"));
     }
 }

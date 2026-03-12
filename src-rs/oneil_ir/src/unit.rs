@@ -1,6 +1,9 @@
 //! Unit system for dimensional analysis in Oneil.
 
-use oneil_shared::span::Span;
+use oneil_shared::{
+    span::Span,
+    symbols::{UnitBaseName, UnitName, UnitPrefix},
+};
 
 /// A composite unit composed of multiple base units.
 #[derive(Debug, Clone, PartialEq)]
@@ -44,7 +47,7 @@ impl CompositeUnit {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Unit {
     span: Span,
-    name: String,
+    name: UnitName,
     name_span: Span,
     exponent: f64,
     exponent_span: Option<Span>,
@@ -56,7 +59,7 @@ impl Unit {
     #[must_use]
     pub const fn new(
         span: Span,
-        name: String,
+        name: UnitName,
         name_span: Span,
         exponent: f64,
         exponent_span: Option<Span>,
@@ -80,8 +83,8 @@ impl Unit {
 
     /// Returns the name of this unit.
     #[must_use]
-    pub const fn name(&self) -> &str {
-        self.name.as_str()
+    pub const fn name(&self) -> &UnitName {
+        &self.name
     }
 
     /// Returns the span of the name of this unit.
@@ -115,17 +118,17 @@ pub enum UnitInfo {
     /// A standard unit
     Standard {
         /// The prefix of the unit, if any
-        prefix: Option<String>,
+        prefix: Option<UnitPrefix>,
         /// The stripped name of the unit, if any
-        base_name: String,
+        base_name: UnitBaseName,
     },
 
     /// A decibel unit
     Db {
         /// The prefix of the unit, if any
-        prefix: Option<String>,
+        prefix: Option<UnitPrefix>,
         /// The stripped name of the unit, if any
-        base_name: Option<String>,
+        base_name: Option<UnitBaseName>,
     },
 }
 

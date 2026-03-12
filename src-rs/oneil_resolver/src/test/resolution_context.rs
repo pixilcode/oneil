@@ -9,6 +9,10 @@
 use std::path::PathBuf;
 
 use oneil_ir as ir;
+use oneil_shared::{
+    paths::{ModelPath, PythonPath},
+    symbols::{ParameterName, ReferenceName},
+};
 
 use crate::{
     ResolutionContext,
@@ -30,14 +34,14 @@ use super::unimportant_span;
 /// references from the active model.
 #[derive(Debug, Default)]
 pub struct ResolutionContextBuilder<'external> {
-    active_model_path: Option<ir::ModelPath>,
+    active_model_path: Option<ModelPath>,
     /// Models to register in the context before the active model is set up.
-    models: Vec<(ir::ModelPath, ir::Model)>,
+    models: Vec<(ModelPath, ir::Model)>,
     parameters: Vec<ir::Parameter>,
-    references: Vec<(ir::ReferenceName, ir::ModelPath, ir::Model)>,
-    parameter_error_names: Vec<ir::ParameterName>,
-    reference_errors: Vec<(ir::ReferenceName, ModelImportResolutionError)>,
-    model_error_paths: Vec<ir::ModelPath>,
+    references: Vec<(ReferenceName, ModelPath, ir::Model)>,
+    parameter_error_names: Vec<ParameterName>,
+    reference_errors: Vec<(ReferenceName, ModelImportResolutionError)>,
+    model_error_paths: Vec<ModelPath>,
     /// Python import paths to load into the active model (via external context) after setup.
     python_import_paths: Vec<PathBuf>,
     external_context: Option<&'external mut TestExternalContext>,
@@ -55,7 +59,7 @@ impl<'external> ResolutionContextBuilder<'external> {
     /// Exactly one active model is pushed; this is required before
     /// parameters, references, or errors are meaningful.
     #[must_use]
-    pub fn with_active_model(mut self, path: ir::ModelPath) -> Self {
+    pub fn with_active_model(mut self, path: ModelPath) -> Self {
         self.active_model_path = Some(path);
         self
     }
@@ -64,10 +68,7 @@ impl<'external> ResolutionContextBuilder<'external> {
     ///
     /// Does not add any references from the active model.
     #[must_use]
-    pub fn with_models(
-        mut self,
-        models: impl IntoIterator<Item = (ir::ModelPath, ir::Model)>,
-    ) -> Self {
+    pub fn with_models(mut self, models: impl IntoIterator<Item = (ModelPath, ir::Model)>) -> Self {
         self.models.extend(models);
         self
     }
@@ -86,7 +87,7 @@ impl<'external> ResolutionContextBuilder<'external> {
     #[must_use]
     pub fn with_references(
         mut self,
-        references: impl IntoIterator<Item = (ir::ReferenceName, ir::ModelPath, ir::Model)>,
+        references: impl IntoIterator<Item = (ReferenceName, ModelPath, ir::Model)>,
     ) -> Self {
         self.references.extend(references);
         self
@@ -94,10 +95,7 @@ impl<'external> ResolutionContextBuilder<'external> {
 
     /// Marks the given parameter names as having resolution errors on the active model.
     #[must_use]
-    pub fn with_parameter_errors(
-        mut self,
-        names: impl IntoIterator<Item = ir::ParameterName>,
-    ) -> Self {
+    pub fn with_parameter_errors(mut self, names: impl IntoIterator<Item = ParameterName>) -> Self {
         self.parameter_error_names.extend(names);
         self
     }
@@ -106,7 +104,7 @@ impl<'external> ResolutionContextBuilder<'external> {
     #[must_use]
     pub fn with_reference_errors(
         mut self,
-        errors: impl IntoIterator<Item = (ir::ReferenceName, ModelImportResolutionError)>,
+        errors: impl IntoIterator<Item = (ReferenceName, ModelImportResolutionError)>,
     ) -> Self {
         self.reference_errors.extend(errors);
         self
@@ -115,7 +113,7 @@ impl<'external> ResolutionContextBuilder<'external> {
     /// Marks the given model paths as having errors (e.g. for
     /// `ReferencePathResult::ModelHasResolutionError`).
     #[must_use]
-    pub fn with_model_errors(mut self, paths: impl IntoIterator<Item = ir::ModelPath>) -> Self {
+    pub fn with_model_errors(mut self, paths: impl IntoIterator<Item = ModelPath>) -> Self {
         self.model_error_paths.extend(paths);
         self
     }
@@ -230,7 +228,7 @@ impl<'external> ResolutionContextBuilder<'external> {
 
         for path in &self.model_error_paths {
             ctx.push_active_model(path);
-            let dummy_name = ir::ParameterName::new("__error__".to_string());
+            let dummy_name = ParameterName::from("__error__");
             let span = unimportant_span();
             let err = ParameterResolutionError::variable_resolution(
                 VariableResolutionError::undefined_parameter(dummy_name.clone(), span),
@@ -240,7 +238,8 @@ impl<'external> ResolutionContextBuilder<'external> {
         }
 
         for path in &self.python_import_paths {
-            let python_path = ir::PythonPath::new(path.clone());
+            let path_str = path.to_string_lossy().to_string();
+            let python_path = PythonPath::from_str_no_ext(&path_str);
             ctx.load_python_import_to_active_model(&python_path, unimportant_span());
         }
 

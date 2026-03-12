@@ -1,27 +1,8 @@
-use std::ops::Deref;
-
-use oneil_shared::span::Span;
-
-use crate::reference::ModelPath;
-
-/// A name for a submodel.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SubmodelName(String);
-
-impl SubmodelName {
-    /// Creates a new submodel name with the given name.
-    #[must_use]
-    pub const fn new(name: String) -> Self {
-        Self(name)
-    }
-}
-
-impl Deref for SubmodelName {
-    type Target = String;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+use oneil_shared::{
+    paths::ModelPath,
+    span::Span,
+    symbols::{ReferenceName, SubmodelName},
+};
 
 /// An import for a submodel.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,25 +40,6 @@ impl SubmodelImport {
     #[must_use]
     pub const fn reference_name(&self) -> &ReferenceName {
         &self.reference_name
-    }
-}
-
-/// A name for a reference.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ReferenceName(String);
-
-impl ReferenceName {
-    /// Creates a new reference name with the given name.
-    #[must_use]
-    pub const fn new(name: String) -> Self {
-        Self(name)
-    }
-}
-
-impl Deref for ReferenceName {
-    type Target = String;
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 

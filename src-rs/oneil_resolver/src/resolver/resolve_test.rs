@@ -2,6 +2,7 @@
 
 use oneil_ast as ast;
 use oneil_ir as ir;
+use oneil_shared::symbols::TestIndex;
 
 use crate::{
     ExternalResolutionContext, ResolutionContext,
@@ -20,7 +21,7 @@ pub fn resolve_tests<E>(
     E: ExternalResolutionContext,
 {
     let tests = tests.into_iter().enumerate().map(|(test_index, test)| {
-        let test_index = ir::TestIndex::new(test_index);
+        let test_index = TestIndex::new(test_index);
         let test_span = test.span();
 
         let trace_level = resolve_trace_level(test.trace_level());
@@ -55,13 +56,14 @@ mod tests {
         error::VariableResolutionError,
         test::{
             external_context::TestExternalContext, resolution_context::ResolutionContextBuilder,
-            test_ast,
+            test_ast, test_model_path,
         },
     };
 
     use super::*;
 
     use oneil_ir as ir;
+    use oneil_shared::symbols::ParameterName;
 
     #[test]
     fn resolve_tests_empty() {
@@ -70,7 +72,7 @@ mod tests {
         let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -106,7 +108,7 @@ mod tests {
         let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -121,7 +123,7 @@ mod tests {
         assert_eq!(resolved_tests.len(), 1);
 
         let test_0 = resolved_tests
-            .get(&ir::TestIndex::new(0))
+            .get(&TestIndex::new(0))
             .expect("test should exist");
         assert_eq!(test_0.trace_level(), ir::TraceLevel::None);
 
@@ -146,7 +148,7 @@ mod tests {
         let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -160,7 +162,7 @@ mod tests {
         let resolved_tests = resolution_context.get_active_model_tests();
         assert_eq!(resolved_tests.len(), 1);
         let test = resolved_tests
-            .get(&ir::TestIndex::new(0))
+            .get(&TestIndex::new(0))
             .expect("test should exist");
         assert_eq!(test.trace_level(), ir::TraceLevel::Debug);
 
@@ -181,7 +183,7 @@ mod tests {
         let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -199,7 +201,7 @@ mod tests {
         assert_eq!(test_errors.len(), 1);
 
         let errors_for_test_0 = test_errors
-            .get(&ir::TestIndex::new(0))
+            .get(&TestIndex::new(0))
             .expect("test 0 errors should exist");
         assert_eq!(errors_for_test_0.len(), 1);
 
@@ -214,10 +216,7 @@ mod tests {
         };
 
         assert_eq!(model_path, &None);
-        assert_eq!(
-            parameter_name,
-            &ir::ParameterName::new("undefined_var".to_string())
-        );
+        assert_eq!(parameter_name, &ParameterName::from("undefined_var"));
     }
 
     #[test]
@@ -236,7 +235,7 @@ mod tests {
         let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
 
         // build the context
-        let active_path = ir::ModelPath::new("main");
+        let active_path = test_model_path("main");
         let mut external = TestExternalContext::new();
         let mut resolution_context = ResolutionContextBuilder::new()
             .with_active_model(active_path)
@@ -250,7 +249,7 @@ mod tests {
         let resolved_tests = resolution_context.get_active_model_tests();
         assert_eq!(resolved_tests.len(), 1);
         let test = resolved_tests
-            .get(&ir::TestIndex::new(0))
+            .get(&TestIndex::new(0))
             .expect("test should exist");
         assert_eq!(test.trace_level(), ir::TraceLevel::None);
 
@@ -259,7 +258,7 @@ mod tests {
         assert_eq!(test_errors.len(), 1);
 
         let errors_for_test_1 = test_errors
-            .get(&ir::TestIndex::new(1))
+            .get(&TestIndex::new(1))
             .expect("test 1 errors should exist");
         assert_eq!(errors_for_test_1.len(), 1);
 
@@ -274,9 +273,6 @@ mod tests {
         };
 
         assert_eq!(model_path, &None);
-        assert_eq!(
-            parameter_name,
-            &ir::ParameterName::new("undefined_var".to_string())
-        );
+        assert_eq!(parameter_name, &ParameterName::from("undefined_var"));
     }
 }

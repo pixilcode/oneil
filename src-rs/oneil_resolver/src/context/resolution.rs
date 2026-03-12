@@ -1,6 +1,15 @@
 use indexmap::{IndexMap, IndexSet};
+use oneil_ast as ast;
 use oneil_ir as ir;
-use oneil_shared::{load_result::LoadResult, span::Span};
+use oneil_shared::{
+    load_result::LoadResult,
+    paths::{ModelPath, PythonPath},
+    span::Span,
+    symbols::{
+        ParameterName, PyFunctionName, ReferenceName, SubmodelName, TestIndex, UnitBaseName,
+        UnitPrefix,
+    },
+};
 
 use crate::error::{
     CircularDependencyError, ModelImportResolutionError, ParameterResolutionError,
@@ -22,7 +31,7 @@ impl ModelResolutionResult {
     /// Creates an empty resolution result with an empty model and
     /// no resolution or circular dependency errors.
     #[must_use]
-    pub fn new(model_path: ir::ModelPath) -> Self {
+    pub fn new(model_path: ModelPath) -> Self {
         let empty_model = ir::Model::new(
             model_path,
             IndexMap::new(),
@@ -41,7 +50,7 @@ impl ModelResolutionResult {
     /// Creates a resolution result from a model and errors.
     #[must_use]
     pub fn from_result(
-        model_path: ir::ModelPath,
+        model_path: ModelPath,
         result: &LoadResult<ir::Model, ResolutionErrorCollection>,
     ) -> Self {
         match result {
@@ -91,11 +100,11 @@ impl ModelResolutionResult {
 pub struct ResolutionContext<'external, E: ExternalResolutionContext> {
     external_context: &'external mut E,
     /// Stack of active models. The last element is the current model.
-    active_models: Vec<ir::ModelPath>,
+    active_models: Vec<ModelPath>,
     /// Set of models that have been visited.
-    visited_models: IndexSet<ir::ModelPath>,
+    visited_models: IndexSet<ModelPath>,
     /// Map of model results.
-    model_results: IndexMap<ir::ModelPath, ModelResolutionResult>,
+    model_results: IndexMap<ModelPath, ModelResolutionResult>,
 }
 
 impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
@@ -133,12 +142,12 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
 
     /// Consumes the context and returns the accumulated models and errors.
     #[must_use]
-    pub fn into_result(self) -> IndexMap<ir::ModelPath, ModelResolutionResult> {
+    pub fn into_result(self) -> IndexMap<ModelPath, ModelResolutionResult> {
         self.model_results
     }
 
     /// Activates a model and initializes its result entry.
-    pub fn push_active_model(&mut self, model_path: &ir::ModelPath) {
+    pub fn push_active_model(&mut self, model_path: &ModelPath) {
         self.active_models.push(model_path.clone());
         self.visited_models.insert(model_path.clone());
         self.model_results
@@ -151,7 +160,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     /// # Panics
     ///
     /// Panics if the popped model does not match the given model path.
-    pub fn pop_active_model(&mut self, model_path: &ir::ModelPath) {
+    pub fn pop_active_model(&mut self, model_path: &ModelPath) {
         let popped = self
             .active_models
             .pop()
@@ -165,19 +174,19 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
 
     /// Checks if the given model is active.
     #[must_use]
-    pub fn is_model_active(&self, model_path: &ir::ModelPath) -> bool {
+    pub fn is_model_active(&self, model_path: &ModelPath) -> bool {
         self.active_models.contains(model_path)
     }
 
     /// Returns the stack of active models.
     #[must_use]
-    pub fn active_models(&self) -> &[ir::ModelPath] {
+    pub fn active_models(&self) -> &[ModelPath] {
         &self.active_models
     }
 
     /// Checks if the given model has been visited.
     #[must_use]
-    pub fn has_visited_model(&self, model_path: &ir::ModelPath) -> bool {
+    pub fn has_visited_model(&self, model_path: &ModelPath) -> bool {
         self.visited_models.contains(model_path)
     }
 
@@ -221,7 +230,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     }
 
     /// Returns whether the given model path has any resolution errors.
-    fn model_has_errors(&self, model_path: &ir::ModelPath) -> bool {
+    fn model_has_errors(&self, model_path: &ModelPath) -> bool {
         self.model_results
             .get(model_path)
             .is_some_and(|r| !r.model_errors().is_empty())
@@ -229,37 +238,37 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
 
     /// Checks if the given identifier refers to a builtin value.
     #[must_use]
-    pub fn has_builtin_value(&self, identifier: &ir::Identifier) -> bool {
+    pub fn has_builtin_value(&self, identifier: &ast::Identifier) -> bool {
         self.external_context.has_builtin_value(identifier)
     }
 
     /// Checks if the given identifier refers to a builtin function.
     #[must_use]
-    pub fn has_builtin_function(&self, identifier: &ir::Identifier) -> bool {
+    pub fn has_builtin_function(&self, identifier: &ast::Identifier) -> bool {
         self.external_context.has_builtin_function(identifier)
     }
 
-    /// Checks if the given name refers to a builtin unit.
+    /// Checks if the given identifier refers to a builtin unit.
     #[must_use]
     pub fn has_builtin_unit(&self, name: &str) -> bool {
         self.external_context.has_builtin_unit(name)
     }
 
     /// Returns the available unit prefixes.
-    pub fn available_prefixes(&self) -> impl Iterator<Item = (&str, f64)> {
+    pub fn available_prefixes(&self) -> impl Iterator<Item = (&UnitPrefix, f64)> {
         self.external_context.available_prefixes()
     }
 
     /// Returns whether the given unit name supports SI prefixes.
     #[must_use]
-    pub fn unit_supports_si_prefixes(&self, name: &str) -> bool {
+    pub fn unit_supports_si_prefixes(&self, name: &UnitBaseName) -> bool {
         self.external_context.unit_supports_si_prefixes(name)
     }
 
     /// Loads the AST for a model.
     pub fn load_ast(
         &mut self,
-        path: &ir::ModelPath,
+        path: &ModelPath,
     ) -> oneil_shared::load_result::LoadResult<&oneil_ast::ModelNode, AstLoadingFailedError> {
         self.external_context.load_ast(path)
     }
@@ -267,13 +276,13 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     /// Loads a Python import and records either the import or an error.
     pub fn load_python_import_to_active_model(
         &mut self,
-        python_path: &ir::PythonPath,
+        python_path: &PythonPath,
         python_path_span: Span,
     ) {
         let load_result = self.external_context.load_python_import(python_path);
 
         if let Ok(functions) = load_result {
-            let functions = functions.into_iter().map(String::from).collect();
+            let functions = functions.into_iter().cloned().collect();
             let import = ir::PythonImport::new(python_path.clone(), python_path_span, functions);
             self.active_model_mut()
                 .add_python_import(python_path.clone(), import);
@@ -290,7 +299,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     /// Adds a Python import error to the active model.
     pub fn add_python_import_error_to_active_model(
         &mut self,
-        python_path: ir::PythonPath,
+        python_path: PythonPath,
         error: PythonImportResolutionError,
     ) {
         self.active_model_errors_mut()
@@ -301,14 +310,14 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     #[must_use]
     pub fn get_python_import_from_active_model(
         &self,
-        python_path: &ir::PythonPath,
+        python_path: &PythonPath,
     ) -> Option<&ir::PythonImport> {
         self.active_model().get_python_imports().get(python_path)
     }
 
     /// Returns the Python paths in the active model that export the given function name.
     #[must_use]
-    pub fn lookup_imported_function(&self, function_name: &str) -> Vec<ir::PythonPath> {
+    pub fn lookup_imported_function(&self, function_name: &PyFunctionName) -> Vec<PythonPath> {
         self.active_model()
             .get_python_imports()
             .iter()
@@ -320,9 +329,9 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     /// Adds a reference to the active model.
     pub fn add_reference_to_active_model(
         &mut self,
-        reference_name: ir::ReferenceName,
+        reference_name: ReferenceName,
         reference_name_span: Span,
-        reference_path: ir::ModelPath,
+        reference_path: ModelPath,
     ) {
         let import =
             ir::ReferenceImport::new(reference_name.clone(), reference_name_span, reference_path);
@@ -333,9 +342,9 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     /// Adds a submodel to the active model.
     pub fn add_submodel_to_active_model(
         &mut self,
-        submodel_name: ir::SubmodelName,
+        submodel_name: SubmodelName,
         submodel_name_span: Span,
-        reference_name: ir::ReferenceName,
+        reference_name: ReferenceName,
     ) {
         let import =
             ir::SubmodelImport::new(submodel_name.clone(), submodel_name_span, reference_name);
@@ -347,7 +356,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     #[must_use]
     pub fn get_reference_from_active_model(
         &self,
-        reference_name: &ir::ReferenceName,
+        reference_name: &ReferenceName,
     ) -> Option<&ir::ReferenceImport> {
         self.active_model().get_references().get(reference_name)
     }
@@ -356,14 +365,14 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     #[must_use]
     pub fn get_submodel_from_active_model(
         &self,
-        submodel_name: &ir::SubmodelName,
+        submodel_name: &SubmodelName,
     ) -> Option<&ir::SubmodelImport> {
         self.active_model().get_submodels().get(submodel_name)
     }
 
     /// Looks up a model by path.
     #[must_use]
-    pub fn lookup_model(&self, model_path: &ir::ModelPath) -> ModelResult<'_> {
+    pub fn lookup_model(&self, model_path: &ModelPath) -> ModelResult<'_> {
         if self.model_has_errors(model_path) {
             return ModelResult::HasError;
         }
@@ -377,7 +386,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     #[must_use]
     pub fn lookup_reference_path_in_active_model(
         &self,
-        reference_name: &ir::ReferenceName,
+        reference_name: &ReferenceName,
     ) -> ReferencePathResult<'_, '_> {
         let active_path = self.active_models.last().expect("no active model");
         let errors = self
@@ -426,8 +435,8 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     /// Adds a reference resolution error to the active model.
     pub fn add_model_import_resolution_error_to_active_model(
         &mut self,
-        reference_name: ir::ReferenceName,
-        submodel_name: Option<ir::SubmodelName>,
+        reference_name: ReferenceName,
+        submodel_name: Option<SubmodelName>,
         error: ModelImportResolutionError,
     ) {
         self.active_model_errors_mut()
@@ -437,7 +446,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     /// Adds a parameter to the active model.
     pub fn add_parameter_to_active_model(
         &mut self,
-        parameter_name: ir::ParameterName,
+        parameter_name: ParameterName,
         parameter: ir::Parameter,
     ) {
         self.active_model_mut()
@@ -448,7 +457,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     #[must_use]
     pub fn lookup_parameter_in_active_model(
         &self,
-        parameter_name: &ir::ParameterName,
+        parameter_name: &ParameterName,
     ) -> ParameterResult<'_> {
         let active_path = self.active_models.last().expect("no active model");
         if let Some(errors) = self
@@ -471,7 +480,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     /// Adds a parameter error to the active model.
     pub fn add_parameter_error_to_active_model(
         &mut self,
-        parameter_name: ir::ParameterName,
+        parameter_name: ParameterName,
         error: ParameterResolutionError,
     ) {
         self.active_model_errors_mut()
@@ -479,14 +488,14 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     }
 
     /// Adds a test to the active model.
-    pub fn add_test_to_active_model(&mut self, test_index: ir::TestIndex, test: ir::Test) {
+    pub fn add_test_to_active_model(&mut self, test_index: TestIndex, test: ir::Test) {
         self.active_model_mut().add_test(test_index, test);
     }
 
     /// Adds a test error to the active model.
     pub fn add_test_error_to_active_model(
         &mut self,
-        test_index: ir::TestIndex,
+        test_index: TestIndex,
         error: VariableResolutionError,
     ) {
         self.active_model_errors_mut()
@@ -513,7 +522,7 @@ impl<E: ExternalResolutionContext> ResolutionContext<'_, E> {
 
     /// Returns the resolved tests for the active model.
     #[must_use]
-    pub fn get_active_model_tests(&self) -> &IndexMap<ir::TestIndex, ir::Test> {
+    pub fn get_active_model_tests(&self) -> &IndexMap<TestIndex, ir::Test> {
         self.active_model().get_tests()
     }
 
@@ -521,13 +530,13 @@ impl<E: ExternalResolutionContext> ResolutionContext<'_, E> {
     #[must_use]
     pub fn get_active_model_test_errors(
         &self,
-    ) -> &IndexMap<ir::TestIndex, Vec<VariableResolutionError>> {
+    ) -> &IndexMap<TestIndex, Vec<VariableResolutionError>> {
         self.active_model_errors().get_test_resolution_errors()
     }
 
     /// Returns the resolved Python imports for the active model.
     #[must_use]
-    pub fn get_active_model_python_imports(&self) -> &IndexMap<ir::PythonPath, ir::PythonImport> {
+    pub fn get_active_model_python_imports(&self) -> &IndexMap<PythonPath, ir::PythonImport> {
         self.active_model().get_python_imports()
     }
 
@@ -535,14 +544,14 @@ impl<E: ExternalResolutionContext> ResolutionContext<'_, E> {
     #[must_use]
     pub fn get_active_model_python_import_errors(
         &self,
-    ) -> &IndexMap<ir::PythonPath, PythonImportResolutionError> {
+    ) -> &IndexMap<PythonPath, PythonImportResolutionError> {
         self.active_model_errors()
             .get_python_import_resolution_errors()
     }
 
     /// Returns the resolved parameters for the active model.
     #[must_use]
-    pub fn get_active_model_parameters(&self) -> &IndexMap<ir::ParameterName, ir::Parameter> {
+    pub fn get_active_model_parameters(&self) -> &IndexMap<ParameterName, ir::Parameter> {
         self.active_model().get_parameters()
     }
 
@@ -550,19 +559,19 @@ impl<E: ExternalResolutionContext> ResolutionContext<'_, E> {
     #[must_use]
     pub fn get_active_model_parameter_errors(
         &self,
-    ) -> &IndexMap<ir::ParameterName, Vec<ParameterResolutionError>> {
+    ) -> &IndexMap<ParameterName, Vec<ParameterResolutionError>> {
         self.active_model_errors().get_parameter_resolution_errors()
     }
 
     /// Returns the resolved references for the active model.
     #[must_use]
-    pub fn get_active_model_references(&self) -> &IndexMap<ir::ReferenceName, ir::ReferenceImport> {
+    pub fn get_active_model_references(&self) -> &IndexMap<ReferenceName, ir::ReferenceImport> {
         self.active_model().get_references()
     }
 
     /// Returns the resolved submodels for the active model.
     #[must_use]
-    pub fn get_active_model_submodels(&self) -> &IndexMap<ir::SubmodelName, ir::SubmodelImport> {
+    pub fn get_active_model_submodels(&self) -> &IndexMap<SubmodelName, ir::SubmodelImport> {
         self.active_model().get_submodels()
     }
 
@@ -570,7 +579,7 @@ impl<E: ExternalResolutionContext> ResolutionContext<'_, E> {
     #[must_use]
     pub fn get_active_model_model_import_errors(
         &self,
-    ) -> &IndexMap<ir::ReferenceName, (Option<ir::SubmodelName>, ModelImportResolutionError)> {
+    ) -> &IndexMap<ReferenceName, (Option<SubmodelName>, ModelImportResolutionError)> {
         self.active_model_errors()
             .get_model_import_resolution_errors()
     }
@@ -585,11 +594,11 @@ pub enum ModelResult<'model> {
 
 #[derive(Debug)]
 pub enum ReferencePathResult<'model, 'reference> {
-    Found(&'model ir::Model, &'reference ir::ModelPath),
+    Found(&'model ir::Model, &'reference ModelPath),
     ReferenceHasResolutionError,
     ReferenceNotFound,
-    ModelHasResolutionError(&'reference ir::ModelPath),
-    ModelNotFound(&'reference ir::ModelPath),
+    ModelHasResolutionError(&'reference ModelPath),
+    ModelNotFound(&'reference ModelPath),
 }
 
 #[derive(Debug)]

@@ -4,7 +4,10 @@ use indexmap::IndexMap;
 
 use oneil_ast as ast;
 use oneil_ir::{self as ir, Dependencies};
-use oneil_shared::span::Span;
+use oneil_shared::{
+    span::Span,
+    symbols::{BuiltinFunctionName, PyFunctionName},
+};
 
 use crate::{
     ExternalResolutionContext, ResolutionContext,
@@ -234,13 +237,14 @@ where
     E: ExternalResolutionContext,
 {
     let name_span = name.span();
-    let name = ir::Identifier::new(name.as_str().to_string());
 
-    if resolution_context.has_builtin_function(&name) {
+    if resolution_context.has_builtin_function(name) {
+        let name = BuiltinFunctionName::from(name.as_str());
         return Ok(ir::FunctionName::builtin(name, name_span));
     }
 
-    let python_paths = resolution_context.lookup_imported_function(name.as_str());
+    let name = PyFunctionName::from(name.as_str());
+    let python_paths = resolution_context.lookup_imported_function(&name);
     match python_paths.len() {
         0 => Err(VariableResolutionError::undefined_function(
             name.as_str().to_string(),
@@ -271,16 +275,16 @@ fn resolve_literal(literal: &ast::LiteralNode) -> ir::Literal {
 /// Extracts internal dependencies from an expression.
 ///
 /// Note that these dependencies include both parameters and builtin variables.
-pub fn get_expr_internal_dependencies(expr: &ast::ExprNode) -> IndexMap<ir::Identifier, Span> {
+pub fn get_expr_internal_dependencies(expr: &ast::ExprNode) -> IndexMap<ast::Identifier, Span> {
     struct ExprInternalDependencyVisitor {
-        dependencies: IndexMap<ir::Identifier, Span>,
+        dependencies: IndexMap<ast::Identifier, Span>,
     }
 
     impl ast::ExprVisitor for ExprInternalDependencyVisitor {
         fn visit_variable(mut self, _span: Span, var: &ast::VariableNode) -> Self {
             match &**var {
                 ast::Variable::Identifier(identifier_node) => {
-                    let identifier = ir::Identifier::new(identifier_node.as_str().to_string());
+                    let identifier = ast::Identifier::from(identifier_node.as_str());
                     let identifier_span = identifier_node.span();
                     self.dependencies.insert(identifier, identifier_span);
                     self
@@ -368,18 +372,19 @@ mod tests {
     use super::*;
     use crate::test::{
         external_context::TestExternalContext, resolution_context::ResolutionContextBuilder,
-        test_ast, test_ir,
+        test_ast, test_ir, test_model_path,
     };
 
     use oneil_ast as ast;
     use oneil_ir as ir;
+    use oneil_shared::symbols::ParameterName;
 
     fn make_resolution_context<'a>(
         external: &'a mut TestExternalContext,
         parameters: Vec<ir::Parameter>,
         python_import_paths: Vec<&'a str>,
     ) -> ResolutionContext<'a, TestExternalContext> {
-        let model_path = ir::ModelPath::new("/test");
+        let model_path = test_model_path("test");
         ResolutionContextBuilder::new()
             .with_active_model(model_path)
             .with_parameters(parameters)
@@ -611,7 +616,7 @@ mod tests {
             panic!("Expected imported function, got {name:?}");
         };
 
-        assert_eq!(python_path.as_ref(), &PathBuf::from("test.py"));
+        assert_eq!(python_path.as_path(), &PathBuf::from("test.py"));
         assert_eq!(name.as_str(), "custom_function");
 
         assert_eq!(args.len(), 1);
@@ -797,7 +802,7 @@ mod tests {
             panic!("Expected imported function, got {name:?}");
         };
 
-        assert_eq!(python_path.as_ref(), &PathBuf::from("test.py"));
+        assert_eq!(python_path.as_path(), &PathBuf::from("test.py"));
         assert_eq!(name.as_str(), "foo");
 
         assert_eq!(args.len(), 1);
@@ -947,7 +952,7 @@ mod tests {
                 panic!("Expected imported function, got {result:?}");
             };
 
-            assert_eq!(python_path.as_ref(), &PathBuf::from("test.py"));
+            assert_eq!(python_path.as_path(), &PathBuf::from("test.py"));
             assert_eq!(name.as_str(), func_name);
         }
     }
@@ -1009,8 +1014,8 @@ mod tests {
             })
             .collect();
 
-        assert!(error_identifiers.contains(&ir::ParameterName::new("undefined1".to_string())));
-        assert!(error_identifiers.contains(&ir::ParameterName::new("undefined2".to_string())));
+        assert!(error_identifiers.contains(&ParameterName::from("undefined1")));
+        assert!(error_identifiers.contains(&ParameterName::from("undefined2")));
     }
 
     #[test]
@@ -1402,10 +1407,8 @@ mod tests {
             })
             .collect();
 
-        assert!(error_identifiers.contains(&ir::ParameterName::new("undefined_left".to_string())));
-        assert!(error_identifiers.contains(&ir::ParameterName::new("undefined_right".to_string())));
-        assert!(
-            error_identifiers.contains(&ir::ParameterName::new("undefined_chained".to_string()))
-        );
+        assert!(error_identifiers.contains(&ParameterName::from("undefined_left")));
+        assert!(error_identifiers.contains(&ParameterName::from("undefined_right")));
+        assert!(error_identifiers.contains(&ParameterName::from("undefined_chained")));
     }
 }

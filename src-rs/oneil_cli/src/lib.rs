@@ -6,11 +6,7 @@
     reason = "this isn't causing problems, and it's going to take time to fix"
 )]
 
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-    sync::mpsc,
-};
+use std::{io::Write, sync::mpsc};
 
 use anstream::{ColorChoice, eprintln, print, println};
 use clap::Parser;
@@ -22,6 +18,12 @@ use oneil_runtime::{
         error::RuntimeErrors,
         tree::{DependencyTreeValue, ReferenceTreeValue, Tree},
     },
+};
+#[cfg(feature = "python")]
+use oneil_shared::paths::PythonPath;
+use oneil_shared::{
+    paths::{ModelPath, SourcePath},
+    symbols::ParameterName,
 };
 
 use crate::{
@@ -127,10 +129,10 @@ fn handle_dev_command(command: DevCommand, show_internal_errors: bool) {
 
 /// Handles the `dev print-python-imports` command.
 #[cfg(feature = "python")]
-fn handle_print_python_imports(files: &[PathBuf], show_internal_errors: bool) {
+fn handle_print_python_imports(files: &[PythonPath], show_internal_errors: bool) {
     let mut runtime = Runtime::new();
 
-    let mut imports = IndexMap::new();
+    let mut imports: IndexMap<PythonPath, IndexSet<String>> = IndexMap::new();
     let mut errors = Vec::new();
 
     for file in files {
@@ -138,7 +140,10 @@ fn handle_print_python_imports(files: &[PathBuf], show_internal_errors: bool) {
 
         match import_result {
             Ok(import) => {
-                let functions: IndexSet<String> = import.into_iter().map(str::to_string).collect();
+                let functions: IndexSet<String> = import
+                    .into_iter()
+                    .map(|name| name.as_str().to_string())
+                    .collect();
                 imports.insert(file.clone(), functions);
             }
 
@@ -156,11 +161,11 @@ fn handle_print_python_imports(files: &[PathBuf], show_internal_errors: bool) {
     let is_multiple_files = imports.len() > 1;
     for (file, import) in imports {
         if is_multiple_files {
-            println!("===== {} =====", file.display());
+            println!("===== {} =====", file.as_path().display());
         }
 
         if import.is_empty() {
-            let message = format!("no functions found in `{}`", file.display());
+            let message = format!("no functions found in `{}`", file.as_path().display());
             let styled_message = stylesheet::NO_PYTHON_FUNCTIONS_FOUND_MESSAGE.style(message);
             println!("{styled_message}");
             continue;
@@ -173,7 +178,7 @@ fn handle_print_python_imports(files: &[PathBuf], show_internal_errors: bool) {
 }
 
 /// Handles the `dev print-ast` command.
-fn handle_print_ast(files: &[PathBuf], display_partial: bool, show_internal_errors: bool) {
+fn handle_print_ast(files: &[ModelPath], display_partial: bool, show_internal_errors: bool) {
     let ast_print_config = AstPrintConfig {};
 
     let mut runtime = Runtime::new();
@@ -203,7 +208,7 @@ fn handle_print_ast(files: &[PathBuf], display_partial: bool, show_internal_erro
 
     for (file, ast) in asts {
         if is_multiple_files {
-            println!("===== {} =====", file.display());
+            println!("===== {} =====", file.as_path().display());
         }
 
         print_debug_ast::print(&ast, &ast_print_config);
@@ -249,7 +254,7 @@ fn ir_sections_from_include(include: Option<&[IrIncludeSection]>) -> print_debug
     reason = "this is just passing in all the arguments from the CLI"
 )]
 fn handle_print_ir(
-    file: &Path,
+    file: &ModelPath,
     display_partial: bool,
     recursive: bool,
     sections: &print_debug_ir::IrSections,
@@ -317,7 +322,7 @@ fn model_result_sections_from_include(
     reason = "this is just passing in all the arguments from the CLI"
 )]
 fn handle_print_model_result(
-    file: &Path,
+    file: &ModelPath,
     display_partial: bool,
     recursive: bool,
     sections: &print_debug_model_result::ModelResultSections,
@@ -394,7 +399,7 @@ fn handle_eval_command(args: EvalArgs, show_internal_errors: bool) {
 }
 
 fn eval_and_print_model(
-    file: &Path,
+    file: &ModelPath,
     eval_expressions: &[String],
     show_internal_errors: bool,
     display_partial_results: bool,
@@ -426,7 +431,7 @@ fn eval_and_print_model(
 }
 
 fn watch_model(
-    file: &Path,
+    file: &ModelPath,
     eval_expressions: &[String],
     show_internal_errors: bool,
     display_partial_results: bool,
@@ -448,7 +453,7 @@ fn watch_model(
         }
     };
 
-    let mut watch_paths = IndexSet::new();
+    let mut watch_paths: IndexSet<SourcePath> = IndexSet::new();
 
     clear_screen();
 
@@ -504,9 +509,9 @@ fn watch_model(
 }
 
 fn find_watch_paths_difference<'a>(
-    old_paths: &'a IndexSet<PathBuf>,
-    new_paths: &'a IndexSet<PathBuf>,
-) -> (IndexSet<&'a PathBuf>, IndexSet<&'a PathBuf>) {
+    old_paths: &'a IndexSet<SourcePath>,
+    new_paths: &'a IndexSet<SourcePath>,
+) -> (IndexSet<&'a SourcePath>, IndexSet<&'a SourcePath>) {
     let add_paths = new_paths.difference(old_paths).collect();
     let remove_paths = old_paths.difference(new_paths).collect();
     (add_paths, remove_paths)
@@ -514,26 +519,29 @@ fn find_watch_paths_difference<'a>(
 
 fn update_watcher(
     watcher: &mut notify::RecommendedWatcher,
-    add_paths: &IndexSet<&PathBuf>,
-    remove_paths: &IndexSet<&PathBuf>,
+    add_paths: &IndexSet<&SourcePath>,
+    remove_paths: &IndexSet<&SourcePath>,
 ) {
     let mut watcher_paths_mut = watcher.paths_mut();
 
     for path in add_paths {
-        let result = watcher_paths_mut.add(path, notify::RecursiveMode::NonRecursive);
+        let result = watcher_paths_mut.add(path.as_path(), notify::RecursiveMode::NonRecursive);
         if let Err(error) = result {
-            let error_msg = format!("error: failed to add path {} to watcher", path.display());
+            let error_msg = format!(
+                "error: failed to add path {} to watcher",
+                path.as_path().display()
+            );
             let error_msg = stylesheet::ERROR_COLOR.bold().style(error_msg);
             eprintln!("{error_msg} - {error}");
         }
     }
 
     for path in remove_paths {
-        let result = watcher_paths_mut.remove(path);
+        let result = watcher_paths_mut.remove(path.as_path());
         if let Err(error) = result {
             let error_msg = format!(
                 "error: failed to remove path {} from watcher",
-                path.display()
+                path.as_path().display()
             );
             let error_msg = stylesheet::ERROR_COLOR.bold().style(error_msg);
             eprintln!("{error_msg} - {error}");
@@ -598,8 +606,8 @@ fn handle_test_command(args: TestArgs, show_internal_errors: bool) {
 
 fn handle_tree_command(args: TreeArgs, show_internal_errors: bool) {
     enum TreeResults {
-        ReferenceTrees(Vec<(String, Option<Tree<ReferenceTreeValue>>)>),
-        DependencyTrees(Vec<(String, Option<Tree<DependencyTreeValue>>)>),
+        ReferenceTrees(Vec<(ParameterName, Option<Tree<ReferenceTreeValue>>)>),
+        DependencyTrees(Vec<(ParameterName, Option<Tree<DependencyTreeValue>>)>),
     }
 
     let TreeArgs {
@@ -692,9 +700,10 @@ fn handle_tree_command(args: TreeArgs, show_internal_errors: bool) {
     }
 }
 
-fn print_param_not_found(param: &str) {
+fn print_param_not_found(param: &ParameterName) {
     let error_label = stylesheet::ERROR_COLOR.bold().style("error:");
-    eprintln!("{error_label} parameter \"{param}\" not found in model");
+    let param_name = param.as_str();
+    eprintln!("{error_label} parameter \"{param_name}\" not found in model");
 }
 
 fn handle_builtins_command(command: Option<BuiltinsCommand>) {

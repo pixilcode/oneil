@@ -2,7 +2,11 @@
 
 use oneil_shared::span::Span;
 
-use crate::{naming::IdentifierNode, node::Node, unit::UnitExprNode};
+use crate::{
+    naming::{IdentifierNode, ParameterNameNode, ReferenceNameNode},
+    node::Node,
+    unit::UnitExprNode,
+};
 
 /// An expression in the Oneil language
 #[derive(Debug, Clone, PartialEq)]
@@ -320,9 +324,9 @@ pub enum Variable {
     /// A parameter in a reference model
     ModelParameter {
         /// The reference model
-        reference_model: IdentifierNode,
+        reference_model: ReferenceNameNode,
         /// The parameter being accessed
-        parameter: IdentifierNode,
+        parameter: ParameterNameNode,
     },
 }
 
@@ -339,8 +343,8 @@ impl Variable {
     /// Creates a model parameter variable reference
     #[must_use]
     pub const fn model_parameter(
-        reference_model: IdentifierNode,
-        parameter: IdentifierNode,
+        reference_model: ReferenceNameNode,
+        parameter: ParameterNameNode,
     ) -> Self {
         Self::ModelParameter {
             reference_model,
@@ -534,8 +538,8 @@ impl Node<Expr> {
                 visitor.visit_function_call(span, name, args)
             }
             Expr::UnitCast { expr, unit } => {
-                let visitor = visitor.visit_unit_cast(span, expr, unit);
-                expr.post_order_visit(visitor)
+                let visitor = expr.post_order_visit(visitor);
+                visitor.visit_unit_cast(span, expr, unit)
             }
             Expr::Parenthesized { expr } => {
                 let visitor = expr.post_order_visit(visitor);

@@ -15,6 +15,7 @@ mod util {
         Runtime,
         output::{self, OneilError},
     };
+    use oneil_shared::paths::ModelPath;
 
     /// Runs the full evaluation pipeline on an Oneil model file and returns
     /// a formatted string containing any errors and the evaluation output.
@@ -33,8 +34,10 @@ mod util {
     #[expect(clippy::unwrap_used, reason = "writing to a String is infallible")]
     #[must_use]
     pub fn run_model_and_format(path: &Path, path_prefix: Option<&Path>) -> String {
+        let path = ModelPath::from_path_with_ext(path);
+
         let mut runtime = Runtime::new();
-        let (model_opt, errors) = runtime.eval_model(path);
+        let (model_opt, errors) = runtime.eval_model(&path);
 
         let mut out = String::new();
 
@@ -109,17 +112,17 @@ mod util {
     ) -> String {
         let mut out = String::new();
 
-        let path = normalize_path(model_ref.path(), path_prefix);
+        let path = normalize_path(model_ref.path().as_path(), path_prefix);
         let tests = model_ref.tests();
-        let passed = tests.iter().filter(|t| t.passed()).count();
+        let passed = tests.iter().filter(|(_, test)| test.passed()).count();
         let total = tests.len();
 
         writeln!(out, "Model: {path}").unwrap();
         writeln!(out, "Tests: {passed}/{total}").unwrap();
 
-        for (i, test) in tests.iter().enumerate() {
+        for (index, test) in tests {
             let result_str = if test.passed() { "PASS" } else { "FAIL" };
-            writeln!(out, "  test {}: {result_str}", i + 1).unwrap();
+            writeln!(out, "  test {}: {result_str}", index.into_usize() + 1).unwrap();
         }
 
         let params = model_ref.parameters();

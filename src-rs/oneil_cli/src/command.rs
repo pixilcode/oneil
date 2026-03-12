@@ -1,7 +1,13 @@
 //! Command-line interface definitions for the Oneil CLI
 
 use clap::{Args, Parser, Subcommand};
-use std::{fmt, path::PathBuf, str};
+#[cfg(feature = "python")]
+use oneil_shared::paths::PythonPath;
+use oneil_shared::{
+    paths::ModelPath,
+    symbols::{BuiltinFunctionName, BuiltinValueName, ParameterName, UnitBaseName, UnitPrefix},
+};
+use std::{fmt, path::Path, path::PathBuf, str};
 
 /// Oneil language CLI - Main command-line interface structure
 #[derive(Parser)]
@@ -80,8 +86,8 @@ pub enum Commands {
 #[derive(Args)]
 pub struct EvalArgs {
     /// Path to the Oneil model file to evaluate
-    #[arg(value_name = "FILE")]
-    pub file: PathBuf,
+    #[arg(value_name = "FILE", value_parser = parse_model_path)]
+    pub file: ModelPath,
 
     /// When provided, selects which parameters to print
     ///
@@ -179,8 +185,8 @@ pub struct EvalArgs {
 #[derive(Args)]
 pub struct TestArgs {
     /// Path to the Oneil model file to run tests in
-    #[arg(value_name = "FILE")]
-    pub file: PathBuf,
+    #[arg(value_name = "FILE", value_parser = parse_model_path)]
+    pub file: ModelPath,
 
     /// Print submodel test results recursively
     ///
@@ -208,12 +214,12 @@ pub struct TestArgs {
 #[derive(Args)]
 pub struct TreeArgs {
     /// Path to the Oneil model file to print the tree for
-    #[arg(value_name = "FILE")]
-    pub file: PathBuf,
+    #[arg(value_name = "FILE", value_parser = parse_model_path)]
+    pub file: ModelPath,
 
     /// The parameter to print the tree for
     #[arg(value_name = "PARAM", required = true)]
-    pub params: Vec<String>,
+    pub params: Vec<ParameterName>,
 
     /// Print the tree of parameter references
     ///
@@ -257,7 +263,7 @@ pub enum BuiltinsCommand {
     Units {
         /// The unit to search for
         #[arg(value_name = "UNIT")]
-        unit_name: Option<String>,
+        unit_name: Option<UnitBaseName>,
     },
 
     /// Print the builtin functions or search for a specific function
@@ -265,7 +271,7 @@ pub enum BuiltinsCommand {
     Functions {
         /// The function to search for
         #[arg(value_name = "FUNCTION")]
-        function_name: Option<String>,
+        function_name: Option<BuiltinFunctionName>,
     },
 
     /// Print the builtin values or search for a specific value
@@ -273,7 +279,7 @@ pub enum BuiltinsCommand {
     Values {
         /// The value to search for
         #[arg(value_name = "VALUE")]
-        value_name: Option<String>,
+        value_name: Option<BuiltinValueName>,
     },
 
     /// Print the builtin unit prefixes or search for a specific prefix
@@ -281,15 +287,15 @@ pub enum BuiltinsCommand {
     Prefixes {
         /// The prefix to search for
         #[arg(value_name = "PREFIX")]
-        prefix_name: Option<String>,
+        prefix_name: Option<UnitPrefix>,
     },
 }
 
 #[derive(Args)]
 pub struct IndependentArgs {
     /// Path to the Oneil model file to print the independent parameters for
-    #[arg(value_name = "FILE")]
-    pub file: PathBuf,
+    #[arg(value_name = "FILE", value_parser = parse_model_path)]
+    pub file: ModelPath,
 
     /// Print the independent parameters in submodels as well as the top model
     #[arg(long, short = 'r')]
@@ -317,8 +323,8 @@ pub enum DevCommand {
     /// Print the Abstract Syntax Tree (AST) of a Oneil source file
     PrintAst {
         /// Path to the Oneil source file(s) to parse and display
-        #[arg(value_name = "FILE")]
-        files: Vec<PathBuf>,
+        #[arg(value_name = "FILE", value_parser = parse_model_path)]
+        files: Vec<ModelPath>,
 
         /// Display partial AST even if there are parsing errors
         ///
@@ -330,8 +336,8 @@ pub enum DevCommand {
     /// Print the Intermediate Representation (IR) of a Oneil source file
     PrintIr {
         /// Path to the Oneil source file to process and display
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
+        #[arg(value_name = "FILE", value_parser = parse_model_path)]
+        file: ModelPath,
 
         /// Display partial IR even if there are loading errors
         ///
@@ -364,8 +370,8 @@ pub enum DevCommand {
     /// which is intended to be used by end users.
     PrintModelResult {
         /// Path to the Oneil model file to evaluate
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
+        #[arg(value_name = "FILE", value_parser = parse_model_path)]
+        file: ModelPath,
 
         /// Display partial results even if there are errors
         ///
@@ -396,8 +402,8 @@ pub enum DevCommand {
     #[cfg(feature = "python")]
     PrintPythonImports {
         /// Path(s) to the Oneil source file(s) to inspect
-        #[arg(value_name = "FILE", num_args = 1..)]
-        files: Vec<PathBuf>,
+        #[arg(value_name = "FILE", num_args = 1.., value_parser = parse_python_path)]
+        files: Vec<PythonPath>,
     },
 }
 
@@ -543,5 +549,34 @@ impl str::FromStr for Variable {
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0.join("."))
+    }
+}
+
+/// Parses a CLI argument into a [`ModelPath`].
+/// Accepts either a path with `.on` extension or a path with no extension.
+fn parse_model_path(s: &str) -> Result<ModelPath, String> {
+    let path = Path::new(s);
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("on") => Ok(ModelPath::from_path_with_ext(path)),
+        None => Ok(ModelPath::from_str_no_ext(s)),
+        Some(_) => Err(format!(
+            "path must have `.on` extension or no extension, got {}",
+            path.display()
+        )),
+    }
+}
+
+#[cfg(feature = "python")]
+/// Parses a CLI argument into a [`PythonPath`].
+/// Accepts either a path with `.py` extension or a path with no extension.
+fn parse_python_path(s: &str) -> Result<PythonPath, String> {
+    let path = PathBuf::from(s);
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("py") => Ok(PythonPath::from_path_no_ext(&path.with_extension(""))),
+        None => Ok(PythonPath::from_str_no_ext(s)),
+        Some(_) => Err(format!(
+            "path must have `.py` extension or no extension, got {}",
+            path.display()
+        )),
     }
 }

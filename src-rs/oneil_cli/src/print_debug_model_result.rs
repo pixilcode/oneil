@@ -6,6 +6,7 @@
 use anstream::println;
 use indexmap::IndexMap;
 use oneil_runtime::output::reference::ModelReference;
+use oneil_shared::symbols::{ReferenceName, SubmodelName, TestIndex};
 
 use crate::stylesheet::debug as dbg_style;
 
@@ -106,7 +107,7 @@ fn print_model(
         "    ".repeat(indent),
         dbg_style::TREE.style(prefix),
         dbg_style::LABEL.style("Model:"),
-        dbg_style::IDENTIFIER.style(model_ref.path().display())
+        dbg_style::IDENTIFIER.style(model_ref.path().as_path().display())
     );
 
     let sections = &config.sections;
@@ -150,7 +151,7 @@ fn print_model(
             SectionTag::Submodels => print_submodels(&submodels, indent + 1),
             SectionTag::Parameters => print_parameters(&parameters, indent + 1, config),
             SectionTag::References => print_references(&references, indent + 1),
-            SectionTag::Tests => print_tests(&tests, indent + 1),
+            SectionTag::Tests => print_tests(tests, indent + 1),
         }
     }
 
@@ -172,7 +173,7 @@ enum SectionTag {
     Tests,
 }
 
-fn print_submodels(submodels: &IndexMap<&str, &str>, indent: usize) {
+fn print_submodels(submodels: &IndexMap<&SubmodelName, &ReferenceName>, indent: usize) {
     for (i, (name, reference_name)) in submodels.iter().enumerate() {
         let is_last = i == submodels.len() - 1;
         let prefix = if is_last { "└──" } else { "├──" };
@@ -181,8 +182,8 @@ fn print_submodels(submodels: &IndexMap<&str, &str>, indent: usize) {
             "    ".repeat(indent),
             dbg_style::TREE.style(prefix),
             dbg_style::LABEL.style("Submodel:"),
-            dbg_style::IDENTIFIER.style(name),
-            dbg_style::IDENTIFIER.style(reference_name)
+            dbg_style::IDENTIFIER.style(name.as_str()),
+            dbg_style::IDENTIFIER.style(reference_name.as_str())
         );
     }
 }
@@ -217,36 +218,38 @@ fn print_parameters(
     }
 }
 
-fn print_references(references: &IndexMap<&str, ModelReference<'_>>, indent: usize) {
+fn print_references(references: &IndexMap<&ReferenceName, ModelReference<'_>>, indent: usize) {
     for (i, (name, result)) in references.iter().enumerate() {
         let is_last = i == references.len() - 1;
         let prefix = if is_last { "└──" } else { "├──" };
-        let path_str = result.path().display().to_string();
+        let path_str = result.path().as_path().display().to_string();
 
         println!(
             "{}    {} {} \"{}\" -> \"{}\"",
             "    ".repeat(indent),
             dbg_style::TREE.style(prefix),
             dbg_style::LABEL.style("Reference:"),
-            dbg_style::IDENTIFIER.style(name),
+            dbg_style::IDENTIFIER.style(name.as_str()),
             dbg_style::IDENTIFIER.style(path_str)
         );
     }
 }
 
-fn print_tests(tests: &[&oneil_runtime::output::Test], indent: usize) {
-    for (i, test) in tests.iter().enumerate() {
-        let is_last = i == tests.len() - 1;
+fn print_tests(tests: &IndexMap<TestIndex, oneil_runtime::output::Test>, indent: usize) {
+    for (test_index, test) in tests {
+        let test_index = test_index.into_usize();
+        let is_last = test_index == tests.len() - 1;
         let prefix = if is_last { "└──" } else { "├──" };
         let (result_str, result_style) = match &test.result {
             oneil_runtime::output::TestResult::Passed => ("passed", dbg_style::TEST_PASSED),
             oneil_runtime::output::TestResult::Failed { .. } => ("failed", dbg_style::TEST_FAILED),
         };
         println!(
-            "{}    {} {} {}",
+            "{}    {} {} {}: {}",
             "    ".repeat(indent),
             dbg_style::TREE.style(prefix),
-            dbg_style::LABEL.style("Test:"),
+            dbg_style::LABEL.style("Test"),
+            dbg_style::COUNT.style(test_index + 1),
             result_style.style(result_str)
         );
     }

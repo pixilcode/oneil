@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
-use oneil_ir as ir;
 use oneil_shared::{
     error::{AsOneilError, Context, ErrorLocation},
+    paths::PythonPath,
     span::Span,
 };
 
@@ -21,14 +21,14 @@ pub enum PythonImportResolutionError {
         /// The span of the duplicate import declaration.
         duplicate_span: Span,
         /// The Python path of the duplicate import.
-        python_path: ir::PythonPath,
+        python_path: PythonPath,
     },
     /// A validation error occurred during import resolution.
     FailedValidation {
         /// The span of the import declaration that caused the validation error.
         ident_span: Span,
         /// The Python path of the import that failed validation.
-        python_path: ir::PythonPath,
+        python_path: PythonPath,
     },
 }
 
@@ -38,7 +38,7 @@ impl PythonImportResolutionError {
     pub const fn duplicate_import(
         original_span: Span,
         duplicate_span: Span,
-        python_path: ir::PythonPath,
+        python_path: PythonPath,
     ) -> Self {
         Self::DuplicateImport {
             original_span,
@@ -49,7 +49,7 @@ impl PythonImportResolutionError {
 
     /// Creates a new import resolution error indicating that validation failed for a Python import.
     #[must_use]
-    pub const fn failed_validation(ident_span: Span, python_path: ir::PythonPath) -> Self {
+    pub const fn failed_validation(ident_span: Span, python_path: PythonPath) -> Self {
         Self::FailedValidation {
             ident_span,
             python_path,
@@ -69,11 +69,11 @@ impl Display for PythonImportResolutionError {
         match self {
             Self::PythonNotEnabled { .. } => write!(f, "python feature is not enabled"),
             Self::DuplicateImport { python_path, .. } => {
-                let path = python_path.as_ref().display();
+                let path = python_path.as_path().display();
                 write!(f, "duplicate import of `{path}`")
             }
             Self::FailedValidation { python_path, .. } => {
-                let path = python_path.as_ref().display();
+                let path = python_path.as_path().display();
                 write!(f, "unable to import python file `{path}`")
             }
         }
