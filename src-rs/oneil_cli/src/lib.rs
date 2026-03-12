@@ -49,6 +49,9 @@ mod print_tree;
 mod print_utils;
 mod stylesheet;
 
+#[cfg(feature = "python")]
+mod load_python_venv;
+
 /// Main entry point for the Oneil CLI application.
 pub fn main() {
     panic_handler::register_panic_handler();
@@ -56,6 +59,9 @@ pub fn main() {
     let cli = CliCommand::parse();
 
     set_color_choice(cli.no_colors);
+
+    #[cfg(feature = "python")]
+    load_python_venv::try_load_venv(cli.venv_path.as_deref());
 
     match cli.command {
         Commands::Lsp {} => {

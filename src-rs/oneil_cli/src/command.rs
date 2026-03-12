@@ -19,6 +19,15 @@ pub struct CliCommand {
     #[arg(long)]
     pub no_colors: bool,
 
+    /// Path to the Python virtual environment (venv) to use
+    ///
+    /// When set, the venv's `bin` (or `Scripts` on Windows) directory is prepended to
+    /// `PATH`. If not set and `VIRTUAL_ENV` is unset, the CLI searches upward for a
+    /// `venv` or `.venv` directory and uses the first one found.
+    #[cfg(feature = "python")]
+    #[arg(long, value_name = "VENV")]
+    pub venv_path: Option<PathBuf>,
+
     /// Show internal errors
     #[arg(long, hide = true)]
     pub dev_show_internal_errors: bool,
