@@ -7,7 +7,7 @@ mod dependency;
 mod error;
 mod interval;
 mod model;
-mod number;
+mod number_kinds;
 mod type_;
 mod unit;
 pub mod util;
@@ -19,7 +19,7 @@ pub use error::{
 };
 pub use interval::Interval;
 pub use model::{DebugInfo, Model, Parameter, PrintLevel, Test, TestResult};
-pub use number::{MeasuredNumber, Number};
+pub use number_kinds::{MeasuredNumber, Number};
 pub use type_::{NumberType, ValueType};
 pub use unit::{Dimension, DimensionMap, DisplayUnit, Unit};
 pub use value::Value;
