@@ -273,6 +273,19 @@ pub fn builtin_units_complete() -> impl Iterator<Item = (UnitBaseName, BuiltinUn
             is_db: false,
             uses_prefixes: true,
         },
+        UnitInfo {
+            name: "henry",
+            aliases: ["H", "henry", "henries"].as_ref(),
+            magnitude: 1.0,
+            dimensions: DimensionMap::new(IndexMap::from([
+                (Dimension::Mass, 1.0),
+                (Dimension::Distance, 2.0),
+                (Dimension::Time, -2.0),
+                (Dimension::Current, -2.0),
+            ])),
+            is_db: false,
+            uses_prefixes: true,
+        },
         // === LEGACY UNITS ===
         UnitInfo {
             name: "millennium",
