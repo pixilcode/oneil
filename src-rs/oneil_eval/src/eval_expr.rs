@@ -193,7 +193,7 @@ fn eval_comparison_chain(
 
     struct ComparisonFailure {
         errors: Vec<EvalError>,
-        last_successful_lhs: (Value, Span),
+        last_successful_lhs: Box<(Value, Span)>,
     }
 
     let initial_result = Ok(ComparisonSuccess {
@@ -217,14 +217,15 @@ fn eval_comparison_chain(
                     })
                     .map_err(|error| ComparisonFailure {
                         errors: vec![*error],
-                        last_successful_lhs: (lhs, lhs_span),
+                        last_successful_lhs: Box::new((lhs, lhs_span)),
                     })
             }
 
             Err(ComparisonFailure {
                 errors,
-                last_successful_lhs: (last_successful_lhs, last_successful_lhs_span),
+                last_successful_lhs,
             }) => {
+                let (last_successful_lhs, last_successful_lhs_span) = *last_successful_lhs;
                 let result = eval_comparison_op(
                     &last_successful_lhs,
                     last_successful_lhs_span,
@@ -243,7 +244,7 @@ fn eval_comparison_chain(
 
                 Err(ComparisonFailure {
                     errors,
-                    last_successful_lhs: (last_successful_lhs, last_successful_lhs_span),
+                    last_successful_lhs: Box::new((last_successful_lhs, last_successful_lhs_span)),
                 })
             }
         },

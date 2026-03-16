@@ -2,7 +2,10 @@
 
 use std::ops;
 
-use crate::{Unit, util::{db_to_linear, linear_to_db}};
+use crate::{
+    Unit,
+    util::{db_to_linear, linear_to_db},
+};
 
 use super::Number;
 

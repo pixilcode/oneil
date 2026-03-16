@@ -478,7 +478,9 @@ impl Value {
                 let rhs_num = rhs.into_number_using_unit(&Unit::one());
                 Ok(Self::Number(base.pow(rhs_num)))
             }
-            (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+            (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs))
+                if rhs.is_effectively_unitless() =>
+            {
                 let rhs_num = rhs.into_number_using_unit(&Unit::one());
                 Ok(Self::MeasuredNumber(lhs.checked_pow(&rhs_num)?))
             }
