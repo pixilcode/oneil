@@ -34,7 +34,7 @@ Each parameter declaration has three required pieces:
 
 1. **Label** - A human-readable name (can include spaces).
 
-2. **Name** - The identifier used in expressions (e.g. `x`). It must appear after the colon and before `=`. Other parameters and expressions refer to the parameter by this identifier.
+2. **Name** - The identifier used in expressions (e.g. `x`). It must appear after the colon and before `=`. Other parameters and expressions refer to the parameter by this identifier. TODO: valid names
 
 3. **Value** - The expression on the right-hand side of `=`. It can be a number, a reference to another parameter, or a more complex expression (with optional unit; see [Value Types](03-value-types.md) and [Units](04-units.md)).
 
@@ -78,6 +78,10 @@ x = 1  # Hello
 
 Without `-m all`, only parameters marked with trace, debug, or performance annotations are printed (see [Annotations](#annotations)).
 
+TODO: repetitive? maybe say "we'll get to what this means later" the first time.
+
+TODO: `-m` -> `--print-mode`. Also, rename `--print-mode` to `--print`/`-P`
+
 ## Multiple parameters and references
 
 You can define multiple parameters in one file. They can reference each other by name, and the order of declarations does not matter — Oneil resolves dependencies automatically.
@@ -89,6 +93,8 @@ First: a = 1
 Second: b = a + 2
 Third: c = b + a
 ```
+
+TODO: don't use `/tmp`
 
 Save as `/tmp/multi.on` and run:
 
@@ -148,6 +154,8 @@ Parameters can be marked with optional annotations that control whether they are
 | Trace     | `*`    | Included when printing “trace” parameters (default). |
 | Debug     | `**`   | Same as trace, and with `--debug` / `-D`, extra debug info is printed for variables used to evaluate this parameter. |
 | Performance | `$`  | Marked for performance/optimization; can be printed in “perf” mode. |
+
+TODO: mention debug variables and `--debug` seperately
 
 Annotations appear before the label. Example:
 
