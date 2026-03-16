@@ -38,6 +38,14 @@ impl Value {
             (Self::String(lhs), Self::String(rhs)) => Ok(lhs == rhs),
             (Self::Number(lhs), Self::Number(rhs)) => Ok(lhs == rhs),
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => lhs.checked_eq(rhs),
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.clone().into_number_using_unit(&Unit::one());
+                Ok(*lhs == rhs_num)
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.clone().into_number_using_unit(&Unit::one());
+                Ok(lhs_num == *rhs)
+            }
             (lhs, rhs) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(lhs.type_()),
                 rhs_type: Box::new(rhs.type_()),
@@ -65,6 +73,14 @@ impl Value {
         match (self, rhs) {
             (Self::Number(lhs), Self::Number(rhs)) => Ok(lhs.lt(rhs)),
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => lhs.checked_lt(rhs),
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.clone().into_number_using_unit(&Unit::one());
+                Ok(lhs.lt(&rhs_num))
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.clone().into_number_using_unit(&Unit::one());
+                Ok(lhs_num.lt(rhs))
+            }
             (Self::Number(_) | Self::MeasuredNumber(_), _) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(self.type_()),
                 rhs_type: Box::new(rhs.type_()),
@@ -87,6 +103,14 @@ impl Value {
         match (self, rhs) {
             (Self::Number(lhs), Self::Number(rhs)) => Ok(lhs.lte(rhs)),
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => lhs.checked_lte(rhs),
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.clone().into_number_using_unit(&Unit::one());
+                Ok(lhs.lte(&rhs_num))
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.clone().into_number_using_unit(&Unit::one());
+                Ok(lhs_num.lte(rhs))
+            }
             (Self::MeasuredNumber(_) | Self::Number(_), _) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(self.type_()),
                 rhs_type: Box::new(rhs.type_()),
@@ -109,6 +133,14 @@ impl Value {
         match (self, rhs) {
             (Self::Number(lhs), Self::Number(rhs)) => Ok(lhs.gt(rhs)),
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => lhs.checked_gt(rhs),
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.clone().into_number_using_unit(&Unit::one());
+                Ok(lhs.gt(&rhs_num))
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.clone().into_number_using_unit(&Unit::one());
+                Ok(lhs_num.gt(rhs))
+            }
             (Self::MeasuredNumber(_) | Self::Number(_), _) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(self.type_()),
                 rhs_type: Box::new(rhs.type_()),
@@ -131,6 +163,14 @@ impl Value {
         match (self, rhs) {
             (Self::Number(lhs), Self::Number(rhs)) => Ok(lhs.gte(rhs)),
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => lhs.checked_gte(rhs),
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.clone().into_number_using_unit(&Unit::one());
+                Ok(lhs.gte(&rhs_num))
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.clone().into_number_using_unit(&Unit::one());
+                Ok(lhs_num.gte(rhs))
+            }
             (Self::MeasuredNumber(_) | Self::Number(_), _) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(self.type_()),
                 rhs_type: Box::new(rhs.type_()),
@@ -154,6 +194,14 @@ impl Value {
             (Self::Number(lhs), Self::Number(rhs)) => Ok(Self::Number(lhs + rhs)),
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => {
                 lhs.checked_add(&rhs).map(Self::MeasuredNumber)
+            }
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs + rhs_num))
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs_num + rhs))
             }
             (Self::MeasuredNumber(lhs_number), rhs) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(ValueType::MeasuredNumber {
@@ -187,6 +235,14 @@ impl Value {
             (Self::Number(lhs), Self::Number(rhs)) => Ok(Self::Number(lhs - rhs)),
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => {
                 lhs.checked_sub(&rhs).map(Self::MeasuredNumber)
+            }
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs - rhs_num))
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs_num - rhs))
             }
             (Self::MeasuredNumber(lhs_number), rhs) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(ValueType::MeasuredNumber {
@@ -222,6 +278,14 @@ impl Value {
             (Self::Number(lhs), Self::Number(rhs)) => Ok(Self::Number(lhs - rhs)),
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => {
                 lhs.checked_escaped_sub(&rhs).map(Self::MeasuredNumber)
+            }
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs - rhs_num))
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs_num - rhs))
             }
             (Self::MeasuredNumber(lhs_number), rhs) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(ValueType::MeasuredNumber {
@@ -369,6 +433,14 @@ impl Value {
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => {
                 lhs.checked_rem(&rhs).map(Self::MeasuredNumber)
             }
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs % rhs_num))
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs_num % rhs))
+            }
             (Self::MeasuredNumber(lhs_number), rhs) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(ValueType::MeasuredNumber {
                     unit: lhs_number.unit().clone(),
@@ -401,6 +473,14 @@ impl Value {
             (Self::Number(base), Self::Number(exponent)) => Ok(Self::Number(base.pow(exponent))),
             (Self::MeasuredNumber(lhs), Self::Number(rhs)) => {
                 Ok(Self::MeasuredNumber(lhs.checked_pow(&rhs)?))
+            }
+            (Self::Number(base), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(base.pow(rhs_num)))
+            }
+            (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.into_number_using_unit(&Unit::one());
+                Ok(Self::MeasuredNumber(lhs.checked_pow(&rhs_num)?))
             }
             (Self::Number(_) | Self::MeasuredNumber(_), Self::MeasuredNumber(rhs)) => {
                 Err(BinaryEvalError::ExponentHasUnits {
@@ -476,6 +556,14 @@ impl Value {
             }
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => {
                 lhs.checked_min_max(&rhs).map(Self::MeasuredNumber)
+            }
+            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_effectively_unitless() => {
+                let rhs_num = rhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs.tightest_enclosing_interval(rhs_num)))
+            }
+            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_effectively_unitless() => {
+                let lhs_num = lhs.into_number_using_unit(&Unit::one());
+                Ok(Self::Number(lhs_num.tightest_enclosing_interval(rhs)))
             }
             (Self::Number(lhs), rhs) => Err(BinaryEvalError::TypeMismatch {
                 lhs_type: Box::new(ValueType::Number {

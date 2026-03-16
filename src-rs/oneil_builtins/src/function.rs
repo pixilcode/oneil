@@ -151,6 +151,8 @@ pub fn builtin_functions_complete() -> impl Iterator<Item = (BuiltinFunctionName
 }
 
 mod fns {
+    use std::borrow::Cow;
+
     use oneil_eval::{
         EvalError,
         error::{ExpectedArgumentCount, ExpectedType, convert::binary_eval_error_to_eval_error},
@@ -181,8 +183,8 @@ mod fns {
         match number_list {
             helper::HomogeneousNumberList::Numbers(numbers) => numbers
                 .into_iter()
-                .filter_map(|number| match number {
-                    Number::Scalar(value) => Some(*value),
+                .filter_map(|number| match number.into_owned() {
+                    Number::Scalar(value) => Some(value),
                     Number::Interval(interval) => {
                         if interval.is_empty() {
                             None
@@ -253,8 +255,8 @@ mod fns {
         match number_list {
             helper::HomogeneousNumberList::Numbers(numbers) => numbers
                 .into_iter()
-                .filter_map(|number| match number {
-                    Number::Scalar(value) => Some(*value),
+                .filter_map(|number| match number.into_owned() {
+                    Number::Scalar(value) => Some(value),
                     Number::Interval(interval) => {
                         if interval.is_empty() {
                             None
@@ -746,7 +748,7 @@ mod fns {
             helper::HomogeneousNumberList::Numbers(numbers) => {
                 let result = numbers
                     .into_iter()
-                    .copied()
+                    .map(Cow::into_owned)
                     .reduce(Number::tightest_enclosing_interval)
                     .expect("there should be at least one number");
 
@@ -769,6 +771,8 @@ mod fns {
 }
 
 mod helper {
+    use std::borrow::Cow;
+
     use oneil_shared::{span::Span, symbols::BuiltinFunctionName};
 
     use oneil_eval::{
@@ -873,14 +877,16 @@ mod helper {
 
     #[derive(Debug)]
     pub enum HomogeneousNumberList<'input> {
-        Numbers(Vec<&'input Number>),
+        /// Numbers (including effectively unitless measured numbers converted to numbers).
+        Numbers(Vec<Cow<'input, Number>>),
+        /// Measured numbers.
         MeasuredNumbers(Vec<&'input MeasuredNumber>),
     }
 
     #[derive(Debug)]
     enum ListResult<'input> {
         Numbers {
-            numbers: Vec<&'input Number>,
+            numbers: Vec<Cow<'input, Number>>,
             first_number_span: &'input Span,
         },
         MeasuredNumbers {
@@ -963,21 +969,30 @@ mod helper {
                 });
             }
             None => {
-                let number_unit = number.unit();
+                if number.is_effectively_unitless() {
+                    let number = number.clone().into_number_using_unit(&Unit::one());
 
-                *list_result = Some(ListResult::MeasuredNumbers {
-                    numbers: vec![number],
-                    expected_unit: number_unit,
-                    expected_unit_value_span: value_span,
-                });
+                    *list_result = Some(ListResult::Numbers {
+                        numbers: vec![Cow::Owned(number)],
+                        first_number_span: value_span,
+                    });
+                } else {
+                    let number_unit = number.unit();
+
+                    *list_result = Some(ListResult::MeasuredNumbers {
+                        numbers: vec![number],
+                        expected_unit: number_unit,
+                        expected_unit_value_span: value_span,
+                    });
+                }
             }
         }
     }
 
-    fn handle_number<'a>(
-        number: &'a Number,
-        value_span: &'a Span,
-        list_result: &mut Option<ListResult<'a>>,
+    fn handle_number<'input>(
+        number: &'input Number,
+        value_span: &'input Span,
+        list_result: &mut Option<ListResult<'input>>,
         errors: &mut Vec<EvalError>,
     ) {
         match list_result {
@@ -999,11 +1014,11 @@ mod helper {
                 });
             }
             Some(ListResult::Numbers { numbers, .. }) => {
-                numbers.push(number);
+                numbers.push(Cow::Borrowed(number));
             }
             None => {
                 *list_result = Some(ListResult::Numbers {
-                    numbers: vec![number],
+                    numbers: vec![Cow::Borrowed(number)],
                     first_number_span: value_span,
                 });
             }
