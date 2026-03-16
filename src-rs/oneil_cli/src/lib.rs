@@ -355,7 +355,7 @@ fn handle_eval_command(args: EvalArgs, show_internal_errors: bool) {
     let EvalArgs {
         file,
         params: variables,
-        print_mode,
+        print: print_mode,
         debug: print_debug_info,
         watch,
         expr: eval_expressions,

@@ -122,8 +122,8 @@ pub struct EvalArgs {
     /// - `perf`: print parameters marked with `$` (performance parameters) only
     ///
     /// - `all`: print all parameter values
-    #[arg(long, short = 'm', default_value_t)]
-    pub print_mode: PrintMode,
+    #[arg(long, short = 'P', default_value_t)]
+    pub print: PrintMode,
 
     /// Print debug information
     ///
