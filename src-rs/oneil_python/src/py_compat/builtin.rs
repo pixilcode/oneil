@@ -110,8 +110,6 @@ impl BuiltinFunctionWrapper {
         py: Python<'py>,
         args: &Bound<'_, PyTuple>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let function = self.function.function;
-
         let oneil_args: Vec<(Value, Span)> = args
             .iter()
             .map(|obj| py_any_to_value(&obj).map(|v| (v, dummy_span())))
@@ -120,7 +118,7 @@ impl BuiltinFunctionWrapper {
 
         let call_span = dummy_span();
 
-        match function(call_span, oneil_args) {
+        match self.function.call(call_span, oneil_args) {
             Ok(value) => Ok(value_to_py_any(value, py)),
             Err(errors) => {
                 let message = errors

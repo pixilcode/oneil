@@ -314,8 +314,8 @@ impl eval::ExternalEvaluationContext for Runtime {
         name_span: Span,
         args: Vec<(Value, Span)>,
     ) -> Option<Result<Value, Vec<eval::EvalError>>> {
-        let function = self.builtins.get_function(name)?;
-        Some(function(name_span, args))
+        let builtin = self.builtins.get_function(name)?;
+        Some(builtin.call(name_span, args))
     }
 
     #[cfg(feature = "python")]

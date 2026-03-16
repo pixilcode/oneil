@@ -1,8 +1,14 @@
 //! Standard builtin functions (e.g. min, max, sqrt).
 
+use indexmap::IndexMap;
 use oneil_eval::EvalError;
 use oneil_output::Value;
-use oneil_shared::{span::Span, symbols::BuiltinFunctionName};
+use oneil_shared::{
+    span::Span,
+    symbols::{BuiltinFunctionName, UnitBaseName},
+};
+
+use crate::unit::BuiltinUnit;
 
 /// Information about a builtin function.
 #[derive(Debug, Clone)]
@@ -13,136 +19,174 @@ pub struct BuiltinFunction {
     pub args: &'static [&'static str],
     /// The description of the function.
     pub description: &'static str,
+    /// The units that the function uses.
+    pub units: IndexMap<UnitBaseName, BuiltinUnit>,
     /// The function implementation.
     pub function: BuiltinFunctionFn,
 }
 
+impl BuiltinFunction {
+    /// Invokes the builtin function with the given span and arguments.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function fails to evaluate.
+    pub fn call(&self, span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+        (self.function)(span, args, &self.units)
+    }
+}
+
 /// Type alias for standard builtin function type.
-pub type BuiltinFunctionFn = fn(Span, Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>>;
+pub type BuiltinFunctionFn = fn(
+    Span,
+    Vec<(Value, Span)>,
+    &IndexMap<UnitBaseName, BuiltinUnit>,
+) -> Result<Value, Vec<EvalError>>;
 
 #[expect(clippy::too_many_lines, reason = "this is a list of builtin functions")]
 /// Returns an iterator over all standard builtin functions.
-pub fn builtin_functions_complete() -> impl Iterator<Item = (BuiltinFunctionName, BuiltinFunction)>
-{
+pub fn builtin_functions_complete(
+    units: &IndexMap<UnitBaseName, BuiltinUnit>,
+) -> impl Iterator<Item = (BuiltinFunctionName, BuiltinFunction)> {
     [
         BuiltinFunction {
             name: BuiltinFunctionName::from("min"),
             args: &["n", "..."],
             description: fns::MIN_DESCRIPTION,
+            units: get_builtin_units(fns::MIN_BUILTIN_UNITS, units),
             function: fns::min as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("max"),
             args: &["n", "..."],
             description: fns::MAX_DESCRIPTION,
+            units: get_builtin_units(fns::MAX_BUILTIN_UNITS, units),
             function: fns::max as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("sin"),
             args: &["x"],
             description: fns::SIN_DESCRIPTION,
+            units: get_builtin_units(fns::SIN_BUILTIN_UNITS, units),
             function: fns::sin as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("cos"),
             args: &["x"],
             description: fns::COS_DESCRIPTION,
+            units: get_builtin_units(fns::COS_BUILTIN_UNITS, units),
             function: fns::cos as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("tan"),
             args: &["x"],
             description: fns::TAN_DESCRIPTION,
+            units: get_builtin_units(fns::TAN_BUILTIN_UNITS, units),
             function: fns::tan as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("asin"),
             args: &["x"],
             description: fns::ASIN_DESCRIPTION,
+            units: get_builtin_units(fns::ASIN_BUILTIN_UNITS, units),
             function: fns::asin as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("acos"),
             args: &["x"],
             description: fns::ACOS_DESCRIPTION,
+            units: get_builtin_units(fns::ACOS_BUILTIN_UNITS, units),
             function: fns::acos as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("atan"),
             args: &["x"],
             description: fns::ATAN_DESCRIPTION,
+            units: get_builtin_units(fns::ATAN_BUILTIN_UNITS, units),
             function: fns::atan as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("sqrt"),
             args: &["x"],
             description: fns::SQRT_DESCRIPTION,
+            units: get_builtin_units(fns::SQRT_BUILTIN_UNITS, units),
             function: fns::sqrt as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("ln"),
             args: &["x"],
             description: fns::LN_DESCRIPTION,
+            units: get_builtin_units(fns::LN_BUILTIN_UNITS, units),
             function: fns::ln as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("log2"),
             args: &["x"],
             description: fns::LOG2_DESCRIPTION,
+            units: get_builtin_units(fns::LOG2_BUILTIN_UNITS, units),
             function: fns::log2 as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("log10"),
             args: &["x"],
             description: fns::LOG10_DESCRIPTION,
+            units: get_builtin_units(fns::LOG10_BUILTIN_UNITS, units),
             function: fns::log10 as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("floor"),
             args: &["x"],
             description: fns::FLOOR_DESCRIPTION,
+            units: get_builtin_units(fns::FLOOR_BUILTIN_UNITS, units),
             function: fns::floor as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("ceiling"),
             args: &["x"],
             description: fns::CEILING_DESCRIPTION,
+            units: get_builtin_units(fns::CEILING_BUILTIN_UNITS, units),
             function: fns::ceiling as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("range"),
             args: &["x", "y?"],
             description: fns::RANGE_DESCRIPTION,
+            units: get_builtin_units(fns::RANGE_BUILTIN_UNITS, units),
             function: fns::range as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("abs"),
             args: &["x"],
             description: fns::ABS_DESCRIPTION,
+            units: get_builtin_units(fns::ABS_BUILTIN_UNITS, units),
             function: fns::abs as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("sign"),
             args: &["x"],
             description: fns::SIGN_DESCRIPTION,
+            units: get_builtin_units(fns::SIGN_BUILTIN_UNITS, units),
             function: fns::sign as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("mid"),
             args: &["x", "y?"],
             description: fns::MID_DESCRIPTION,
+            units: get_builtin_units(fns::MID_BUILTIN_UNITS, units),
             function: fns::mid as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("strip"),
             args: &["x"],
             description: fns::STRIP_DESCRIPTION,
+            units: get_builtin_units(fns::STRIP_BUILTIN_UNITS, units),
             function: fns::strip as BuiltinFunctionFn,
         },
         BuiltinFunction {
             name: BuiltinFunctionName::from("mnmx"),
             args: &["n", "..."],
             description: fns::MNMX_DESCRIPTION,
+            units: get_builtin_units(fns::MNMX_BUILTIN_UNITS, units),
             function: fns::mnmx as BuiltinFunctionFn,
         },
     ]
@@ -150,25 +194,50 @@ pub fn builtin_functions_complete() -> impl Iterator<Item = (BuiltinFunctionName
     .map(|function| (function.name.clone(), function))
 }
 
+pub fn get_builtin_units(
+    units: impl IntoIterator<Item = &'static str>,
+    units_map: &IndexMap<UnitBaseName, BuiltinUnit>,
+) -> IndexMap<UnitBaseName, BuiltinUnit> {
+    units
+        .into_iter()
+        .map(|unit_name| {
+            let unit_name = UnitBaseName::from(unit_name);
+            let unit = units_map
+                .get(&unit_name)
+                .expect("unit should exist or else builtin is broken")
+                .clone();
+            (unit_name, unit)
+        })
+        .collect()
+}
+
 mod fns {
+    use indexmap::IndexMap;
     use std::borrow::Cow;
 
     use oneil_eval::{
         EvalError,
         error::{ExpectedArgumentCount, ExpectedType, convert::binary_eval_error_to_eval_error},
     };
-    use oneil_output::{MeasuredNumber, Number, NumberType, Unit, Value};
-    use oneil_shared::{span::Span, symbols::BuiltinFunctionName};
+    use oneil_output::{MeasuredNumber, Number, NumberType, Value};
+    use oneil_shared::{span::Span, symbols::BuiltinFunctionName, symbols::UnitBaseName};
+
+    use crate::unit::BuiltinUnit;
 
     use super::helper;
 
     pub const MIN_DESCRIPTION: &str = "Find the minimum value of the given values.\n\nIf a value is an interval, the minimum value of the interval is used.";
+    pub const MIN_BUILTIN_UNITS: [&str; 0] = [];
 
     #[expect(
         clippy::needless_pass_by_value,
         reason = "matches the expected signature"
     )]
-    pub fn min(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn min(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         if args.is_empty() {
             return Err(vec![EvalError::InvalidArgumentCount {
                 function_name: BuiltinFunctionName::from("min"),
@@ -235,12 +304,17 @@ mod fns {
     }
 
     pub const MAX_DESCRIPTION: &str = "Find the maximum value of the given values.\n\nIf a value is an interval, the maximum value of the interval is used.";
+    pub const MAX_BUILTIN_UNITS: [&str; 0] = [];
 
     #[expect(
         clippy::needless_pass_by_value,
         reason = "matches the expected signature"
     )]
-    pub fn max(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn max(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         if args.is_empty() {
             return Err(vec![EvalError::InvalidArgumentCount {
                 function_name: BuiltinFunctionName::from("max"),
@@ -307,44 +381,71 @@ mod fns {
     }
 
     pub const SIN_DESCRIPTION: &str = "Compute the sine of an angle.";
+    pub const SIN_BUILTIN_UNITS: [&str; 1] = ["rad"];
 
-    pub fn sin(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
-        // the base unit for angles is radians,
-        // so we need to convert from dimensionless with no magnitude
+    pub fn sin(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
+        let rad = builtins
+            .get(&UnitBaseName::from("rad"))
+            .expect("rad unit should exist");
+
         helper::unary_measured_number_fn(identifier_span, args, "sin", |m, arg_span| {
-            let number = helper::dimensionless_measured_number_as_number(m, arg_span)?;
+            let number = helper::measured_number_into_number_using_unit(m, &rad.unit, arg_span)?;
             Ok(Value::Number(number.sin()))
         })
     }
 
     pub const COS_DESCRIPTION: &str = "Compute the cosine of an angle.";
+    pub const COS_BUILTIN_UNITS: [&str; 1] = ["rad"];
 
-    pub fn cos(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
-        // the base unit for angles is radians,
-        // so we need to convert from dimensionless with no magnitude
+    pub fn cos(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
+        let rad = builtins
+            .get(&UnitBaseName::from("rad"))
+            .expect("rad unit should exist");
+
         helper::unary_measured_number_fn(identifier_span, args, "cos", |m, arg_span| {
-            let number = helper::dimensionless_measured_number_as_number(m, arg_span)?;
+            let number = helper::measured_number_into_number_using_unit(m, &rad.unit, arg_span)?;
             Ok(Value::Number(number.cos()))
         })
     }
 
     pub const TAN_DESCRIPTION: &str = "Compute the tangent of an angle.";
+    pub const TAN_BUILTIN_UNITS: [&str; 1] = ["rad"];
 
-    pub fn tan(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
-        // the base unit for angles is radians,
-        // so we need to convert from dimensionless with no magnitude
+    pub fn tan(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
+        let rad = builtins
+            .get(&UnitBaseName::from("rad"))
+            .expect("rad unit should exist");
+
         helper::unary_measured_number_fn(identifier_span, args, "tan", |m, arg_span| {
-            let number = helper::dimensionless_measured_number_as_number(m, arg_span)?;
+            let number = helper::measured_number_into_number_using_unit(m, &rad.unit, arg_span)?;
             Ok(Value::Number(number.tan()))
         })
     }
 
     pub const ASIN_DESCRIPTION: &str =
         "Compute the arcsine (inverse sine) of a value, returning an angle.";
+    pub const ASIN_BUILTIN_UNITS: [&str; 1] = ["rad"];
 
-    pub fn asin(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
-        // the base unit for angles is radians,
-        // so we essentially need to convert to unit `1`
+    pub fn asin(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
+        let rad = builtins
+            .get(&UnitBaseName::from("rad"))
+            .expect("rad unit should exist");
 
         helper::unary_number_or_measured_number_fn(
             identifier_span,
@@ -352,7 +453,7 @@ mod fns {
             "asin",
             |n, _arg_span| {
                 let number = n.asin();
-                let unit = Unit::one();
+                let unit = rad.unit.clone();
                 let measured_number = MeasuredNumber::from_number_and_unit(number, unit);
 
                 Ok(Value::MeasuredNumber(measured_number))
@@ -360,7 +461,7 @@ mod fns {
             |m, arg_span| {
                 let number = helper::dimensionless_measured_number_as_number(m, arg_span)?;
                 let number = number.asin();
-                let unit = Unit::one();
+                let unit = rad.unit.clone();
                 let measured_number = MeasuredNumber::from_number_and_unit(number, unit);
 
                 Ok(Value::MeasuredNumber(measured_number))
@@ -370,10 +471,16 @@ mod fns {
 
     pub const ACOS_DESCRIPTION: &str =
         "Compute the arccosine (inverse cosine) of a value, returning an angle.";
+    pub const ACOS_BUILTIN_UNITS: [&str; 1] = ["rad"];
 
-    pub fn acos(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
-        // the base unit for angles is radians,
-        // so we essentially need to convert to unit `1`
+    pub fn acos(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
+        let rad = builtins
+            .get(&UnitBaseName::from("rad"))
+            .expect("rad unit should exist");
 
         helper::unary_number_or_measured_number_fn(
             identifier_span,
@@ -381,7 +488,7 @@ mod fns {
             "acos",
             |n, _arg_span| {
                 let number = n.acos();
-                let unit = Unit::one();
+                let unit = rad.unit.clone();
                 let measured_number = MeasuredNumber::from_number_and_unit(number, unit);
 
                 Ok(Value::MeasuredNumber(measured_number))
@@ -389,7 +496,7 @@ mod fns {
             |m, arg_span| {
                 let number = helper::dimensionless_measured_number_as_number(m, arg_span)?;
                 let number = number.acos();
-                let unit = Unit::one();
+                let unit = rad.unit.clone();
                 let measured_number = MeasuredNumber::from_number_and_unit(number, unit);
 
                 Ok(Value::MeasuredNumber(measured_number))
@@ -399,10 +506,16 @@ mod fns {
 
     pub const ATAN_DESCRIPTION: &str =
         "Compute the arctangent (inverse tangent) of a value, returning an angle.";
+    pub const ATAN_BUILTIN_UNITS: [&str; 1] = ["rad"];
 
-    pub fn atan(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
-        // the base unit for angles is radians,
-        // so we essentially need to convert to unit `1`
+    pub fn atan(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
+        let rad = builtins
+            .get(&UnitBaseName::from("rad"))
+            .expect("rad unit should exist");
 
         helper::unary_number_or_measured_number_fn(
             identifier_span,
@@ -410,7 +523,7 @@ mod fns {
             "atan",
             |n, _arg_span| {
                 let number = n.atan();
-                let unit = Unit::one();
+                let unit = rad.unit.clone();
 
                 let measured_number = MeasuredNumber::from_number_and_unit(number, unit);
 
@@ -419,7 +532,7 @@ mod fns {
             |m, arg_span| {
                 let number = helper::dimensionless_measured_number_as_number(m, arg_span)?;
                 let number = number.atan();
-                let unit = Unit::one();
+                let unit = rad.unit.clone();
                 let measured_number = MeasuredNumber::from_number_and_unit(number, unit);
 
                 Ok(Value::MeasuredNumber(measured_number))
@@ -428,8 +541,13 @@ mod fns {
     }
 
     pub const SQRT_DESCRIPTION: &str = "Compute the square root of a value.";
+    pub const SQRT_BUILTIN_UNITS: [&str; 0] = [];
 
-    pub fn sqrt(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn sqrt(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         helper::unary_number_or_measured_number_fn(
             identifier_span,
             args,
@@ -440,6 +558,7 @@ mod fns {
     }
 
     pub const LN_DESCRIPTION: &str = "Compute the natural logarithm (base e) of a value.";
+    pub const LN_BUILTIN_UNITS: [&str; 0] = [];
 
     /// Returns the natural logarithm (base e) of the single numerical argument.
     ///
@@ -447,7 +566,11 @@ mod fns {
     ///
     /// Returns `Err` if the argument count is not exactly one, or if the
     /// argument is not a number or measured number.
-    pub fn ln(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn ln(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         helper::unary_number_or_measured_number_fn(
             identifier_span,
             args,
@@ -458,6 +581,7 @@ mod fns {
     }
 
     pub const LOG10_DESCRIPTION: &str = "Compute the base-10 logarithm of a value.";
+    pub const LOG10_BUILTIN_UNITS: [&str; 0] = [];
 
     /// Returns the base-10 logarithm of the single numerical argument.
     ///
@@ -465,7 +589,11 @@ mod fns {
     ///
     /// Returns `Err` if the argument count is not exactly one, or if the
     /// argument is not a number or measured number.
-    pub fn log10(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn log10(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         helper::unary_number_or_measured_number_fn(
             identifier_span,
             args,
@@ -476,6 +604,7 @@ mod fns {
     }
 
     pub const LOG2_DESCRIPTION: &str = "Compute the base-2 logarithm of a value.";
+    pub const LOG2_BUILTIN_UNITS: [&str; 0] = [];
 
     /// Returns the base-2 logarithm of the single numerical argument.
     ///
@@ -483,7 +612,11 @@ mod fns {
     ///
     /// Returns `Err` if the argument count is not exactly one, or if the
     /// argument is not a number or measured number.
-    pub fn log2(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn log2(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         helper::unary_number_or_measured_number_fn(
             identifier_span,
             args,
@@ -494,6 +627,7 @@ mod fns {
     }
 
     pub const FLOOR_DESCRIPTION: &str = "Round a value down to the nearest integer.";
+    pub const FLOOR_BUILTIN_UNITS: [&str; 0] = [];
 
     /// Returns the single numerical argument rounded down to the nearest integer.
     ///
@@ -501,7 +635,11 @@ mod fns {
     ///
     /// Returns `Err` if the argument count is not exactly one, or if the
     /// argument is not a number or measured number.
-    pub fn floor(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn floor(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         helper::unary_number_or_measured_number_fn(
             identifier_span,
             args,
@@ -512,6 +650,7 @@ mod fns {
     }
 
     pub const CEILING_DESCRIPTION: &str = "Round a value up to the nearest integer.";
+    pub const CEILING_BUILTIN_UNITS: [&str; 0] = [];
 
     /// Returns the single numerical argument rounded up to the nearest integer.
     ///
@@ -522,6 +661,7 @@ mod fns {
     pub fn ceiling(
         identifier_span: Span,
         args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
     ) -> Result<Value, Vec<EvalError>> {
         helper::unary_number_or_measured_number_fn(
             identifier_span,
@@ -533,8 +673,13 @@ mod fns {
     }
 
     pub const RANGE_DESCRIPTION: &str = "Compute the range of values.\n\nWith one argument (an interval), returns the difference between the maximum and minimum.\n\nWith two arguments, returns the difference between them.";
+    pub const RANGE_BUILTIN_UNITS: [&str; 0] = [];
 
-    pub fn range(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn range(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         match args.len() {
             1 => {
                 let mut args = args.into_iter();
@@ -597,6 +742,7 @@ mod fns {
     }
 
     pub const ABS_DESCRIPTION: &str = "Compute the absolute value of a number.";
+    pub const ABS_BUILTIN_UNITS: [&str; 0] = [];
 
     /// Returns the absolute value of the single numerical argument.
     ///
@@ -604,7 +750,11 @@ mod fns {
     ///
     /// Returns `Err` if the argument count is not exactly one, or if the
     /// argument is not a number or measured number.
-    pub fn abs(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn abs(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         helper::unary_number_or_measured_number_fn(
             identifier_span,
             args,
@@ -616,6 +766,7 @@ mod fns {
 
     pub const SIGN_DESCRIPTION: &str =
         "Compute the sign of a number, returning -1 for negative, 0 for zero, or 1 for positive.";
+    pub const SIGN_BUILTIN_UNITS: [&str; 0] = [];
 
     /// Returns the sign of the single numerical argument (-1, 0, or 1).
     ///
@@ -625,7 +776,11 @@ mod fns {
     ///
     /// Returns `Err` if the argument count is not exactly one, or if the
     /// argument is not a number or measured number.
-    pub fn sign(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn sign(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         helper::unary_number_or_measured_number_fn(
             identifier_span,
             args,
@@ -639,8 +794,13 @@ mod fns {
     }
 
     pub const MID_DESCRIPTION: &str = "Compute the midpoint.\n\nWith one argument (an interval), returns the midpoint of the interval.\n\nWith two arguments, returns the midpoint between them.";
+    pub const MID_BUILTIN_UNITS: [&str; 0] = [];
 
-    pub fn mid(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn mid(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         match args.len() {
             1 => {
                 let mut args = args.into_iter();
@@ -706,6 +866,7 @@ mod fns {
 
     pub const STRIP_DESCRIPTION: &str =
         "Strip units from a measured number, returning just the numeric value.";
+    pub const STRIP_BUILTIN_UNITS: [&str; 0] = [];
 
     /// Strips units from a measured number, returning the numeric value.
     ///
@@ -713,7 +874,11 @@ mod fns {
     ///
     /// Returns `Err` if the argument count is not exactly one, or if the
     /// argument is not a number or measured number.
-    pub fn strip(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn strip(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         helper::unary_measured_number_fn(identifier_span, args, "strip", |m, _arg_span| {
             Ok(Value::Number(m.into_number_and_unit().0))
         })
@@ -721,6 +886,7 @@ mod fns {
 
     pub const MNMX_DESCRIPTION: &str =
         "Return both the minimum and maximum values from the given values.";
+    pub const MNMX_BUILTIN_UNITS: [&str; 0] = [];
 
     /// Returns the tightest interval containing all given values (min of mins, max of maxes).
     ///
@@ -732,7 +898,11 @@ mod fns {
         clippy::needless_pass_by_value,
         reason = "matches the expected signature"
     )]
-    pub fn mnmx(identifier_span: Span, args: Vec<(Value, Span)>) -> Result<Value, Vec<EvalError>> {
+    pub fn mnmx(
+        identifier_span: Span,
+        args: Vec<(Value, Span)>,
+        _builtins: &IndexMap<UnitBaseName, BuiltinUnit>,
+    ) -> Result<Value, Vec<EvalError>> {
         if args.is_empty() {
             return Err(vec![EvalError::InvalidArgumentCount {
                 function_name: BuiltinFunctionName::from("mnmx"),
@@ -873,6 +1043,26 @@ mod helper {
         }
 
         Ok(measured.into_number_using_unit(&Unit::one()))
+    }
+
+    /// Converts a measured number to a raw number expressed in the given unit.
+    ///
+    /// Returns an error if the measured number's unit is not dimensionally
+    /// equivalent to the target unit.
+    pub fn measured_number_into_number_using_unit(
+        measured: MeasuredNumber,
+        unit: &Unit,
+        argument_span: Span,
+    ) -> Result<Number, Vec<EvalError>> {
+        if !measured.unit().dimensionally_eq(unit) {
+            return Err(vec![EvalError::InvalidUnit {
+                expected_unit: Some(unit.display_unit.clone()),
+                found_unit: Some(measured.unit().display_unit.clone()),
+                found_span: argument_span,
+            }]);
+        }
+
+        Ok(measured.into_number_using_unit(unit))
     }
 
     #[derive(Debug)]

@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use oneil_output::{Unit, Value};
 use oneil_shared::symbols::{BuiltinFunctionName, BuiltinValueName, UnitBaseName, UnitPrefix};
 
-use crate::function::{BuiltinFunction, BuiltinFunctionFn};
+use crate::function::BuiltinFunction;
 use crate::prefix::BuiltinPrefix;
 use crate::unit::BuiltinUnit;
 use crate::value::BuiltinValue;
@@ -28,11 +28,16 @@ impl BuiltinRef {
     /// Creates a new instance with all standard builtins.
     #[must_use]
     pub fn new() -> Self {
+        let values = value::builtin_values_complete().collect();
+        let units = unit::builtin_units_complete().collect();
+        let prefixes = prefix::builtin_prefixes_complete().collect();
+        let functions = function::builtin_functions_complete(&units).collect();
+
         Self {
-            values: value::builtin_values_complete().collect(),
-            functions: function::builtin_functions_complete().collect(),
-            units: unit::builtin_units_complete().collect(),
-            prefixes: prefix::builtin_prefixes_complete().collect(),
+            values,
+            functions,
+            units,
+            prefixes,
         }
     }
 
@@ -58,8 +63,8 @@ impl BuiltinRef {
 
     /// Returns the builtin function for the given identifier, if any.
     #[must_use]
-    pub fn get_function(&self, identifier: &BuiltinFunctionName) -> Option<BuiltinFunctionFn> {
-        self.functions.get(identifier).map(|f| f.function)
+    pub fn get_function(&self, identifier: &BuiltinFunctionName) -> Option<&BuiltinFunction> {
+        self.functions.get(identifier)
     }
 
     /// Returns the builtin unit for the given name, if any.
