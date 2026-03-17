@@ -14,17 +14,15 @@ readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
 	"Development Status :: 3 - Alpha",
-	"Programming Language :: Python :: 3",
+	"Programming Language :: Rust",
+	"Topic :: Scientific/Engineering",
+	"Environment :: Console",
 	"Operating System :: POSIX :: Linux",
 ]
-dependencies = ["beautifultable==1.1.0", "numpy==2.0.0", "pytexit==0.4.0"]
 
 [project.urls]
 Homepage = "https://github.com/careweather/oneil"
 Issues = "https://github.com/careweather/oneil/issues"
-
-[project.scripts]
-oneil = "oneil:main"
 
 [tool.maturin]
 profile = "release"
