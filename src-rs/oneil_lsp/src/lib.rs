@@ -38,19 +38,21 @@ struct Backend {
 
 impl Backend {
     /// Evaluates the model at the given URI and publishes any errors as LSP diagnostics.
-    async fn publish_diagnostics_for_uri(&self, uri: &Uri, version: Option<i32>) {
+    async fn publish_diagnostics_for_model_path(
+        &self,
+        model_path: &ModelPath,
+        version: Option<i32>,
+    ) {
         self.client
             .log_message(
                 MessageType::INFO,
-                format!("publish_diagnostics_for_uri: {uri:?}, version: {version:?}"),
+                format!("publish_diagnostics_for_model_path: {model_path:?}, version: {version:?}"),
             )
             .await;
 
-        let model_path = ModelPath::from_src_with_ext(uri.path().as_str());
-
         let (successful_models, diagnostics) = {
             let mut runtime = self.runtime.lock().expect("runtime mutex poisoned");
-            let (result, errors) = runtime.eval_model(&model_path);
+            let (result, errors) = runtime.eval_model(model_path);
 
             let successful_models = result
                 .map(|result| result.all_model_paths())
@@ -165,7 +167,10 @@ impl LanguageServer for Backend {
 
         self.docs.open(params.text_document).await;
 
-        self.publish_diagnostics_for_uri(&uri, Some(version)).await;
+        if let Ok(model_path) = ModelPath::try_from(uri.path().as_str()) {
+            self.publish_diagnostics_for_model_path(&model_path, Some(version))
+                .await;
+        }
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -200,7 +205,10 @@ impl LanguageServer for Backend {
 
         let uri = params.text_document.uri.clone();
 
-        self.publish_diagnostics_for_uri(&uri, None).await;
+        if let Ok(model_path) = ModelPath::try_from(uri.path().as_str()) {
+            self.publish_diagnostics_for_model_path(&model_path, None)
+                .await;
+        }
     }
 
     async fn goto_definition(
@@ -213,6 +221,10 @@ impl LanguageServer for Backend {
 
         let position = params.text_document_position_params.position;
         let uri = params.text_document_position_params.text_document.uri;
+
+        let Ok(current_model_path) = ModelPath::try_from(uri.path().as_str()) else {
+            return Ok(None);
+        };
 
         // Convert LSP position to byte offset
         let Some(offset) = self.docs.position_to_offset(&uri, position).await else {
@@ -232,8 +244,6 @@ impl LanguageServer for Backend {
                 ),
             )
             .await;
-
-        let current_model_path = ModelPath::from_src_with_ext(uri.path().as_str());
 
         // To avoid async problems with holding a mutex guard across an await,
         // we return a tuple of the result and maybe a log message.

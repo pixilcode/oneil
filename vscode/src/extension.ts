@@ -34,7 +34,7 @@ function buildOptions(): { serverOptions: ServerOptions, clientOptions: Language
     return {
         serverOptions: { command, args: ["lsp"] },
         clientOptions: {
-            documentSelector: [{ scheme: "file", language: "oneil" }],
+            documentSelector: [{ scheme: "file", language: "oneil" }, { scheme: "file", language: "python" }],
         },
     }
 }

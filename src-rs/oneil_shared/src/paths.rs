@@ -37,16 +37,7 @@ impl ModelPath {
     /// Panics if the given path has an extension.
     #[must_use]
     pub fn from_str_no_ext(s: &str) -> Self {
-        let path = PathBuf::from(s);
-
-        assert_eq!(
-            path.extension(),
-            None,
-            "given path must not have an extension, got {}",
-            path.display()
-        );
-
-        Self(path.with_extension(ON_EXTENSION))
+        Self::from_path_no_ext(Path::new(s))
     }
 
     /// Creates a new model path from a path with the `.on` extension.
@@ -55,7 +46,7 @@ impl ModelPath {
     ///
     /// Panics if the given path does not have the `.on` extension.
     #[must_use]
-    pub fn from_src_with_ext(path: &str) -> Self {
+    pub fn from_str_with_ext(path: &str) -> Self {
         Self::from_path_with_ext(Path::new(path))
     }
 
@@ -66,16 +57,18 @@ impl ModelPath {
     /// Panics if the given path has an extension.
     #[must_use]
     pub fn from_path_no_ext(path: &Path) -> Self {
-        let path = path.to_path_buf();
-
-        assert_eq!(
-            path.extension(),
-            None,
+        assert!(
+            path.extension().is_none(),
             "given path must not have an extension, got {}",
             path.display()
         );
 
-        Self(path.with_extension(ON_EXTENSION))
+        Self::try_from(path.with_extension(ON_EXTENSION).as_path()).unwrap_or_else(|()| {
+            panic!(
+                "given path must not have an extension, got {}",
+                path.display()
+            )
+        })
     }
 
     /// Creates a new model path from a path with the `.on` extension.
@@ -85,16 +78,12 @@ impl ModelPath {
     /// Panics if the given path does not have the `.on` extension.
     #[must_use]
     pub fn from_path_with_ext(path: &Path) -> Self {
-        let path = path.to_path_buf();
-
-        assert_eq!(
-            path.extension().map(|ext| ext.to_string_lossy()),
-            Some(ON_EXTENSION.into()),
-            "given path must have `.{ON_EXTENSION}` extension, got {}",
-            path.display()
-        );
-
-        Self(path.with_extension(ON_EXTENSION))
+        Self::try_from(path).unwrap_or_else(|()| {
+            panic!(
+                "given path must have `.{ON_EXTENSION}` extension, got {}",
+                path.display()
+            )
+        })
     }
 
     /// Returns the path as a reference.
@@ -134,6 +123,26 @@ impl ModelPath {
         } else {
             PythonPath::new(sibling_path)
         }
+    }
+}
+
+impl TryFrom<&Path> for ModelPath {
+    type Error = ();
+
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        if path.extension().map(|ext| ext.to_string_lossy()) == Some(ON_EXTENSION.into()) {
+            Ok(Self(path.to_path_buf()))
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl TryFrom<&str> for ModelPath {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_from(Path::new(value))
     }
 }
 
