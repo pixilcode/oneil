@@ -107,6 +107,13 @@ pub fn find_symbol_at_offset(
         }
     }
 
+    // Check if cursor is on a test expression
+    for test in model.tests().values() {
+        if span_contains_offset(test.span(), offset) {
+            return find_symbol_in_expr(test.expr(), offset);
+        }
+    }
+
     None
 }
 
