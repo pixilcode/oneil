@@ -1145,18 +1145,23 @@ mod helper {
                 }
             }
             Some(ListResult::Numbers {
-                numbers: _,
+                numbers,
                 first_number_span,
             }) => {
-                errors.push(EvalError::TypeMismatch {
-                    expected_type: ExpectedType::Number { number_type: None },
-                    expected_source_span: **first_number_span,
-                    found_type: ValueType::MeasuredNumber {
-                        number_type: number.normalized_value().type_(),
-                        unit: number.unit().clone(),
-                    },
-                    found_span: *value_span,
-                });
+                if number.is_effectively_unitless() {
+                    let number = number.clone().into_number_using_unit(&Unit::one());
+                    numbers.push(Cow::Owned(number));
+                } else {
+                    errors.push(EvalError::TypeMismatch {
+                        expected_type: ExpectedType::Number { number_type: None },
+                        expected_source_span: **first_number_span,
+                        found_type: ValueType::MeasuredNumber {
+                            number_type: number.normalized_value().type_(),
+                            unit: number.unit().clone(),
+                        },
+                        found_span: *value_span,
+                    });
+                }
             }
             None => {
                 if number.is_effectively_unitless() {
