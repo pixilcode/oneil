@@ -78,6 +78,7 @@ impl RuntimeErrors {
                     .chain(test_errors.values().flatten())
                     .collect(),
             })
+            .chain(self.python_import_errors.values())
             .collect()
     }
 
