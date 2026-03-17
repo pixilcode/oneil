@@ -1,5 +1,7 @@
 //! Generic path-keyed cache using [`LoadResult`], and a source cache for raw file contents.
 
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use indexmap::IndexMap;
 use oneil_eval as eval;
 use oneil_parser::error::ParserError;
@@ -16,16 +18,41 @@ use crate::{error::SourceError, output};
 #[cfg(feature = "python")]
 use crate::error::PythonImportError;
 
+/// Content hash for cached source, used to detect when file contents change.
+pub fn source_hash(source: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    source.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Result of inserting a source into the cache.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InsertSourceResult {
+    /// The source was inserted as a new entry.
+    InsertedNewSource,
+    /// A source with the same hash already exists in the cache.
+    MatchingSourceExists,
+}
+
+/// Cached source for a path, with an optional content hash when load succeeded.
+#[derive(Debug)]
+struct SourceCacheEntry {
+    /// Hash of the source when load succeeded; `None` when load failed.
+    pub hash: u64,
+    /// The loaded source or the load error.
+    pub source: String,
+}
+
 /// Cache for source file contents keyed by path.
 ///
-/// Stores a [`Result`] per path: either the file contents as a [`String`] or a
+/// Stores a [`Result`] per path: either the file contents as a [`SourceCacheEntry`] or a
 /// [`SourceError`](crate::error::SourceError) when loading failed.
 ///
 /// This is specialized for source files because, unlike other caches,
 /// there is no possible partial result.
 #[derive(Debug)]
 pub struct SourceCache {
-    entries: IndexMap<SourcePath, Result<String, SourceError>>,
+    entries: IndexMap<SourcePath, Result<SourceCacheEntry, SourceError>>,
 }
 
 impl Default for SourceCache {
@@ -43,20 +70,53 @@ impl SourceCache {
         Self::default()
     }
 
-    /// Returns the full cached entry for `path`.
+    /// Returns the cached result for `path`, if present.
     #[must_use]
-    pub fn get_entry(&self, path: &SourcePath) -> Option<&Result<String, SourceError>> {
-        self.entries.get(path)
+    pub fn get_entry(&self, path: &SourcePath) -> Option<Result<&str, &SourceError>> {
+        self.entries
+            .get(path)
+            .map(|result| result.as_ref().map(|entry| entry.source.as_str()))
     }
 
-    /// Inserts a result for `path`, replacing any existing entry.
-    pub fn insert(&mut self, path: SourcePath, result: Result<String, SourceError>) {
-        self.entries.insert(path, result);
+    /// Inserts a result for `path`, replacing any existing entry. Computes and stores the content
+    /// hash when the load succeeded.
+    pub fn insert(
+        &mut self,
+        path: SourcePath,
+        result: Result<String, SourceError>,
+    ) -> InsertSourceResult {
+        match result {
+            Ok(source) => {
+                // if the result is a source, compute the hash and check if it already exists
+                let hash = source_hash(source.as_str());
+
+                if self.contains_matching(&path, hash) {
+                    InsertSourceResult::MatchingSourceExists
+                } else {
+                    let result = Ok(SourceCacheEntry { hash, source });
+                    self.entries.insert(path, result);
+                    InsertSourceResult::InsertedNewSource
+                }
+            }
+            Err(e) => {
+                self.entries.insert(path, Err(e));
+                InsertSourceResult::InsertedNewSource
+            }
+        }
+    }
+
+    /// Checks if the cache contains an entry for `path` matching `source`. Uses hashes to determine
+    /// equality.
+    #[must_use]
+    fn contains_matching(&self, path: &SourcePath, hash: u64) -> bool {
+        self.entries
+            .get(path)
+            .is_some_and(|result| result.as_ref().is_ok_and(|entry| entry.hash == hash))
     }
 
     /// Returns an iterator over path–result pairs.
-    pub fn iter(&self) -> indexmap::map::Iter<'_, SourcePath, Result<String, SourceError>> {
-        self.entries.iter()
+    pub fn paths(&self) -> impl Iterator<Item = &SourcePath> {
+        self.entries.iter().map(|(path, _)| path)
     }
 }
 
@@ -114,6 +174,11 @@ impl PythonImportCache {
     ) {
         self.entries.insert(path, result);
     }
+
+    /// Removes the cached entry for `path`, if present.
+    pub fn remove(&mut self, path: &PythonPath) {
+        self.entries.swap_remove(path);
+    }
 }
 
 /// Generic cache keyed by path, storing [`LoadResult<T, E>`] per path.
@@ -161,6 +226,11 @@ impl<T, E> ModelCache<T, E> {
     /// Inserts a [`LoadResult`] for `path`, replacing any existing entry.
     pub fn insert(&mut self, path: ModelPath, result: LoadResult<T, E>) {
         self.entries.insert(path, result);
+    }
+
+    /// Removes the cached entry for `path`, if present.
+    pub fn remove(&mut self, path: &ModelPath) {
+        self.entries.swap_remove(path);
     }
 
     /// Returns whether `path` has a cached entry.

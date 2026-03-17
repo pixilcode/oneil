@@ -1,7 +1,7 @@
 //! Utility methods for the runtime.
 
 use indexmap::IndexSet;
-use oneil_shared::paths::SourcePath;
+use oneil_shared::paths::{ModelPath, PythonPath, SourcePath};
 
 use super::Runtime;
 #[cfg(feature = "python")]
@@ -24,13 +24,29 @@ impl Runtime {
         }
     }
 
+    /// Clears the runtime's caches for a given path.
+    ///
+    /// If the path is a model path (`.on`), clears the AST, IR, and eval caches for that path.
+    /// If the path is a Python path (`.py`), clears the Python import cache for that path.
+    ///
+    /// This does not clear the source cache.
+    pub fn clear_non_source_caches(&mut self, path: &SourcePath) {
+        if let Ok(model_path) = ModelPath::try_from(path.clone()) {
+            self.ast_cache.remove(&model_path);
+            self.ir_cache.remove(&model_path);
+            self.eval_cache.remove(&model_path);
+        }
+
+        #[cfg(feature = "python")]
+        if let Ok(python_path) = PythonPath::try_from(path.clone()) {
+            self.python_import_cache.remove(&python_path);
+        }
+    }
+
     /// Gets the paths to files that the runtime relies on.
     #[must_use]
     pub fn get_watch_paths(&self) -> IndexSet<SourcePath> {
-        self.source_cache
-            .iter()
-            .map(|(path, _)| path.clone())
-            .collect()
+        self.source_cache.paths().cloned().collect()
     }
 }
 

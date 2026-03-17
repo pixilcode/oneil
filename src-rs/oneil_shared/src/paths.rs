@@ -1,5 +1,6 @@
 //! Path types for model and Python module locations.
 
+use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 
 /// The extension for Oneil source files.
@@ -189,6 +190,25 @@ impl PythonPath {
         Self(path.with_extension(PYTHON_EXTENSION))
     }
 
+    /// Creates a new Python path from a path with the `.py` extension.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given path does not have the `.py` extension.
+    #[must_use]
+    pub fn from_path_with_ext(path: &Path) -> Self {
+        let path = path.to_path_buf();
+
+        assert_eq!(
+            path.extension().map(|ext| ext.to_string_lossy()),
+            Some(PYTHON_EXTENSION.into()),
+            "Python path must have `.{PYTHON_EXTENSION}` extension, got {}",
+            path.display()
+        );
+
+        Self(path)
+    }
+
     /// Returns the path as a reference.
     #[must_use]
     pub fn as_path(&self) -> &Path {
@@ -235,5 +255,37 @@ impl From<&ModelPath> for SourcePath {
 impl From<&PythonPath> for SourcePath {
     fn from(value: &PythonPath) -> Self {
         Self::new(value.clone().into_path_buf())
+    }
+}
+
+impl TryFrom<SourcePath> for ModelPath {
+    type Error = ();
+
+    /// Attempts to convert a [`SourcePath`] to a [`ModelPath`].
+    ///
+    /// Succeeds only when the path has the `.on` extension.
+    fn try_from(value: SourcePath) -> Result<Self, Self::Error> {
+        value
+            .as_path()
+            .extension()
+            .filter(|ext| ext.to_string_lossy().as_ref() == ON_EXTENSION)
+            .map(|_| Self::from_path_with_ext(value.as_path()))
+            .ok_or(())
+    }
+}
+
+impl TryFrom<SourcePath> for PythonPath {
+    type Error = ();
+
+    /// Attempts to convert a [`SourcePath`] to a [`PythonPath`].
+    ///
+    /// Succeeds only when the path has the `.py` extension.
+    fn try_from(value: SourcePath) -> Result<Self, Self::Error> {
+        value
+            .as_path()
+            .extension()
+            .filter(|ext| ext.to_string_lossy().as_ref() == PYTHON_EXTENSION)
+            .map(|_| Self::from_path_with_ext(value.as_path()))
+            .ok_or(())
     }
 }
