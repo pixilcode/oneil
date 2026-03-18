@@ -121,6 +121,12 @@ impl MeasuredNumber {
         &self.unit
     }
 
+    /// Returns whether this measured number is dimensionless.
+    #[must_use]
+    pub fn is_dimensionless(&self) -> bool {
+        self.unit.is_dimensionless()
+    }
+
     /// Returns whether this measured number is effectively unitless.
     ///
     /// A measured number is effectively unitless when its unit has magnitude 1,

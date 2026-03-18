@@ -927,7 +927,7 @@ mod fns {
             helper::HomogeneousNumberList::MeasuredNumbers(numbers) => {
                 let result = numbers
                     .into_iter()
-                    .cloned()
+                    .map(Cow::into_owned)
                     .reduce(|a, b| {
                         a.checked_min_max(&b)
                             .expect("homogeneous list ensures same unit")
@@ -1070,7 +1070,7 @@ mod helper {
         /// Numbers (including effectively unitless measured numbers converted to numbers).
         Numbers(Vec<Cow<'input, Number>>),
         /// Measured numbers.
-        MeasuredNumbers(Vec<&'input MeasuredNumber>),
+        MeasuredNumbers(Vec<Cow<'input, MeasuredNumber>>),
     }
 
     #[derive(Debug)]
@@ -1080,7 +1080,7 @@ mod helper {
             first_number_span: &'input Span,
         },
         MeasuredNumbers {
-            numbers: Vec<&'input MeasuredNumber>,
+            numbers: Vec<Cow<'input, MeasuredNumber>>,
             expected_unit: &'input Unit,
             expected_unit_value_span: &'input Span,
         },
@@ -1134,7 +1134,7 @@ mod helper {
                 expected_unit_value_span,
             }) => {
                 if number.unit().dimensionally_eq(expected_unit) {
-                    numbers.push(number);
+                    numbers.push(Cow::Borrowed(number));
                 } else {
                     errors.push(EvalError::UnitMismatch {
                         expected_unit: expected_unit.display_unit.clone(),
@@ -1148,7 +1148,7 @@ mod helper {
                 numbers,
                 first_number_span,
             }) => {
-                if number.is_effectively_unitless() {
+                if number.is_dimensionless() {
                     let number = number.clone().into_number_using_unit(&Unit::one());
                     numbers.push(Cow::Owned(number));
                 } else {
@@ -1164,22 +1164,13 @@ mod helper {
                 }
             }
             None => {
-                if number.is_effectively_unitless() {
-                    let number = number.clone().into_number_using_unit(&Unit::one());
+                let number_unit = number.unit();
 
-                    *list_result = Some(ListResult::Numbers {
-                        numbers: vec![Cow::Owned(number)],
-                        first_number_span: value_span,
-                    });
-                } else {
-                    let number_unit = number.unit();
-
-                    *list_result = Some(ListResult::MeasuredNumbers {
-                        numbers: vec![number],
-                        expected_unit: number_unit,
-                        expected_unit_value_span: value_span,
-                    });
-                }
+                *list_result = Some(ListResult::MeasuredNumbers {
+                    numbers: vec![Cow::Borrowed(number)],
+                    expected_unit: number_unit,
+                    expected_unit_value_span: value_span,
+                });
             }
         }
     }
@@ -1192,21 +1183,26 @@ mod helper {
     ) {
         match list_result {
             Some(ListResult::MeasuredNumbers {
-                numbers: _,
+                numbers,
                 expected_unit,
                 expected_unit_value_span,
             }) => {
-                errors.push(EvalError::TypeMismatch {
-                    expected_type: ExpectedType::MeasuredNumber {
-                        number_type: None,
-                        unit: Some(expected_unit.display_unit.clone()),
-                    },
-                    expected_source_span: **expected_unit_value_span,
-                    found_type: ValueType::Number {
-                        number_type: number.type_(),
-                    },
-                    found_span: *value_span,
-                });
+                if expected_unit.is_dimensionless() {
+                    let number = MeasuredNumber::from_number_and_unit(*number, Unit::one());
+                    numbers.push(Cow::Owned(number));
+                } else {
+                    errors.push(EvalError::TypeMismatch {
+                        expected_type: ExpectedType::MeasuredNumber {
+                            number_type: None,
+                            unit: Some(expected_unit.display_unit.clone()),
+                        },
+                        expected_source_span: **expected_unit_value_span,
+                        found_type: ValueType::Number {
+                            number_type: number.type_(),
+                        },
+                        found_span: *value_span,
+                    });
+                }
             }
             Some(ListResult::Numbers { numbers, .. }) => {
                 numbers.push(Cow::Borrowed(number));
