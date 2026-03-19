@@ -116,6 +116,7 @@ impl resolver::ExternalResolutionContext for Runtime {
             .map_err(|_e| resolver::AstLoadingFailedError)
     }
 
+    #[cfg(feature = "python")]
     fn load_python_import<'context>(
         &'context mut self,
         python_path: &PythonPath,
@@ -125,6 +126,16 @@ impl resolver::ExternalResolutionContext for Runtime {
             .ok()
             .map(|functions| functions.get_function_names().collect())
             .ok_or(resolver::PythonImportLoadingFailedError)
+    }
+
+    /// Resolver never calls this when the `python` feature is disabled; the stub satisfies
+    /// [`ExternalResolutionContext`](resolver::ExternalResolutionContext).
+    #[cfg(not(feature = "python"))]
+    fn load_python_import<'context>(
+        &'context mut self,
+        _python_path: &PythonPath,
+    ) -> Result<IndexSet<&'context PyFunctionName>, resolver::PythonImportLoadingFailedError> {
+        Err(resolver::PythonImportLoadingFailedError)
     }
 
     fn get_preloaded_models(

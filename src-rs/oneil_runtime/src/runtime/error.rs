@@ -2,23 +2,24 @@
 
 use indexmap::{IndexMap, IndexSet};
 use oneil_eval::{EvalError, EvalErrors};
-use oneil_resolver::ResolutionErrorCollection;
-use oneil_resolver::error::{
-    ModelImportResolutionError, ParameterResolutionError, PythonImportResolutionError,
-    VariableResolutionError,
+use oneil_resolver::{
+    ResolutionErrorCollection,
+    error::{
+        ModelImportResolutionError, ParameterResolutionError, PythonImportResolutionError,
+        VariableResolutionError,
+    },
 };
-use oneil_shared::error::OneilError;
-use oneil_shared::load_result::LoadResult;
-use oneil_shared::paths::ModelPath;
-#[cfg(feature = "python")]
-use oneil_shared::paths::PythonPath;
-use oneil_shared::symbols::{ParameterName, ReferenceName, TestIndex};
+use oneil_shared::{
+    error::OneilError,
+    load_result::LoadResult,
+    paths::{ModelPath, PythonPath},
+    symbols::{ParameterName, ReferenceName, TestIndex},
+};
 
 use super::Runtime;
-use crate::{
-    error::PythonImportError,
-    output::error::{ModelError, RuntimeErrors},
-};
+#[cfg(feature = "python")]
+use crate::error::PythonImportError;
+use crate::output::error::{ModelError, RuntimeErrors};
 
 impl Runtime {
     /// Returns all errors associated with the given model, as well as any
@@ -106,6 +107,9 @@ impl Runtime {
             parameter_errors,
             test_errors,
         } = merge_ir_and_eval_errors(ir_errors, eval_errors);
+
+        #[cfg(not(feature = "python"))]
+        let _ = python_imports_with_errors;
 
         let mut errors = RuntimeErrors::new();
 

@@ -7,7 +7,9 @@ use oneil_shared::{
     paths::ModelPath,
     symbols::{BuiltinFunctionName, BuiltinValueName, ParameterName, UnitBaseName, UnitPrefix},
 };
-use std::{fmt, path::Path, path::PathBuf, str};
+#[cfg(feature = "python")]
+use std::path::PathBuf;
+use std::{fmt, path::Path, str};
 
 /// Oneil language CLI - Main command-line interface structure
 #[derive(Parser)]

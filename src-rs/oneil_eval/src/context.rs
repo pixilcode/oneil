@@ -2,17 +2,16 @@ use indexmap::{IndexMap, IndexSet};
 
 use oneil_ir as ir;
 use oneil_output as output;
-use oneil_shared::paths::ModelPath;
-#[cfg(feature = "python")]
-use oneil_shared::paths::PythonPath;
-use oneil_shared::span::Span;
-#[cfg(feature = "python")]
-use oneil_shared::symbols::PyFunctionName;
-use oneil_shared::symbols::{
-    BuiltinFunctionName, BuiltinValueName, ParameterName, ReferenceName, SubmodelName, TestIndex,
-    UnitBaseName, UnitPrefix,
+use oneil_shared::{
+    load_result::LoadResult,
+    partial::MaybePartialResult,
+    paths::{ModelPath, PythonPath},
+    span::Span,
+    symbols::{
+        BuiltinFunctionName, BuiltinValueName, ParameterName, PyFunctionName, ReferenceName,
+        SubmodelName, TestIndex, UnitBaseName, UnitPrefix,
+    },
 };
-use oneil_shared::{load_result::LoadResult, partial::MaybePartialResult};
 
 use crate::error::{EvalError, EvalErrors};
 
@@ -389,7 +388,10 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
 
         #[cfg(not(feature = "python"))]
         {
-            Err(EvalError::PythonNotEnabled { identifier_span })
+            let _ = (self, python_path, name, args);
+            Err(Box::new(EvalError::PythonNotEnabled {
+                relevant_span: function_call_span,
+            }))
         }
     }
 
