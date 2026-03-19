@@ -113,7 +113,28 @@ cargo run -p oneil -- path/to/model.on
 
 - **VS Code / Cursor**: Install the [Oneil extension](https://marketplace.visualstudio.com/items?itemName=careweather.oneil) from the Marketplace for LSP and syntax highlighting.
 
-<!-- TODO: Talk about how to install Python library/type hints -->
+
+## Install Oneil Python
+
+To install the `oneil` package into your current Python environment from a checkout of the repository, run `pip install .` from the **project root** (the directory that contains `pyproject.toml`):
+
+```sh
+git clone https://github.com/careweather/oneil.git
+cd oneil
+pip install .
+```
+
+For an editable install while developing the package:
+
+```sh
+pip install -e .
+```
+
+After installation you can `import oneil` in Python.
+
+> ![NOTE]
+> This does NOT install the CLI, only the python library.
+
 
 ## Troubleshooting
 
