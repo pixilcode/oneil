@@ -1,6 +1,6 @@
 //! Testing for Oneil model IR.
 
-use oneil_shared::span::Span;
+use oneil_shared::{labels::SectionLabel, span::Span};
 
 use crate::{Dependencies, debug_info::TraceLevel, expr::Expr};
 
@@ -11,6 +11,7 @@ pub struct Test {
     trace_level: TraceLevel,
     expr: Expr,
     dependencies: Dependencies,
+    section_label: Option<SectionLabel>,
 }
 
 impl Test {
@@ -21,12 +22,14 @@ impl Test {
         trace_level: TraceLevel,
         expr: Expr,
         dependencies: Dependencies,
+        section_label: Option<SectionLabel>,
     ) -> Self {
         Self {
             span,
             trace_level,
             expr,
             dependencies,
+            section_label,
         }
     }
 
@@ -52,5 +55,11 @@ impl Test {
     #[must_use]
     pub const fn dependencies(&self) -> &Dependencies {
         &self.dependencies
+    }
+
+    /// Returns the section label for this test, if any.
+    #[must_use]
+    pub const fn section_label(&self) -> Option<&SectionLabel> {
+        self.section_label.as_ref()
     }
 }

@@ -46,6 +46,7 @@ pub fn empty_model() -> ir::Model {
         IndexMap::new(),
         IndexMap::new(),
         IndexMap::new(),
+        None,
     )
 }
 
@@ -112,6 +113,7 @@ impl ModelBuilder {
             self.references,
             self.parameters,
             self.tests,
+            None,
         )
     }
 }
@@ -173,10 +175,12 @@ impl ParameterBuilder {
             name_span,
             span,
             label,
+            None,
             value,
             limits,
             is_performance,
             trace_level,
+            None,
         )
     }
 }

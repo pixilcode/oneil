@@ -12,6 +12,7 @@
 //!
 
 use oneil_ast as ast;
+use oneil_ir as ir;
 use oneil_shared::paths::ModelPath;
 
 use crate::{ExternalResolutionContext, ResolutionContext, error::CircularDependencyError};
@@ -24,9 +25,11 @@ mod resolve_test;
 mod resolve_trace_level;
 mod resolve_unit;
 mod resolve_variable;
+mod util;
 
 pub use resolve_expr::resolve_expr;
 pub use resolve_unit::resolve_unit;
+pub use util::{ParameterWithSection, TestWithSection};
 
 /// Loads a model and all its dependencies, building a complete model collection.
 pub fn load_model<E>(model_path: &ModelPath, resolution_context: &mut ResolutionContext<'_, E>)
@@ -73,6 +76,11 @@ where
     };
     let model_ast = (*model_ast).clone();
 
+    let model_note = model_ast
+        .note()
+        .map(|n| ir::Note::new(n.value().to_string()));
+    resolution_context.set_active_model_note(model_note);
+
     // split model ast into imports, use models, parameters, and tests
     let (imports, model_imports, parameters, tests) = split_model_ast(&model_ast);
 
@@ -110,8 +118,8 @@ where
 /// A tuple containing:
 /// * `Vec<&ImportNode>` - All import declarations from the model
 /// * `Vec<&UseModelNode>` - All use model declarations from the model
-/// * `Vec<&ParameterNode>` - All parameter declarations from the model
-/// * `Vec<&TestNode>` - All test declarations from the model
+/// * `Vec<ParameterWithSection>` - Parameter declarations with optional enclosing section
+/// * `Vec<TestWithSection>` - Test declarations with optional enclosing section
 ///
 /// # Behavior
 ///
@@ -125,8 +133,8 @@ fn split_model_ast(
 ) -> (
     Vec<&ast::ImportNode>,
     Vec<&ast::UseModelNode>,
-    Vec<&ast::ParameterNode>,
-    Vec<&ast::TestNode>,
+    Vec<ParameterWithSection<'_>>,
+    Vec<TestWithSection<'_>>,
 ) {
     let mut imports = vec![];
     let mut use_models = vec![];
@@ -137,18 +145,31 @@ fn split_model_ast(
         match &**decl {
             ast::Decl::Import(import) => imports.push(import),
             ast::Decl::UseModel(use_model) => use_models.push(use_model),
-            ast::Decl::Parameter(parameter) => parameters.push(parameter),
-            ast::Decl::Test(test) => tests.push(test),
+            ast::Decl::Parameter(parameter) => parameters.push(ParameterWithSection {
+                parameter,
+                section_label: None,
+            }),
+            ast::Decl::Test(test) => tests.push(TestWithSection {
+                test,
+                section_label: None,
+            }),
         }
     }
 
     for section in model_ast.sections() {
+        let section_label = section.header().label();
         for decl in section.decls() {
             match &**decl {
                 ast::Decl::Import(import) => imports.push(import),
                 ast::Decl::UseModel(use_model) => use_models.push(use_model),
-                ast::Decl::Parameter(parameter) => parameters.push(parameter),
-                ast::Decl::Test(test) => tests.push(test),
+                ast::Decl::Parameter(parameter) => parameters.push(ParameterWithSection {
+                    parameter,
+                    section_label: Some(section_label),
+                }),
+                ast::Decl::Test(test) => tests.push(TestWithSection {
+                    test,
+                    section_label: Some(section_label),
+                }),
             }
         }
     }

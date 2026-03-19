@@ -1646,10 +1646,12 @@ mod tests {
                 random_span(),
                 random_span(),
                 ParameterLabel::from(name),
+                None,
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
                 ir::TraceLevel::None,
+                None,
             )
         }
 
@@ -1696,10 +1698,12 @@ mod tests {
                 random_span(),
                 random_span(),
                 ParameterLabel::from(name),
+                None,
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
                 ir::TraceLevel::None,
+                None,
             )
         }
 
@@ -1746,10 +1750,12 @@ mod tests {
                 random_span(),
                 random_span(),
                 ParameterLabel::from(name),
+                None,
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
                 ir::TraceLevel::None,
+                None,
             )
         }
 
@@ -1796,10 +1802,12 @@ mod tests {
                 random_span(),
                 random_span(),
                 ParameterLabel::from(name),
+                None,
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
                 ir::TraceLevel::None,
+                None,
             )
         }
 
@@ -1849,10 +1857,12 @@ mod tests {
                 random_span(),
                 random_span(),
                 ParameterLabel::from(name),
+                None,
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
                 ir::TraceLevel::None,
+                None,
             )
         }
 
@@ -1902,10 +1912,12 @@ mod tests {
                 random_span(),
                 random_span(),
                 ParameterLabel::from(name),
+                None,
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
                 ir::TraceLevel::None,
+                None,
             )
         }
 
@@ -1952,10 +1964,12 @@ mod tests {
                 random_span(),
                 random_span(),
                 ParameterLabel::from(name),
+                None,
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
                 ir::TraceLevel::None,
+                None,
             )
         }
 
@@ -2002,10 +2016,12 @@ mod tests {
                 random_span(),
                 random_span(),
                 ParameterLabel::from(name),
+                None,
                 ir::ParameterValue::simple(expr, units),
                 ir::Limits::default(),
                 false,
                 ir::TraceLevel::None,
+                None,
             )
         }
 

@@ -1,6 +1,7 @@
 //! Test resolution for the Oneil model loader
 
-use oneil_ast as ast;
+use std::ops::Deref;
+
 use oneil_ir as ir;
 use oneil_shared::symbols::TestIndex;
 
@@ -10,30 +11,37 @@ use crate::{
     resolver::{
         resolve_expr::{get_expr_dependencies, resolve_expr},
         resolve_trace_level::resolve_trace_level,
+        util::TestWithSection,
     },
 };
 
 /// Resolves tests from AST test declarations.
 pub fn resolve_tests<E>(
-    tests: Vec<&ast::TestNode>,
+    tests: Vec<TestWithSection<'_>>,
     resolution_context: &mut ResolutionContext<'_, E>,
 ) where
     E: ExternalResolutionContext,
 {
-    let tests = tests.into_iter().enumerate().map(|(test_index, test)| {
+    let tests = tests.into_iter().enumerate().map(|(test_index, decl)| {
         let test_index = TestIndex::new(test_index);
-        let test_span = test.span();
+        let test_span = decl.test.span();
 
-        let trace_level = resolve_trace_level(test.trace_level());
+        let trace_level = resolve_trace_level(decl.test.trace_level());
 
-        let test_expr = resolve_expr(test.expr(), resolution_context)
+        let test_expr = resolve_expr(decl.test.expr(), resolution_context)
             .map_err(|errors| (test_index, error::convert_errors(errors)))?;
 
         let dependencies = get_expr_dependencies(&test_expr);
 
         Ok((
             test_index,
-            ir::Test::new(test_span, trace_level, test_expr, dependencies),
+            ir::Test::new(
+                test_span,
+                trace_level,
+                test_expr,
+                dependencies,
+                decl.section_label.map(|label| label.deref().clone()),
+            ),
         ))
     });
 
@@ -54,6 +62,7 @@ pub fn resolve_tests<E>(
 mod tests {
     use crate::{
         error::VariableResolutionError,
+        resolver::TestWithSection,
         test::{
             external_context::TestExternalContext, resolution_context::ResolutionContextBuilder,
             test_ast, test_model_path,
@@ -68,8 +77,7 @@ mod tests {
     #[test]
     fn resolve_tests_empty() {
         // build the tests
-        let tests: [ast::TestNode; 0] = [];
-        let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
+        let tests_refs: Vec<TestWithSection<'_>> = vec![];
 
         // build the context
         let active_path = test_model_path("main");
@@ -105,7 +113,13 @@ mod tests {
                 .with_boolean_expr(true)
                 .build(),
         ];
-        let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
+        let tests_refs: Vec<_> = tests
+            .iter()
+            .map(|t| TestWithSection {
+                test: t,
+                section_label: None,
+            })
+            .collect();
 
         // build the context
         let active_path = test_model_path("main");
@@ -145,7 +159,13 @@ mod tests {
                 .with_debug_trace_level()
                 .build(),
         ];
-        let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
+        let tests_refs: Vec<_> = tests
+            .iter()
+            .map(|t| TestWithSection {
+                test: t,
+                section_label: None,
+            })
+            .collect();
 
         // build the context
         let active_path = test_model_path("main");
@@ -180,7 +200,13 @@ mod tests {
                 .with_variable_expr("undefined_var")
                 .build(),
         ];
-        let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
+        let tests_refs: Vec<_> = tests
+            .iter()
+            .map(|t| TestWithSection {
+                test: t,
+                section_label: None,
+            })
+            .collect();
 
         // build the context
         let active_path = test_model_path("main");
@@ -232,7 +258,13 @@ mod tests {
                 .with_variable_expr("undefined_var")
                 .build(),
         ];
-        let tests_refs: Vec<&ast::TestNode> = tests.iter().collect();
+        let tests_refs: Vec<_> = tests
+            .iter()
+            .map(|t| TestWithSection {
+                test: t,
+                section_label: None,
+            })
+            .collect();
 
         // build the context
         let active_path = test_model_path("main");

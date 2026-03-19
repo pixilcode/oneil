@@ -7,6 +7,7 @@ use oneil_shared::{
 };
 
 use crate::{
+    Note,
     model_import::{ReferenceImport, SubmodelImport},
     parameter::Parameter,
     python_import::PythonImport,
@@ -22,6 +23,7 @@ pub struct Model {
     references: IndexMap<ReferenceName, ReferenceImport>,
     parameters: IndexMap<ParameterName, Parameter>,
     tests: IndexMap<TestIndex, Test>,
+    note: Option<Note>,
 }
 
 impl Model {
@@ -34,6 +36,7 @@ impl Model {
         references: IndexMap<ReferenceName, ReferenceImport>,
         parameters: IndexMap<ParameterName, Parameter>,
         tests: IndexMap<TestIndex, Test>,
+        note: Option<Note>,
     ) -> Self {
         Self {
             path,
@@ -42,6 +45,7 @@ impl Model {
             references,
             parameters,
             tests,
+            note,
         }
     }
 
@@ -114,6 +118,12 @@ impl Model {
         &self.tests
     }
 
+    /// Returns the optional note attached to this model.
+    #[must_use]
+    pub const fn note(&self) -> Option<&Note> {
+        self.note.as_ref()
+    }
+
     /// Adds a Python import to this model.
     pub fn add_python_import(&mut self, path: PythonPath, import: PythonImport) {
         self.python_imports.insert(path, import);
@@ -137,5 +147,10 @@ impl Model {
     /// Adds a test to this model.
     pub fn add_test(&mut self, index: TestIndex, test: Test) {
         self.tests.insert(index, test);
+    }
+
+    /// Sets the note attached to this model.
+    pub fn set_note(&mut self, note: Note) {
+        self.note = Some(note);
     }
 }

@@ -3,13 +3,13 @@
 use indexmap::IndexMap;
 
 use oneil_shared::{
-    labels::ParameterLabel,
+    labels::{ParameterLabel, SectionLabel},
     paths::ModelPath,
     span::Span,
     symbols::{BuiltinValueName, ParameterName, ReferenceName},
 };
 
-use crate::{debug_info::TraceLevel, expr::Expr, unit::CompositeUnit};
+use crate::{debug_info::TraceLevel, expr::Expr, note::Note, unit::CompositeUnit};
 
 /// Represents a single parameter in an Oneil model.
 #[derive(Debug, Clone, PartialEq)]
@@ -19,10 +19,12 @@ pub struct Parameter {
     name_span: Span,
     span: Span,
     label: ParameterLabel,
+    section_label: Option<SectionLabel>,
     value: ParameterValue,
     limits: Limits,
     is_performance: bool,
     trace_level: TraceLevel,
+    note: Option<Note>,
 }
 
 impl Parameter {
@@ -35,10 +37,12 @@ impl Parameter {
         name_span: Span,
         span: Span,
         label: ParameterLabel,
+        section_label: Option<SectionLabel>,
         value: ParameterValue,
         limits: Limits,
         is_performance: bool,
         trace_level: TraceLevel,
+        note: Option<Note>,
     ) -> Self {
         Self {
             dependencies,
@@ -46,10 +50,12 @@ impl Parameter {
             name_span,
             span,
             label,
+            section_label,
             value,
             limits,
             is_performance,
             trace_level,
+            note,
         }
     }
 
@@ -105,6 +111,18 @@ impl Parameter {
     #[must_use]
     pub const fn trace_level(&self) -> TraceLevel {
         self.trace_level
+    }
+
+    /// Returns the section label for this parameter, if it was declared under a section.
+    #[must_use]
+    pub const fn section_label(&self) -> Option<&SectionLabel> {
+        self.section_label.as_ref()
+    }
+
+    /// Returns the optional documentation note for this parameter.
+    #[must_use]
+    pub const fn note(&self) -> Option<&Note> {
+        self.note.as_ref()
     }
 }
 

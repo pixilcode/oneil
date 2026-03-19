@@ -39,6 +39,7 @@ impl ModelResolutionResult {
             IndexMap::new(),
             IndexMap::new(),
             IndexMap::new(),
+            None,
         );
 
         Self {
@@ -502,6 +503,13 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     ) {
         self.active_model_errors_mut()
             .add_test_error(test_index, error);
+    }
+
+    /// Sets the model-level documentation note on the active model when `note` is `Some`.
+    pub fn set_active_model_note(&mut self, note: Option<ir::Note>) {
+        if let Some(note) = note {
+            self.active_model_mut().set_note(note);
+        }
     }
 }
 
