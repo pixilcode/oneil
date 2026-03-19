@@ -139,6 +139,12 @@ impl<'runtime> ModelIrReference<'runtime> {
         self.model.get_path()
     }
 
+    /// Returns the optional model-level documentation note.
+    #[must_use]
+    pub const fn note(&self) -> Option<&'runtime ir::Note> {
+        self.model.note()
+    }
+
     /// Returns a map of submodel names to their `SubmodelImport`s.
     ///
     /// If you need the model reference itself, use `submodel_models` instead.

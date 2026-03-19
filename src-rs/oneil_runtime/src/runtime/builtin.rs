@@ -36,4 +36,22 @@ impl Runtime {
     ) -> impl Iterator<Item = (&UnitPrefix, (&'static str, f64))> {
         self.builtins.builtin_prefixes_docs()
     }
+
+    /// Returns formal parameter names and documentation text for a builtin function, if it exists.
+    #[must_use]
+    pub fn lookup_builtin_function_docs(
+        &self,
+        name: &BuiltinFunctionName,
+    ) -> Option<(&'static [&'static str], &'static str)> {
+        self.builtins.lookup_builtin_function_docs(name)
+    }
+
+    /// Returns the description and value for a builtin constant, if it exists.
+    #[must_use]
+    pub fn lookup_builtin_value_docs(
+        &self,
+        name: &BuiltinValueName,
+    ) -> Option<(&'static str, &Value)> {
+        self.builtins.lookup_builtin_value_docs(name)
+    }
 }

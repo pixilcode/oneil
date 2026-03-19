@@ -161,6 +161,24 @@ impl BuiltinRef {
             .iter()
             .map(|(name, p)| (name, (p.description, p.value)))
     }
+
+    /// Returns formal parameter names and documentation text for a builtin function, if it exists.
+    #[must_use]
+    pub fn lookup_builtin_function_docs(
+        &self,
+        name: &BuiltinFunctionName,
+    ) -> Option<(&'static [&'static str], &'static str)> {
+        self.functions.get(name).map(|f| (f.args, f.description))
+    }
+
+    /// Returns the human-readable description and constant value for a builtin value, if it exists.
+    #[must_use]
+    pub fn lookup_builtin_value_docs(
+        &self,
+        name: &BuiltinValueName,
+    ) -> Option<(&'static str, &Value)> {
+        self.values.get(name).map(|v| (v.description, &v.value))
+    }
 }
 
 impl Default for BuiltinRef {

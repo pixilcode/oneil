@@ -6,10 +6,15 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(dead_code)]
 
+mod definition;
 mod diagnostics;
 mod doc_store;
+mod hover;
+mod lsp_span;
+mod path;
 mod symbol_lookup;
 
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use oneil_runtime::Runtime as OneilRuntime;
@@ -17,87 +22,46 @@ use oneil_shared::paths::ModelPath;
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, InitializeParams,
-    InitializeResult, InitializedParams, MessageType, PositionEncodingKind, ServerCapabilities,
-    ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, Uri,
+    DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
+    HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, MessageType,
+    PositionEncodingKind, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Uri,
 };
 use tower_lsp_server::{Client, LanguageServer, LspService, Server, UriExt};
 
+use definition::resolve_definition;
 use diagnostics::diagnostics_from_runtime_errors;
 use doc_store::DocumentStore;
+use hover::hover_markdown;
+use lsp_span::span_to_range;
+
+#[tokio::main]
+pub async fn run() {
+    let stdin = tokio::io::stdin();
+    let stdout = tokio::io::stdout();
+
+    let docs = Arc::new(DocumentStore::new());
+    let runtime = Mutex::new(OneilRuntime::new());
+
+    let (service, socket) = LspService::new(|client| Backend {
+        client,
+        docs,
+        workspace_roots: Mutex::new(Vec::new()),
+        runtime,
+    });
+
+    Server::new(stdin, stdout, socket).serve(service).await;
+}
 
 struct Backend {
     client: Client,
     docs: Arc<DocumentStore>,
+    /// Workspace folder paths from `initialize`, longest first (nested folders match innermost).
+    workspace_roots: Mutex<Vec<PathBuf>>,
     // TODO: figure out how to handle async runtime operations better.
     //
     //       Right now, only one thing can use the runtime at a time.
     runtime: Mutex<OneilRuntime>,
-}
-
-impl Backend {
-    /// Evaluates the model at the given URI and publishes any errors as LSP diagnostics.
-    async fn publish_diagnostics_for_model_path(
-        &self,
-        model_path: &ModelPath,
-        version: Option<i32>,
-    ) {
-        self.client
-            .log_message(
-                MessageType::INFO,
-                format!("publish_diagnostics_for_model_path: {model_path:?}, version: {version:?}"),
-            )
-            .await;
-
-        let (successful_models, diagnostics) = {
-            let mut runtime = self.runtime.lock().expect("runtime mutex poisoned");
-            let (result, errors) = runtime.eval_model(model_path);
-
-            let successful_models = result
-                .map(|result| result.all_model_paths())
-                .unwrap_or_default()
-                .into_iter()
-                .map(ModelPath::into_path_buf)
-                .filter_map(Uri::from_file_path);
-
-            let diagnostics = diagnostics_from_runtime_errors(&errors);
-
-            (successful_models, diagnostics)
-        };
-
-        for uri in successful_models {
-            self.client
-                .log_message(
-                    MessageType::INFO,
-                    format!("clearing diagnostics for successful model: {uri:?}"),
-                )
-                .await;
-
-            // clear diagnostics for successful models
-            self.client
-                .publish_diagnostics(uri.clone(), vec![], version)
-                .await;
-        }
-
-        // publish new diagnostics
-        for (uri, diagnostics) in diagnostics {
-            self.client
-                .log_message(
-                    MessageType::INFO,
-                    format!("publishing diagnostics for {uri:?}: {diagnostics:?}"),
-                )
-                .await;
-
-            self.client
-                .publish_diagnostics(uri, diagnostics, version)
-                .await;
-
-            self.client
-                .log_message(MessageType::INFO, "diagnostics published".to_string())
-                .await;
-        }
-    }
 }
 
 impl LanguageServer for Backend {
@@ -105,6 +69,24 @@ impl LanguageServer for Backend {
         self.client
             .log_message(MessageType::INFO, "initialize called")
             .await;
+
+        let workspace_roots = params
+            .workspace_folders
+            .as_ref()
+            .map(|folders| {
+                folders
+                    .iter()
+                    .filter_map(|folder| {
+                        folder.uri.to_file_path().map(std::borrow::Cow::into_owned)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        *self
+            .workspace_roots
+            .lock()
+            .expect("workspace_roots mutex poisoned") = workspace_roots;
 
         // let params_string = format!("{params:#?}");
         // self.client
@@ -134,6 +116,7 @@ impl LanguageServer for Backend {
                 )),
                 position_encoding: Some(PositionEncodingKind::UTF16),
                 definition_provider: Some(tower_lsp_server::lsp_types::OneOf::Left(true)),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 ..Default::default()
             },
             server_info: Some(ServerInfo {
@@ -269,8 +252,7 @@ impl LanguageServer for Backend {
             };
 
             // Resolve the symbol to its definition location
-            let location =
-                symbol_lookup::resolve_definition(&symbol, &mut runtime, &current_model_path);
+            let location = resolve_definition(&symbol, &mut runtime, &current_model_path);
 
             let log_message =
                 format!("Found symbol: {symbol:?}, definition location: {location:?}");
@@ -289,21 +271,133 @@ impl LanguageServer for Backend {
 
         result
     }
+
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let position = params.text_document_position_params.position;
+        let uri = params.text_document_position_params.text_document.uri;
+
+        let Ok(current_model_path) = ModelPath::try_from(uri.path().as_str()) else {
+            return Ok(None);
+        };
+
+        let Some(offset) = self.docs.position_to_offset(&uri, position).await else {
+            return Ok(None);
+        };
+
+        let (result, maybe_log_message) = 'complete: {
+            let mut runtime = self
+                .runtime
+                .lock()
+                .expect("if the runtime has panicked elsewhere, it is not in a useful state");
+
+            let (ir_model, errors) = runtime.load_ir(&current_model_path);
+
+            let Some(ir_model) = ir_model else {
+                break 'complete (
+                    Ok(None),
+                    Some(format!("hover: error loading IR: {errors:?}")),
+                );
+            };
+
+            let Some(symbol) = symbol_lookup::find_symbol_at_offset(ir_model, offset) else {
+                break 'complete (Ok(None), Some("hover: no symbol at position".to_string()));
+            };
+
+            let workspace_roots = self
+                .workspace_roots
+                .lock()
+                .expect("workspace_roots mutex poisoned")
+                .clone();
+
+            let markdown =
+                hover_markdown(&symbol, &mut runtime, &current_model_path, &workspace_roots);
+
+            let has_contents = markdown.is_some();
+            let hover_range = Some(span_to_range(symbol.span()));
+
+            let hover = markdown.map(|contents| Hover {
+                contents,
+                range: hover_range,
+            });
+
+            (
+                Ok(hover),
+                Some(format!(
+                    "hover: symbol={symbol:?}, has_contents={has_contents}"
+                )),
+            )
+        };
+
+        if let Some(log_message) = maybe_log_message {
+            self.client
+                .log_message(MessageType::INFO, log_message)
+                .await;
+        }
+
+        result
+    }
 }
 
-#[tokio::main]
-pub async fn run() {
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
+impl Backend {
+    /// Evaluates the model at the given URI and publishes any errors as LSP diagnostics.
+    async fn publish_diagnostics_for_model_path(
+        &self,
+        model_path: &ModelPath,
+        version: Option<i32>,
+    ) {
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("publish_diagnostics_for_model_path: {model_path:?}, version: {version:?}"),
+            )
+            .await;
 
-    let docs = Arc::new(DocumentStore::new());
-    let runtime = Mutex::new(OneilRuntime::new());
+        let (successful_models, diagnostics) = {
+            let mut runtime = self.runtime.lock().expect("runtime mutex poisoned");
+            let (result, errors) = runtime.eval_model(model_path);
 
-    let (service, socket) = LspService::new(|client| Backend {
-        client,
-        docs,
-        runtime,
-    });
+            let successful_models = result
+                .map(|result| result.all_model_paths())
+                .unwrap_or_default()
+                .into_iter()
+                .map(ModelPath::into_path_buf)
+                .filter_map(Uri::from_file_path);
 
-    Server::new(stdin, stdout, socket).serve(service).await;
+            let diagnostics = diagnostics_from_runtime_errors(&errors);
+
+            (successful_models, diagnostics)
+        };
+
+        for uri in successful_models {
+            self.client
+                .log_message(
+                    MessageType::INFO,
+                    format!("clearing diagnostics for successful model: {uri:?}"),
+                )
+                .await;
+
+            // clear diagnostics for successful models
+            self.client
+                .publish_diagnostics(uri.clone(), vec![], version)
+                .await;
+        }
+
+        // publish new diagnostics
+        for (uri, diagnostics) in diagnostics {
+            self.client
+                .log_message(
+                    MessageType::INFO,
+                    format!("publishing diagnostics for {uri:?}: {diagnostics:?}"),
+                )
+                .await;
+
+            self.client
+                .publish_diagnostics(uri, diagnostics, version)
+                .await;
+
+            self.client
+                .log_message(MessageType::INFO, "diagnostics published".to_string())
+                .await;
+        }
+    }
 }
