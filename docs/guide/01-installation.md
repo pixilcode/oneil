@@ -21,7 +21,7 @@ Pre-built binaries are published on the [Releases](https://github.com/careweathe
 ### Linux / macOS
 
 1. Open the [latest release](https://github.com/careweather/oneil/releases/latest).
-2. Download the archive for your OS and architecture (e.g. `oneil-v0.15.0-x86_64-unknown-linux-gnu.tar.gz`).
+2. Download the archive for your OS and architecture (e.g. `oneil-v0.16.0-x86_64-unknown-linux-gnu.tar.gz`).
 3. Unpack and put the `oneil` binary on your `PATH`:
 
    ```sh
@@ -43,7 +43,7 @@ Pre-built binaries are published on the [Releases](https://github.com/careweathe
 ### Windows
 
 1. Open the [latest release](https://github.com/careweather/oneil/releases/latest).
-2. Download the `.zip` for Windows (e.g. `oneil-v0.15.0-x86_64-pc-windows-msvc.zip`).
+2. Download the `.zip` for Windows (e.g. `oneil-v0.16.0-x86_64-pc-windows-msvc.zip`).
 3. Unzip and either move `oneil.exe` into a directory on your `PATH`, or add the folder containing `oneil.exe` to your `PATH`.
 4. Confirm in PowerShell or Command Prompt:
 

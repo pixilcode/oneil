@@ -40,8 +40,8 @@ def process_file(file_path: Path) -> None:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("Usage: update_to_0.15.py FILE1 [FILE2 ...]", file=sys.stderr)
-        print("This tool applies all conversions needed for Oneil 0.15:", file=sys.stderr)
+        print("Usage: update_to_0.16.py FILE1 [FILE2 ...]", file=sys.stderr)
+        print("This tool applies all conversions needed for Oneil 0.16:", file=sys.stderr)
         print("  1. Converts '=>' to '='", file=sys.stderr)
         print("  2. Converts discrete patterns [a, b, c] to ['a', 'b', 'c']", file=sys.stderr)
         print("  3. Converts whitespace-style notes to tilde-style notes", file=sys.stderr)

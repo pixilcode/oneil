@@ -663,7 +663,7 @@ checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
 
 [[package]]
 name = "oneil"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "oneil_analysis",
  "oneil_ast",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_analysis"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_ir",
@@ -693,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_ast"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_shared",
@@ -701,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_builtins"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_eval",
@@ -711,7 +711,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_cli"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anstream 1.0.0",
  "clap",
@@ -725,7 +725,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_eval"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_builtins",
@@ -736,7 +736,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_ir"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_shared",
@@ -744,7 +744,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_lsp"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_runtime",
@@ -755,7 +755,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_output"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "arbitrary",
  "indexmap",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_parser"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "nom",
  "nom_locate",
@@ -782,7 +782,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_python"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_builtins",
@@ -793,7 +793,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_resolver"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_ast",
@@ -803,7 +803,7 @@ dependencies = [
 
 [[package]]
 name = "oneil_runtime"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_analysis",
@@ -820,14 +820,14 @@ dependencies = [
 
 [[package]]
 name = "oneil_shared"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "rand",
 ]
 
 [[package]]
 name = "oneil_snapshot_tests"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "insta",
  "oneil_runtime",
