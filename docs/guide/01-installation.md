@@ -8,7 +8,7 @@ This section describes how to install the Oneil CLI (Rust implementation) on Lin
 
 Optional, for full functionality:
 
-- **Python 3.10+** (for Python breakout functions and optional runtime features). The CLI can run without it; Python is only needed when your models use `import` and Python-defined functions.
+- **Python 3.10+** (for Python functions and optional runtime features). The CLI can run without it; Python is only needed when your models import Python-defined functions.
 
 ## Option 1: Download a release from GitHub (recommended)
 
@@ -51,7 +51,25 @@ Pre-built binaries are published on the [Releases](https://github.com/careweathe
    oneil --version
    ```
 
-## Option 2: Install from source with Cargo
+## Option 2: Install from source using the install script
+
+From the repository root, the install script checks for **Cargo**, then installs the **Rust CLI** (`cargo install`) and, by default, the **Python package** (`pip install`) so you can run `oneil` and `import oneil`.
+
+```sh
+git clone https://github.com/careweather/oneil.git
+cd oneil
+./install.sh
+```
+
+- **Without Python** (CLI only, no bindings and no pip package): `./install.sh --no-python`
+- **Editable Python install** (for working on the bindings): `./install.sh --editable` or `./install.sh -e`
+
+On Windows, run `install.bat` from the repository root with the same flags (`--no-python`, `-e`, `--help`).
+
+If Cargo is missing, the script prints how to install Rust via [rustup](https://rustup.rs/). For the default install you also need **Python 3.10+** with pip. Vim syntax highlighting is not part of the script; see the README [Vim support](https://github.com/careweather/oneil#vim-support) section.
+
+
+## Option 3: Install from source with Cargo
 
 Use this if you want the latest development version or need to customize the build.
 
@@ -70,34 +88,17 @@ Use this if you want the latest development version or need to customize the bui
 
    This places the `oneil` executable in `~/.cargo/bin` (or `%USERPROFILE%\.cargo\bin` on Windows). Ensure that directory is on your `PATH`.
 
-3. Optional: build without Python support (avoids Python/pyo3 dependencies):
+   _Optional: build without Python support (avoids Python/pyo3 dependencies, makes smaller binary):_
 
    ```sh
    cargo install --path src-rs/oneil --no-default-features --features rust-lib
    ```
 
-4. Confirm:
+3. Confirm:
 
    ```sh
    oneil --version
    ```
-
-## Option 3: Install from source using the install script
-
-From the repository root, the install script checks for **Cargo**, then installs the **Rust CLI** (`cargo install`) and, by default, the **Python package** (`pip install`) so you can run `oneil` and `import oneil`.
-
-```sh
-git clone https://github.com/careweather/oneil.git
-cd oneil
-./install.sh
-```
-
-- **Without Python** (CLI only, no bindings and no pip package): `./install.sh --no-python`
-- **Editable Python install** (for working on the bindings): `./install.sh --editable` or `./install.sh -e`
-
-On Windows, run `install.bat` from the repository root with the same flags (`--no-python`, `-e`, `--help`).
-
-If Cargo is missing, the script prints how to install Rust via [rustup](https://rustup.rs/). For the default install you also need **Python 3.10+** with pip. Vim syntax highlighting is not part of the script; see the README [Vim support](https://github.com/careweather/oneil#vim-support) section.
 
 ## Option 4: Run from the repository (development)
 
@@ -119,7 +120,7 @@ cargo run -p oneil -- path/to/model.on
 - **VS Code / Cursor**: Install the [Oneil extension](https://marketplace.visualstudio.com/items?itemName=careweather.oneil) from the Marketplace for LSP and syntax highlighting.
 
 
-## Install Oneil Python
+## Install Oneil Python library
 
 To install the `oneil` package into your current Python environment from a checkout of the repository, run `pip install .` from the **project root** (the directory that contains `pyproject.toml`):
 
@@ -138,7 +139,7 @@ pip install -e .
 After installation you can `import oneil` in Python.
 
 > ![NOTE]
-> `pip install .` alone does not install the CLI. Use **Option 3** (`./install.sh`) or **Option 2** (`cargo install --path src-rs/oneil`) if you want both the CLI and the library.
+> `pip install .` alone does not install the CLI. Use **Option 2** (`./install.sh`) or **Option 3** (`cargo install --path src-rs/oneil`) if you want both the CLI and the library.
 
 
 ## Troubleshooting

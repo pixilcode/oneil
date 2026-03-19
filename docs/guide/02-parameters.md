@@ -13,10 +13,10 @@ Hello: x = 1
 Run it with:
 
 ```sh
-oneil eval hello.on -m all
+oneil eval hello.on --params x
 ```
 
-The `-m all` option prints all parameter values (by default only *trace* parameters are printed; see [Annotations](#annotations)). You should see something like:
+The `--params x` option prints the parameter `x`. This option can also be shortened to `-p x`. You should see something like:
 
 ```
 ────────────────────────────────────────────────────────────────────────────────
@@ -26,15 +26,16 @@ Tests: 0/0 (PASS)
 x = 1  # Hello
 ```
 
-So `oneil eval <model>.on` is how you run an Oneil file. The output shows the model path, test summary, and each parameter’s identifier, value, and label (after `#`).
+`oneil eval <model>.on` is how you run an Oneil file. The output shows the model path, test summary, and each parameter’s identifier, value, and label (after `#`).
+
 
 ## Required parts of a parameter
 
 Each parameter declaration has three required pieces:
 
-1. **Label** - A human-readable name (can include spaces).
+1. **Label** - A human-readable name (can include spaces). This can contain any character except the following: `(`, `)`, `[`, `]`, `{`, `}`, `#`, `~`, `:`, `=`, `\n`, `*`, and `$`.
 
-2. **Name** - The identifier used in expressions (e.g. `x`). It must appear after the colon and before `=`. Other parameters and expressions refer to the parameter by this identifier. TODO: valid names
+2. **Name** - The identifier used in expressions (e.g. `x`). It must appear after the colon and before `=`. Other parameters and expressions refer to the parameter by this identifier. A name starts with a letter and may contain letters, digits, and underscores (`_`).
 
 3. **Value** - The expression on the right-hand side of `=`. It can be a number, a reference to another parameter, or a more complex expression (with optional unit; see [Value Types](03-value-types.md) and [Units](04-units.md)).
 
@@ -63,7 +64,23 @@ oneil eval <model>.on
 For example, with a file `hello.on` containing `Hello: x = 1`:
 
 ```sh
-oneil eval hello.on -m all
+oneil eval hello.on
+```
+
+Output:
+
+```
+────────────────────────────────────────────────────────────────────────────────
+Model: /tmp/hello.on
+Tests: 0/0 (PASS)
+────────────────────────────────────────────────────────────────────────────────
+```
+
+Note that there are no parameters printed out. The reason for this is discussed in [_Annotations_](#annotations).
+For now, use `--print all` to print out all parameters.
+
+```sh
+oneil eval hello.on --print all
 ```
 
 Output:
@@ -76,30 +93,22 @@ Tests: 0/0 (PASS)
 x = 1  # Hello
 ```
 
-Without `-m all`, only parameters marked with trace, debug, or performance annotations are printed (see [Annotations](#annotations)).
-
-TODO: repetitive? maybe say "we'll get to what this means later" the first time.
-
-TODO: `-m` -> `--print-mode`. Also, rename `--print-mode` to `--print`/`-P`
-
 ## Multiple parameters and references
 
-You can define multiple parameters in one file. They can reference each other by name, and the order of declarations does not matter — Oneil resolves dependencies automatically.
+You can define multiple parameters in one file. They can reference each other by name, and the order of declarations does not matter - Oneil resolves dependencies automatically.
 
 Example:
 
 ```oneil
 First: a = 1
-Second: b = a + 2
-Third: c = b + a
+Second: b = a + c
+Third: c = 2
 ```
 
-TODO: don't use `/tmp`
-
-Save as `/tmp/multi.on` and run:
+Save as `multi.on` and run:
 
 ```sh
-oneil eval /tmp/multi.on -m all
+oneil eval multi.on --print all
 ```
 
 Output:
@@ -110,11 +119,9 @@ Model: /tmp/multi.on
 Tests: 0/0 (PASS)
 ────────────────────────────────────────────────────────────────────────────────
 a = 1  # First
+c = 2  # Third
 b = 3  # Second
-c = 4  # Third
 ```
-
-`b` uses `a`, and `c` uses both `b` and `a`. Only the `+` operator is used here; other arithmetic and types are covered later.
 
 ## Selecting parameters to print
 
@@ -126,10 +133,10 @@ oneil eval <model>.on --params param1,param2
 oneil eval <model>.on -p param1,param2
 ```
 
-Example with `/tmp/multi.on`:
+Example with `multi.on`:
 
 ```sh
-oneil eval /tmp/multi.on -p b,a
+oneil eval multi.on -p b,a
 ```
 
 Output:
@@ -165,7 +172,7 @@ Annotations appear before the label. Example:
 $ Perf param: p = 3
 ```
 
-Save as `/tmp/annot.on`. With the default print mode (trace), all three are printed because trace mode includes `*`, `**`, and `$`:
+Save as `annot.on`. With the default print mode (trace), all three are printed because trace mode includes `*`, `**`, and `$`:
 
 ```sh
 oneil eval /tmp/annot.on
@@ -185,7 +192,7 @@ p = 3  # Perf param
 
 ### Print mode and debug
 
-- **`--print-mode` / `-m`** — Controls which parameters are printed when you don’t use `--params`:
+- **`--print` / `-P`** - Controls which parameters are printed when you don’t use `--params`:
   - `trace` (default): print parameters marked with `*`, `**`, or `$`.
   - `perf`: print only parameters marked with `$`.
   - `all`: print every parameter.
@@ -193,7 +200,7 @@ p = 3  # Perf param
   Example: to see only performance-marked parameters:
 
   ```sh
-  oneil eval /tmp/annot.on -m perf
+  oneil eval annot.on -P perf
   ```
 
   Output:
@@ -203,27 +210,27 @@ p = 3  # Perf param
   p = 3  # Perf param
   ```
 
-- **`--debug` / `-D`** — When set, for parameters marked with `**`, Oneil prints debug information about the variables used to evaluate that parameter. Run `oneil eval --help` for current behavior.
+- **`--debug` / `-D`** - When set, for parameters marked with `**`, Oneil prints debug information about the variables used to evaluate that parameter. Run `oneil eval --help` for current behavior.
 
 ## Other useful eval options
 
-- **`--expr` / `-x`** — Evaluate one or more expressions in the model’s context. Example:
+- **`--expr` / `-x`** - Evaluate one or more expressions in the model’s context. Example:
 
   ```sh
-  oneil eval /tmp/multi.on --expr "a + b"
+  oneil eval multi.on --expr "a + b"
   ```
 
   Output includes: `a + b = 4`.
 
-- **`--watch`** — Watch the model file for changes and re-run evaluation when it changes.
+- **`--watch`** - Watch the model file for changes and re-run evaluation when it changes.
 
-- **`--partial`** — If evaluation has errors, still print partial results after the error messages.
+- **`--partial`** - If evaluation has errors, still print partial results after the error messages.
 
-- **`--no-header`** — Omit the model path and test summary header.
+- **`--no-header`** - Omit the model path and test summary header.
 
-- **`--no-test-report`** — Omit the test report line from the header.
+- **`--no-test-report`** - Omit the test report line from the header.
 
-- **`--no-parameters`** — Do not print any parameters (overrides `--params` and `--print-mode`). Useful when you only care about `--expr` output or the test report.
+- **`--no-parameters`** - Do not print any parameters (overrides `--params` and `--print`). Useful when you only care about `--expr` output or the test report.
 
 For a full list of options, run:
 
