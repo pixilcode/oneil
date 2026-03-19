@@ -138,9 +138,7 @@ Oneil supports syntax highlighting in vim. Oneil is already designed for readabi
 
 *This highlighting has not been updated since the updates to the syntax have been released, so it might have some problems highlighting*
 
-If you installed using `install.sh`, then vim should be installed and configured.
-
-Otherwise, create a `~/.vim` directory with subdirectories `syntax` and `ftdetect` if they don't exist yet. From this directory create soft links to the files in the `vim` directory of the Oneil repository.
+Create a `~/.vim` directory with subdirectories `syntax` and `ftdetect` if they don't exist yet. From this directory create soft links to the files in the `vim` directory of the Oneil repository.
 
 ``` { .sh }
 mkdir ~/.vim

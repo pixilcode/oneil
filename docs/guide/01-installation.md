@@ -84,7 +84,7 @@ Use this if you want the latest development version or need to customize the bui
 
 ## Option 3: Install from source using the install script
 
-From the repository root, you can run the project’s install script to install the Python package and set up Vim syntax highlighting:
+From the repository root, the install script checks for **Cargo**, then installs the **Rust CLI** (`cargo install`) and, by default, the **Python package** (`pip install`) so you can run `oneil` and `import oneil`.
 
 ```sh
 git clone https://github.com/careweather/oneil.git
@@ -92,7 +92,12 @@ cd oneil
 ./install.sh
 ```
 
-This installs the Python implementation and editor support. For the Rust CLI, use Option 1 or Option 2.
+- **Without Python** (CLI only, no bindings and no pip package): `./install.sh --no-python`
+- **Editable Python install** (for working on the bindings): `./install.sh --editable` or `./install.sh -e`
+
+On Windows, run `install.bat` from the repository root with the same flags (`--no-python`, `-e`, `--help`).
+
+If Cargo is missing, the script prints how to install Rust via [rustup](https://rustup.rs/). For the default install you also need **Python 3.10+** with pip. Vim syntax highlighting is not part of the script; see the README [Vim support](https://github.com/careweather/oneil#vim-support) section.
 
 ## Option 4: Run from the repository (development)
 
@@ -133,7 +138,7 @@ pip install -e .
 After installation you can `import oneil` in Python.
 
 > ![NOTE]
-> This does NOT install the CLI, only the python library.
+> `pip install .` alone does not install the CLI. Use **Option 3** (`./install.sh`) or **Option 2** (`cargo install --path src-rs/oneil`) if you want both the CLI and the library.
 
 
 ## Troubleshooting
