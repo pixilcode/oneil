@@ -1,9 +1,9 @@
 //! Utility methods for the runtime.
 
 use indexmap::IndexSet;
-use oneil_shared::paths::{ModelPath, SourcePath};
 #[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
+use oneil_shared::paths::{ModelPath, SourcePath};
 
 use super::Runtime;
 #[cfg(feature = "python")]
