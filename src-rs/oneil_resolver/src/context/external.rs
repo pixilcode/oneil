@@ -4,7 +4,7 @@ use oneil_ir as ir;
 use oneil_shared::{
     load_result::LoadResult,
     paths::{ModelPath, PythonPath},
-    symbols::{PyFunctionName, UnitBaseName, UnitPrefix},
+    symbols::{BuiltinFunctionName, BuiltinValueName, PyFunctionName, UnitBaseName, UnitPrefix},
 };
 
 use crate::ResolutionErrorCollection;
@@ -22,6 +22,12 @@ pub trait ExternalResolutionContext {
 
     /// Checks if the given identifier refers to a builtin function.
     fn has_builtin_function(&self, identifier: &ast::Identifier) -> bool;
+
+    /// Yields every builtin value name (for fuzzy matching and suggestions).
+    fn get_builtin_value_names(&self) -> impl Iterator<Item = &BuiltinValueName>;
+
+    /// Yields every builtin function name (for fuzzy matching and suggestions).
+    fn get_builtin_function_names(&self) -> impl Iterator<Item = &BuiltinFunctionName>;
 
     /// Checks if the given name refers to a builtin unit.
     fn has_builtin_unit(&self, name: &str) -> bool;

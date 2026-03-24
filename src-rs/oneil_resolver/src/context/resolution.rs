@@ -6,8 +6,8 @@ use oneil_shared::{
     paths::{ModelPath, PythonPath},
     span::Span,
     symbols::{
-        ParameterName, PyFunctionName, ReferenceName, SubmodelName, TestIndex, UnitBaseName,
-        UnitPrefix,
+        BuiltinFunctionName, BuiltinValueName, ParameterName, PyFunctionName, ReferenceName,
+        SubmodelName, TestIndex, UnitBaseName, UnitPrefix,
     },
 };
 
@@ -17,6 +17,9 @@ use crate::error::{
 };
 
 use super::{AstLoadingFailedError, ExternalResolutionContext};
+
+/// The maximum Levenshtein distance for a best match.
+pub const MAX_BEST_MATCH_DISTANCE: usize = 2;
 
 /// Result of resolving one or more models: resolved models and per-model errors.
 #[derive(Debug)]
@@ -249,6 +252,24 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
         self.external_context.has_builtin_function(identifier)
     }
 
+    /// Returns all builtin value names for fuzzy matching (stable iteration order).
+    pub fn get_builtin_values(&self) -> impl Iterator<Item = &BuiltinValueName> {
+        self.external_context.get_builtin_value_names()
+    }
+
+    /// Returns all builtin function names for fuzzy matching (stable iteration order).
+    pub fn get_builtin_functions(&self) -> impl Iterator<Item = &BuiltinFunctionName> {
+        self.external_context.get_builtin_function_names()
+    }
+
+    /// Returns every Python function name imported into the active model (across all imports).
+    pub fn get_active_model_imported_functions(&self) -> impl Iterator<Item = &PyFunctionName> {
+        self.active_model()
+            .get_python_imports()
+            .values()
+            .flat_map(ir::PythonImport::functions)
+    }
+
     /// Checks if the given identifier refers to a builtin unit.
     #[must_use]
     pub fn has_builtin_unit(&self, name: &str) -> bool {
@@ -371,6 +392,18 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
         submodel_name: &SubmodelName,
     ) -> Option<&ir::SubmodelImport> {
         self.active_model().get_submodels().get(submodel_name)
+    }
+
+    /// Returns the resolved references for the active model.
+    #[must_use]
+    pub fn get_active_model_references(&self) -> &IndexMap<ReferenceName, ir::ReferenceImport> {
+        self.active_model().get_references()
+    }
+
+    /// Returns the resolved parameters for the active model.
+    #[must_use]
+    pub fn get_active_model_parameters(&self) -> &IndexMap<ParameterName, ir::Parameter> {
+        self.active_model().get_parameters()
     }
 
     /// Looks up a model by path.
@@ -559,24 +592,12 @@ impl<E: ExternalResolutionContext> ResolutionContext<'_, E> {
             .get_python_import_resolution_errors()
     }
 
-    /// Returns the resolved parameters for the active model.
-    #[must_use]
-    pub fn get_active_model_parameters(&self) -> &IndexMap<ParameterName, ir::Parameter> {
-        self.active_model().get_parameters()
-    }
-
     /// Returns the parameter resolution errors for the active model.
     #[must_use]
     pub fn get_active_model_parameter_errors(
         &self,
     ) -> &IndexMap<ParameterName, Vec<ParameterResolutionError>> {
         self.active_model_errors().get_parameter_resolution_errors()
-    }
-
-    /// Returns the resolved references for the active model.
-    #[must_use]
-    pub fn get_active_model_references(&self) -> &IndexMap<ReferenceName, ir::ReferenceImport> {
-        self.active_model().get_references()
     }
 
     /// Returns the resolved submodels for the active model.

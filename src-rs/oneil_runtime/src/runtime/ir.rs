@@ -9,7 +9,7 @@ use oneil_resolver::{
 use oneil_shared::{
     load_result::LoadResult,
     paths::{ModelPath, PythonPath},
-    symbols::{PyFunctionName, UnitBaseName, UnitPrefix},
+    symbols::{BuiltinFunctionName, BuiltinValueName, PyFunctionName, UnitBaseName, UnitPrefix},
 };
 
 use super::Runtime;
@@ -92,6 +92,14 @@ impl resolver::ExternalResolutionContext for Runtime {
 
     fn has_builtin_function(&self, identifier: &ast::Identifier) -> bool {
         self.builtins.has_builtin_function(identifier.as_str())
+    }
+
+    fn get_builtin_value_names(&self) -> impl Iterator<Item = &BuiltinValueName> {
+        self.builtins.builtin_values().map(|(name, _)| name)
+    }
+
+    fn get_builtin_function_names(&self) -> impl Iterator<Item = &BuiltinFunctionName> {
+        self.builtins.builtin_functions().map(|(name, _)| name)
     }
 
     fn has_builtin_unit(&self, name: &str) -> bool {

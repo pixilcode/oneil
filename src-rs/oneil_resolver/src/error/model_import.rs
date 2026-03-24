@@ -36,6 +36,8 @@ pub enum ModelImportResolutionError {
         submodel: SubmodelName,
         /// The span of where the submodel is referenced
         reference_span: Span,
+        /// Best match for the submodel name
+        best_match: Option<String>,
     },
     /// The submodel name is a duplicate.
     DuplicateSubmodel {
@@ -89,11 +91,13 @@ impl ModelImportResolutionError {
         parent_model_path: ModelPath,
         submodel: SubmodelName,
         reference_span: Span,
+        best_match: Option<String>,
     ) -> Self {
         Self::UndefinedSubmodel {
             parent_model_path,
             submodel,
             reference_span,
+            best_match,
         }
     }
 
@@ -152,6 +156,7 @@ impl fmt::Display for ModelImportResolutionError {
                 parent_model_path,
                 submodel,
                 reference_span: _,
+                best_match: _,
             } => {
                 let path = parent_model_path.as_path().display();
                 let submodel_str = submodel.as_str();
@@ -191,6 +196,7 @@ impl AsOneilError for ModelImportResolutionError {
                 parent_model_path: _,
                 submodel: _,
                 reference_span: location_span,
+                best_match: _,
             }
             | Self::DuplicateSubmodel {
                 duplicate_span: location_span,
@@ -203,6 +209,22 @@ impl AsOneilError for ModelImportResolutionError {
                 let location = ErrorLocation::from_source_and_span(source, *location_span);
                 Some(location)
             }
+        }
+    }
+
+    fn context(&self) -> Vec<Context> {
+        match self {
+            Self::UndefinedSubmodel {
+                best_match: Some(best_match),
+                ..
+            } => {
+                vec![Context::Help(format!("did you mean `{best_match}`?"))]
+            }
+            Self::ModelHasError { .. }
+            | Self::ParentModelHasError { .. }
+            | Self::UndefinedSubmodel { .. }
+            | Self::DuplicateSubmodel { .. }
+            | Self::DuplicateReference { .. } => vec![],
         }
     }
 

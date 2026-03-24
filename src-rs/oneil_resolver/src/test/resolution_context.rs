@@ -213,7 +213,7 @@ impl<'external> ResolutionContextBuilder<'external> {
         for name in &self.parameter_error_names {
             let span = unimportant_span();
             let err = ParameterResolutionError::variable_resolution(
-                VariableResolutionError::undefined_parameter(name.clone(), span),
+                VariableResolutionError::undefined_parameter(name.clone(), span, None),
             );
             ctx.add_parameter_error_to_active_model(name.clone(), err);
         }
@@ -231,7 +231,7 @@ impl<'external> ResolutionContextBuilder<'external> {
             let dummy_name = ParameterName::from("__error__");
             let span = unimportant_span();
             let err = ParameterResolutionError::variable_resolution(
-                VariableResolutionError::undefined_parameter(dummy_name.clone(), span),
+                VariableResolutionError::undefined_parameter(dummy_name.clone(), span, None),
             );
             ctx.add_parameter_error_to_active_model(dummy_name, err);
             ctx.pop_active_model(path);

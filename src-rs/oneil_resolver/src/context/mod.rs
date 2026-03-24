@@ -7,5 +7,6 @@ pub use external::{
     AstLoadingFailedError, ExternalResolutionContext, PythonImportLoadingFailedError,
 };
 pub use resolution::{
-    ModelResolutionResult, ModelResult, ParameterResult, ReferencePathResult, ResolutionContext,
+    MAX_BEST_MATCH_DISTANCE, ModelResolutionResult, ModelResult, ParameterResult,
+    ReferencePathResult, ResolutionContext,
 };

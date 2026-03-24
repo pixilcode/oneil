@@ -236,6 +236,7 @@ mod tests {
             model_path,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("expected undefined parameter error, got {error:?}");
@@ -299,6 +300,7 @@ mod tests {
             model_path,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("expected undefined parameter error, got {error:?}");

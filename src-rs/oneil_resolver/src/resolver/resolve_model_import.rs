@@ -1,14 +1,17 @@
 //! Submodel resolution for the Oneil model loader
 
 use oneil_ast as ast;
+use oneil_ir as ir;
 use oneil_shared::{
     paths::ModelPath,
+    search::search,
     span::Span,
     symbols::{ReferenceName, SubmodelName},
 };
 
 use crate::{
-    ExternalResolutionContext, ResolutionContext, context::ModelResult,
+    ExternalResolutionContext, ResolutionContext,
+    context::{MAX_BEST_MATCH_DISTANCE, ModelResult},
     error::ModelImportResolutionError,
 };
 
@@ -263,10 +266,13 @@ where
     let submodel_reference = model
         .get_submodel_reference(&submodel_name)
         .ok_or_else(|| {
+            let best_match = get_best_match_submodel_name_in_model(model, &submodel_name);
+
             ModelImportResolutionError::undefined_submodel_in_submodel(
                 model_path,
                 submodel_name,
                 submodel_name_span,
+                best_match,
             )
         })?
         .clone();
@@ -279,6 +285,21 @@ where
         submodel_subcomponents,
         resolution_context,
     )
+}
+
+fn get_best_match_submodel_name_in_model(
+    model: &ir::Model,
+    submodel_name: &SubmodelName,
+) -> Option<String> {
+    let submodels: Vec<&str> = model
+        .get_submodels()
+        .keys()
+        .map(SubmodelName::as_str)
+        .collect();
+
+    search(submodel_name.as_str(), &submodels)
+        .and_then(|result| result.some_if_within_distance(MAX_BEST_MATCH_DISTANCE))
+        .map(String::from)
 }
 
 fn handle_resolution_error<E>(
@@ -721,6 +742,7 @@ mod tests {
             parent_model_path,
             submodel,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected UndefinedSubmodel, got {error:?}");
@@ -783,6 +805,7 @@ mod tests {
             parent_model_path,
             submodel,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected UndefinedSubmodel, got {error:?}");
@@ -1138,6 +1161,7 @@ mod tests {
             parent_model_path,
             submodel,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected UndefinedSubmodel, got {error:?}");
@@ -1210,6 +1234,7 @@ mod tests {
             parent_model_path,
             submodel,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected UndefinedSubmodel, got {error:?}");
@@ -1463,6 +1488,7 @@ mod tests {
             parent_model_path,
             submodel,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected UndefinedSubmodel, got {error:?}");
@@ -1537,6 +1563,7 @@ mod tests {
             parent_model_path,
             submodel,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected UndefinedSubmodel, got {error:?}");

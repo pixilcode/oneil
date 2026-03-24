@@ -5,12 +5,14 @@ use indexmap::IndexMap;
 use oneil_ast as ast;
 use oneil_ir::{self as ir, Dependencies};
 use oneil_shared::{
+    search::search,
     span::Span,
     symbols::{BuiltinFunctionName, PyFunctionName},
 };
 
 use crate::{
     ExternalResolutionContext, ResolutionContext,
+    context::MAX_BEST_MATCH_DISTANCE,
     error::{self, VariableResolutionError},
     resolver::{resolve_unit::resolve_unit, resolve_variable::resolve_variable},
 };
@@ -246,10 +248,16 @@ where
     let name = PyFunctionName::from(name.as_str());
     let python_paths = resolution_context.lookup_imported_function(&name);
     match python_paths.len() {
-        0 => Err(VariableResolutionError::undefined_function(
-            name.as_str().to_string(),
-            name_span,
-        )),
+        0 => {
+            let best_match =
+                get_best_match_function_name_in_active_model(resolution_context, &name);
+
+            Err(VariableResolutionError::undefined_function(
+                name.as_str().to_string(),
+                name_span,
+                best_match,
+            ))
+        }
         1 => Ok(ir::FunctionName::imported(
             python_paths[0].clone(),
             name,
@@ -261,6 +269,25 @@ where
             python_paths,
         )),
     }
+}
+
+fn get_best_match_function_name_in_active_model<E>(
+    resolution_context: &ResolutionContext<'_, E>,
+    name: &PyFunctionName,
+) -> Option<String>
+where
+    E: ExternalResolutionContext,
+{
+    let imported_functions = resolution_context.get_active_model_imported_functions();
+    let builtin_functions = resolution_context.get_builtin_functions();
+    let functions: Vec<&str> = imported_functions
+        .map(PyFunctionName::as_str)
+        .chain(builtin_functions.map(BuiltinFunctionName::as_str))
+        .collect();
+
+    search(name.as_str(), &functions)
+        .and_then(|result| result.some_if_within_distance(MAX_BEST_MATCH_DISTANCE))
+        .map(String::from)
 }
 
 /// Converts an AST literal to a model literal.
@@ -713,6 +740,7 @@ mod tests {
             model_path: None,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected undefined parameter error, got {error:?}");
@@ -1005,6 +1033,7 @@ mod tests {
                     model_path: None,
                     parameter_name,
                     reference_span: _,
+                    best_match: _,
                 } = e
                 {
                     Some(parameter_name.clone())
@@ -1284,6 +1313,7 @@ mod tests {
             model_path: None,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected undefined parameter error, got {error:?}");
@@ -1318,6 +1348,7 @@ mod tests {
             model_path: None,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected undefined parameter error, got {error:?}");
@@ -1356,6 +1387,7 @@ mod tests {
             model_path: None,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected undefined parameter error, got {error:?}");
@@ -1398,6 +1430,7 @@ mod tests {
                     model_path: None,
                     parameter_name,
                     reference_span: _,
+                    best_match: _,
                 } = e
                 {
                     Some(parameter_name.clone())

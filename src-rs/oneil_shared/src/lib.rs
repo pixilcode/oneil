@@ -6,5 +6,6 @@ pub mod labels;
 pub mod load_result;
 pub mod partial;
 pub mod paths;
+pub mod search;
 pub mod span;
 pub mod symbols;

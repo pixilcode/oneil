@@ -41,6 +41,8 @@ pub enum VariableResolutionError {
         parameter_name: ParameterName,
         /// The span of where the parameter is referenced
         reference_span: Span,
+        /// Best match for the parameter name
+        best_match: Option<String>,
     },
     /// The reference is not defined in the current model.
     UndefinedReference {
@@ -48,6 +50,8 @@ pub enum VariableResolutionError {
         reference: ReferenceName,
         /// The span of where the reference is referenced
         reference_span: Span,
+        /// Best match for the reference name
+        best_match: Option<String>,
     },
     /// The function name is not defined as a builtin or in any loaded Python import.
     UndefinedFunction {
@@ -55,6 +59,8 @@ pub enum VariableResolutionError {
         function_name: String,
         /// The span of the function name in the source
         relevant_span: Span,
+        /// Best match for the function name
+        best_match: Option<String>,
     },
     /// The function name is defined in more than one Python import; resolution is ambiguous.
     MultipleFunctionsFound {
@@ -103,11 +109,16 @@ impl VariableResolutionError {
 
     /// Creates a new error indicating that the parameter is undefined in the current model.
     #[must_use]
-    pub const fn undefined_parameter(parameter_name: ParameterName, reference_span: Span) -> Self {
+    pub const fn undefined_parameter(
+        parameter_name: ParameterName,
+        reference_span: Span,
+        best_match: Option<String>,
+    ) -> Self {
         Self::UndefinedParameter {
             model_path: None,
             parameter_name,
             reference_span,
+            best_match,
         }
     }
 
@@ -117,29 +128,41 @@ impl VariableResolutionError {
         reference_path: ModelPath,
         parameter_name: ParameterName,
         reference_span: Span,
+        best_match: Option<String>,
     ) -> Self {
         Self::UndefinedParameter {
             model_path: Some(reference_path),
             parameter_name,
             reference_span,
+            best_match,
         }
     }
 
     /// Creates a new error indicating that the submodel is undefined in the current model.
     #[must_use]
-    pub const fn undefined_reference(reference: ReferenceName, reference_span: Span) -> Self {
+    pub const fn undefined_reference(
+        reference: ReferenceName,
+        reference_span: Span,
+        best_match: Option<String>,
+    ) -> Self {
         Self::UndefinedReference {
             reference,
             reference_span,
+            best_match,
         }
     }
 
     /// Creates a new error indicating that the function is not defined as a builtin or in any Python import.
     #[must_use]
-    pub const fn undefined_function(function_name: String, relevant_span: Span) -> Self {
+    pub const fn undefined_function(
+        function_name: String,
+        relevant_span: Span,
+        best_match: Option<String>,
+    ) -> Self {
         Self::UndefinedFunction {
             function_name,
             relevant_span,
+            best_match,
         }
     }
 
@@ -186,8 +209,8 @@ impl fmt::Display for VariableResolutionError {
                 model_path,
                 parameter_name,
                 reference_span: _,
+                best_match: _,
             } => {
-                // TODO: add context "did you mean `{}`?" using hamming distance to suggest similar parameter names
                 let identifier_str = parameter_name.as_str();
                 match model_path {
                     Some(path) => {
@@ -206,8 +229,8 @@ impl fmt::Display for VariableResolutionError {
             Self::UndefinedReference {
                 reference,
                 reference_span: _,
+                best_match: _,
             } => {
-                // TODO: add context "did you mean `{}`?" using hamming distance to suggest similar submodel names
                 let identifier_str = reference.as_str();
                 write!(
                     f,
@@ -217,6 +240,7 @@ impl fmt::Display for VariableResolutionError {
             Self::UndefinedFunction {
                 function_name,
                 relevant_span: _,
+                best_match: _,
             } => {
                 write!(
                     f,
@@ -261,10 +285,12 @@ impl AsOneilError for VariableResolutionError {
                 model_path: _,
                 parameter_name: _,
                 reference_span,
+                best_match: _,
             }
             | Self::UndefinedReference {
                 reference: _,
                 reference_span,
+                best_match: _,
             } => {
                 let location = ErrorLocation::from_source_and_span(source, *reference_span);
                 Some(location)
@@ -272,6 +298,7 @@ impl AsOneilError for VariableResolutionError {
             Self::UndefinedFunction {
                 function_name: _,
                 relevant_span,
+                best_match: _,
             }
             | Self::MultipleFunctionsFound {
                 function_name: _,
@@ -299,20 +326,25 @@ impl AsOneilError for VariableResolutionError {
                 identifier: _,
                 reference_span: _,
             }
-            | Self::UndefinedParameter {
+            | Self::UnitResolution(_) => Vec::new(),
+            Self::UndefinedParameter {
                 model_path: _,
                 parameter_name: _,
                 reference_span: _,
+                best_match,
             }
             | Self::UndefinedReference {
                 reference: _,
                 reference_span: _,
+                best_match,
             }
             | Self::UndefinedFunction {
                 function_name: _,
                 relevant_span: _,
-            }
-            | Self::UnitResolution(_) => Vec::new(),
+                best_match,
+            } => best_match.as_ref().map_or_else(Vec::new, |best_match| {
+                vec![Context::Help(format!("did you mean `{best_match}`?"))]
+            }),
             Self::MultipleFunctionsFound {
                 function_name,
                 relevant_span: _,

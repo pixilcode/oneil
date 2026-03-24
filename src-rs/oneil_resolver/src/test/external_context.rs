@@ -193,6 +193,14 @@ impl ExternalResolutionContext for TestExternalContext {
         self.builtin_functions.contains(identifier)
     }
 
+    fn get_builtin_value_names(&self) -> impl Iterator<Item = &BuiltinValueName> {
+        self.builtin_variables.iter()
+    }
+
+    fn get_builtin_function_names(&self) -> impl Iterator<Item = &BuiltinFunctionName> {
+        self.builtin_functions.iter()
+    }
+
     fn has_builtin_unit(&self, name: &str) -> bool {
         let name = UnitBaseName::from(name);
         self.builtin_units.contains(&name)
