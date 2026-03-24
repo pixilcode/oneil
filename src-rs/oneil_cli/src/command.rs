@@ -20,6 +20,10 @@ pub struct CliCommand {
     #[command(subcommand)]
     pub command: Commands,
 
+    /// Number of significant figures to print
+    #[arg(long, default_value_t = 4)]
+    pub sig_figs: usize,
+
     /// Disable colors in the output
     ///
     /// When enabled, suppresses colored output for better compatibility with

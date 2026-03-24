@@ -7,11 +7,15 @@ use oneil_runtime::output::{
 };
 use oneil_shared::{paths::ModelPath, span::Span};
 
-use crate::{print_utils, stylesheet};
+use crate::{
+    print_utils::{self, PrintUtilsConfig},
+    stylesheet,
+};
 
 pub struct TreePrintConfig {
     pub recursive: bool,
     pub depth: Option<usize>,
+    pub print_utils_config: PrintUtilsConfig,
 }
 
 /// Prints a reference tree showing which parameters reference a given parameter.
@@ -83,7 +87,7 @@ fn print_tree_node<T: PrintableTreeValue>(
     let styled_value_name = stylesheet::TREE_VALUE_NAME.style(&value_name);
     print!("{indent}{first_prefix}");
     print!("{styled_value_name} = ");
-    print_utils::print_value(value.get_value());
+    print_utils::print_value(value.get_value(), config.print_utils_config);
     println!();
 
     // Print the parameter equation

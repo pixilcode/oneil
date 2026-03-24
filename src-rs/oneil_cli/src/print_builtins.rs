@@ -4,7 +4,10 @@ use anstream::{print, println};
 use oneil_runtime::{Runtime, output::Value};
 use oneil_shared::symbols::{BuiltinFunctionName, BuiltinValueName, UnitBaseName, UnitPrefix};
 
-use crate::{print_utils, stylesheet};
+use crate::{
+    print_utils::{self, PrintUtilsConfig},
+    stylesheet,
+};
 
 pub fn search_builtins_units(runtime: &Runtime, unit_name: &UnitBaseName) {
     let search_result = runtime
@@ -37,13 +40,17 @@ pub fn search_builtins_functions(runtime: &Runtime, function_name: &BuiltinFunct
     }
 }
 
-pub fn search_builtins_values(runtime: &Runtime, value_name: &BuiltinValueName) {
+pub fn search_builtins_values(
+    runtime: &Runtime,
+    value_name: &BuiltinValueName,
+    print_utils_config: PrintUtilsConfig,
+) {
     let search_result = runtime
         .builtin_values_docs()
         .find(|(name, _)| *name == value_name);
 
     if let Some((name, (description, value))) = search_result {
-        print_builtin_value(name, description, &value);
+        print_builtin_value(name, description, &value, print_utils_config);
     } else {
         let msg = format!("No builtin value found for \"{}\"", value_name.as_str());
         let msg = stylesheet::BUILTIN_NOT_FOUND.style(msg);
@@ -65,8 +72,8 @@ pub fn search_builtins_prefixes(runtime: &Runtime, prefix_name: &UnitPrefix) {
     }
 }
 
-pub fn print_builtins_all(runtime: &Runtime) {
-    print_builtins_values(runtime);
+pub fn print_builtins_all(runtime: &Runtime, print_utils_config: PrintUtilsConfig) {
+    print_builtins_values(runtime, print_utils_config);
     println!();
     print_builtins_prefixes(runtime);
     println!();
@@ -121,20 +128,25 @@ fn print_builtin_function(name: &BuiltinFunctionName, args: &[&str], description
     println!();
 }
 
-pub fn print_builtins_values(runtime: &Runtime) {
+pub fn print_builtins_values(runtime: &Runtime, print_utils_config: PrintUtilsConfig) {
     let header = stylesheet::BUILTIN_SECTION_HEADER.style("Builtin Values:");
     println!("{header}");
     println!();
 
     for (name, (description, value)) in runtime.builtin_values_docs() {
-        print_builtin_value(name, description, &value);
+        print_builtin_value(name, description, &value, print_utils_config);
     }
 }
 
-fn print_builtin_value(name: &BuiltinValueName, description: &str, value: &Value) {
+fn print_builtin_value(
+    name: &BuiltinValueName,
+    description: &str,
+    value: &Value,
+    print_utils_config: PrintUtilsConfig,
+) {
     let styled_name = stylesheet::BUILTIN_NAME.style(name.as_str());
     print!("  {styled_name} = ");
-    print_utils::print_value(value);
+    print_utils::print_value(value, print_utils_config);
     println!();
     let styled_description = stylesheet::BUILTIN_DESCRIPTION.style(description);
     println!("    {styled_description}");

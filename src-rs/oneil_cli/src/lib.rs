@@ -36,6 +36,7 @@ use crate::{
     print_independents::IndependentPrintConfig,
     print_model_result::{ModelPrintConfig, TestPrintConfig},
     print_tree::TreePrintConfig,
+    print_utils::PrintUtilsConfig,
 };
 
 mod command;
@@ -65,17 +66,19 @@ pub fn main() {
     #[cfg(feature = "python")]
     load_python_venv::try_load_venv(cli.venv_path.as_deref());
 
+    let sig_figs = cli.sig_figs;
+
     match cli.command {
         Commands::Lsp {} => {
             oneil_lsp::run();
         }
         Commands::Dev { command } => handle_dev_command(command, cli.dev_show_internal_errors),
-        Commands::Eval(args) => handle_eval_command(args, cli.dev_show_internal_errors),
-        Commands::Test(args) => handle_test_command(args, cli.dev_show_internal_errors),
-        Commands::Tree(args) => handle_tree_command(args, cli.dev_show_internal_errors),
-        Commands::Builtins { command } => handle_builtins_command(command),
+        Commands::Eval(args) => handle_eval_command(args, cli.dev_show_internal_errors, sig_figs),
+        Commands::Test(args) => handle_test_command(args, cli.dev_show_internal_errors, sig_figs),
+        Commands::Tree(args) => handle_tree_command(args, cli.dev_show_internal_errors, sig_figs),
+        Commands::Builtins { command } => handle_builtins_command(command, sig_figs),
         Commands::Independent(args) => {
-            handle_independent_command(args, cli.dev_show_internal_errors);
+            handle_independent_command(args, cli.dev_show_internal_errors, sig_figs);
         }
     }
 }
@@ -351,7 +354,7 @@ fn handle_print_model_result(
     }
 }
 
-fn handle_eval_command(args: EvalArgs, show_internal_errors: bool) {
+fn handle_eval_command(args: EvalArgs, show_internal_errors: bool, sig_figs: usize) {
     let EvalArgs {
         file,
         params: variables,
@@ -374,6 +377,7 @@ fn handle_eval_command(args: EvalArgs, show_internal_errors: bool) {
         no_header,
         no_test_report,
         no_parameters,
+        print_utils_config: PrintUtilsConfig { sig_figs },
     };
 
     if watch {
@@ -571,7 +575,7 @@ fn clear_screen() {
     std::io::stdout().flush().expect("failed to flush stdout");
 }
 
-fn handle_test_command(args: TestArgs, show_internal_errors: bool) {
+fn handle_test_command(args: TestArgs, show_internal_errors: bool, sig_figs: usize) {
     let TestArgs {
         file,
         recursive,
@@ -586,6 +590,7 @@ fn handle_test_command(args: TestArgs, show_internal_errors: bool) {
         recursive,
         display_partial_results,
         show_internal_errors,
+        print_utils_config: PrintUtilsConfig { sig_figs },
     };
 
     let mut runtime = Runtime::new();
@@ -604,7 +609,7 @@ fn handle_test_command(args: TestArgs, show_internal_errors: bool) {
     }
 }
 
-fn handle_tree_command(args: TreeArgs, show_internal_errors: bool) {
+fn handle_tree_command(args: TreeArgs, show_internal_errors: bool, sig_figs: usize) {
     enum TreeResults {
         ReferenceTrees(Vec<(ParameterName, Option<Tree<ReferenceTreeValue>>)>),
         DependencyTrees(Vec<(ParameterName, Option<Tree<DependencyTreeValue>>)>),
@@ -619,7 +624,11 @@ fn handle_tree_command(args: TreeArgs, show_internal_errors: bool) {
         partial: display_partial_results,
     } = args;
 
-    let tree_print_config = TreePrintConfig { recursive, depth };
+    let tree_print_config = TreePrintConfig {
+        recursive,
+        depth,
+        print_utils_config: PrintUtilsConfig { sig_figs },
+    };
 
     let mut runtime = Runtime::new();
 
@@ -706,10 +715,13 @@ fn print_param_not_found(param: &ParameterName) {
     eprintln!("{error_label} parameter \"{param_name}\" not found in model");
 }
 
-fn handle_builtins_command(command: Option<BuiltinsCommand>) {
+fn handle_builtins_command(command: Option<BuiltinsCommand>, sig_figs: usize) {
     let runtime = Runtime::new();
+    let print_utils_config = PrintUtilsConfig { sig_figs };
     match command {
-        None | Some(BuiltinsCommand::All) => print_builtins::print_builtins_all(&runtime),
+        None | Some(BuiltinsCommand::All) => {
+            print_builtins::print_builtins_all(&runtime, print_utils_config);
+        }
         Some(BuiltinsCommand::Units {
             unit_name: Some(unit_name),
         }) => print_builtins::search_builtins_units(&runtime, &unit_name),
@@ -724,9 +736,9 @@ fn handle_builtins_command(command: Option<BuiltinsCommand>) {
         }) => print_builtins::print_builtins_functions(&runtime),
         Some(BuiltinsCommand::Values {
             value_name: Some(value_name),
-        }) => print_builtins::search_builtins_values(&runtime, &value_name),
+        }) => print_builtins::search_builtins_values(&runtime, &value_name, print_utils_config),
         Some(BuiltinsCommand::Values { value_name: None }) => {
-            print_builtins::print_builtins_values(&runtime);
+            print_builtins::print_builtins_values(&runtime, print_utils_config);
         }
         Some(BuiltinsCommand::Prefixes {
             prefix_name: Some(prefix_name),
@@ -737,7 +749,7 @@ fn handle_builtins_command(command: Option<BuiltinsCommand>) {
     }
 }
 
-fn handle_independent_command(args: IndependentArgs, show_internal_errors: bool) {
+fn handle_independent_command(args: IndependentArgs, show_internal_errors: bool, sig_figs: usize) {
     let IndependentArgs {
         file,
         recursive,
@@ -748,6 +760,7 @@ fn handle_independent_command(args: IndependentArgs, show_internal_errors: bool)
     let independent_print_config = IndependentPrintConfig {
         print_values,
         recursive,
+        print_utils_config: crate::print_utils::PrintUtilsConfig { sig_figs },
     };
 
     let mut runtime = Runtime::new();

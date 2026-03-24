@@ -5,11 +5,15 @@ use indexmap::IndexMap;
 use oneil_runtime::output::{Independents, Value};
 use oneil_shared::{paths::ModelPath, symbols::ParameterName};
 
-use crate::{print_utils, stylesheet};
+use crate::{
+    print_utils::{self, PrintUtilsConfig},
+    stylesheet,
+};
 
 pub struct IndependentPrintConfig {
     pub print_values: bool,
     pub recursive: bool,
+    pub print_utils_config: PrintUtilsConfig,
 }
 
 /// Prints all independent parameters from the model result.
@@ -51,17 +55,17 @@ fn print_model_independents(
     config: &IndependentPrintConfig,
 ) {
     for (name, value) in independent_params {
-        print_parameter(name, value, config.print_values);
+        print_parameter(name, value, config);
     }
 }
 
 /// Prints a single parameter.
-fn print_parameter(name: &ParameterName, value: &Value, print_values: bool) {
+fn print_parameter(name: &ParameterName, value: &Value, config: &IndependentPrintConfig) {
     let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(name.as_str());
 
-    if print_values {
+    if config.print_values {
         print!("{styled_ident} = ");
-        print_utils::print_value(value);
+        print_utils::print_value(value, config.print_utils_config);
     } else {
         print!("{styled_ident}");
     }
