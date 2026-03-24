@@ -371,10 +371,13 @@ impl fmt::Display for DisplayUnit {
                     write!(f, "^{exponent}")?;
                 }
             }
+            Self::Multiply(left, right) if **left == Self::One => write!(f, "{right}")?,
+            Self::Multiply(left, right) if **right == Self::One => write!(f, "{left}")?,
             Self::Multiply(left, right) => write!(f, "{left}*{right}")?,
             Self::Divide(left, right) => match **right {
                 Self::Multiply(_, _) | Self::Divide(_, _) => write!(f, "{left}/({right})")?,
-                Self::One | Self::Unit { .. } | Self::Power { .. } => {
+                Self::One => write!(f, "{left}")?,
+                Self::Unit { .. } | Self::Power { .. } => {
                     write!(f, "{left}/{right}")?;
                 }
             },
