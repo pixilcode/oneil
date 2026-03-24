@@ -66,17 +66,11 @@ fn print_expr_results(expr_results: &IndexMap<&str, Value>, print_utils_config: 
     }
 }
 
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "this is a configuration struct for printing test results"
-)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestPrintConfig {
     pub no_header: bool,
     pub no_test_report: bool,
     pub recursive: bool,
-    pub display_partial_results: bool,
-    pub show_internal_errors: bool,
     pub print_utils_config: PrintUtilsConfig,
 }
 

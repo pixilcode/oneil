@@ -28,8 +28,8 @@ use oneil_shared::{
 
 use crate::{
     command::{
-        BuiltinsCommand, CliCommand, Commands, DevCommand, EvalArgs, IndependentArgs,
-        IrIncludeSection, ModelResultIncludeSection, TestArgs, TreeArgs,
+        BuiltinsCommand, CliCommand, Commands, CommonArgs, DevCommand, EvalArgs, IndependentArgs,
+        IrIncludeSection, LspArgs, ModelResultIncludeSection, TestArgs, TreeArgs,
     },
     print_debug_ast::AstPrintConfig,
     print_debug_ir::IrPrintConfig,
@@ -61,40 +61,42 @@ pub fn main() {
 
     let cli = CliCommand::parse();
 
-    set_color_choice(cli.no_colors);
+    // handle common args
+    let common_args = cli.get_common_args();
+    apply_common_side_effects(common_args);
 
-    #[cfg(feature = "python")]
-    load_python_venv::try_load_venv(cli.venv_path.as_deref());
-
-    let sig_figs = cli.sig_figs;
-
-    match cli.command {
-        Commands::Lsp {} => {
-            oneil_lsp::run();
-        }
-        Commands::Dev { command } => handle_dev_command(command, cli.dev_show_internal_errors),
-        Commands::Eval(args) => handle_eval_command(args, cli.dev_show_internal_errors, sig_figs),
-        Commands::Test(args) => handle_test_command(args, cli.dev_show_internal_errors, sig_figs),
-        Commands::Tree(args) => handle_tree_command(args, cli.dev_show_internal_errors, sig_figs),
-        Commands::Builtins { command } => handle_builtins_command(command, sig_figs),
-        Commands::Independent(args) => {
-            handle_independent_command(args, cli.dev_show_internal_errors, sig_figs);
-        }
+    match cli.get_command() {
+        Commands::Eval(eval_args) => handle_eval_command(eval_args),
+        Commands::Test(test_args) => handle_test_command(test_args),
+        Commands::Tree(tree_args) => handle_tree_command(tree_args),
+        Commands::Builtins(builtins_args) => handle_builtins_command(builtins_args.get_command()),
+        Commands::Independent(independent_args) => handle_independent_command(independent_args),
+        Commands::Lsp(lsp_args) => handle_lsp_command(lsp_args),
+        Commands::Dev(dev_command) => handle_dev_command(dev_command),
     }
 }
 
-fn handle_dev_command(command: DevCommand, show_internal_errors: bool) {
+fn handle_lsp_command(args: LspArgs) {
+    let LspArgs { common } = args;
+    // TODO: figure out how to handle common args for the LSP
+    let _ = common;
+    oneil_lsp::run();
+}
+
+fn handle_dev_command(command: DevCommand) {
     match command {
         DevCommand::PrintAst {
             files,
             partial: display_partial,
-        } => handle_print_ast(&files, display_partial, show_internal_errors),
+            common,
+        } => handle_print_ast(&files, display_partial, common.dev_show_internal_errors),
         DevCommand::PrintIr {
             file,
             partial: display_partial,
             recursive,
             include,
             no_values,
+            common,
         } => {
             let sections = ir_sections_from_include(include.as_deref());
             handle_print_ir(
@@ -103,7 +105,7 @@ fn handle_dev_command(command: DevCommand, show_internal_errors: bool) {
                 recursive,
                 &sections,
                 no_values,
-                show_internal_errors,
+                common.dev_show_internal_errors,
             );
         }
         DevCommand::PrintModelResult {
@@ -112,6 +114,7 @@ fn handle_dev_command(command: DevCommand, show_internal_errors: bool) {
             recursive,
             include,
             no_values,
+            common,
         } => {
             let sections = model_result_sections_from_include(include.as_deref());
             handle_print_model_result(
@@ -120,14 +123,21 @@ fn handle_dev_command(command: DevCommand, show_internal_errors: bool) {
                 recursive,
                 &sections,
                 no_values,
-                show_internal_errors,
+                common.dev_show_internal_errors,
             );
         }
         #[cfg(feature = "python")]
-        DevCommand::PrintPythonImports { files } => {
-            handle_print_python_imports(&files, show_internal_errors);
+        DevCommand::PrintPythonImports { files, common } => {
+            handle_print_python_imports(&files, common.dev_show_internal_errors);
         }
     }
+}
+
+fn apply_common_side_effects(common_args: &CommonArgs) {
+    set_color_choice(common_args.no_colors);
+
+    #[cfg(feature = "python")]
+    load_python_venv::try_load_venv(common_args.venv_path.as_deref());
 }
 
 /// Handles the `dev print-python-imports` command.
@@ -354,7 +364,7 @@ fn handle_print_model_result(
     }
 }
 
-fn handle_eval_command(args: EvalArgs, show_internal_errors: bool, sig_figs: usize) {
+fn handle_eval_command(args: EvalArgs) {
     let EvalArgs {
         file,
         params: variables,
@@ -367,7 +377,14 @@ fn handle_eval_command(args: EvalArgs, show_internal_errors: bool, sig_figs: usi
         no_header,
         no_test_report,
         no_parameters,
+        common,
     } = args;
+
+    let file = file.expect("file should be provided since it is required");
+
+    let print_utils_config = PrintUtilsConfig {
+        sig_figs: common.sig_figs,
+    };
 
     let model_print_config = ModelPrintConfig {
         print_mode,
@@ -377,14 +394,14 @@ fn handle_eval_command(args: EvalArgs, show_internal_errors: bool, sig_figs: usi
         no_header,
         no_test_report,
         no_parameters,
-        print_utils_config: PrintUtilsConfig { sig_figs },
+        print_utils_config,
     };
 
     if watch {
         watch_model(
             &file,
             &eval_expressions,
-            show_internal_errors,
+            common.dev_show_internal_errors,
             display_partial_results,
             &model_print_config,
         );
@@ -394,7 +411,7 @@ fn handle_eval_command(args: EvalArgs, show_internal_errors: bool, sig_figs: usi
         eval_and_print_model(
             &file,
             &eval_expressions,
-            show_internal_errors,
+            common.dev_show_internal_errors,
             display_partial_results,
             &model_print_config,
             &mut runtime,
@@ -575,29 +592,32 @@ fn clear_screen() {
     std::io::stdout().flush().expect("failed to flush stdout");
 }
 
-fn handle_test_command(args: TestArgs, show_internal_errors: bool, sig_figs: usize) {
+fn handle_test_command(args: TestArgs) {
     let TestArgs {
         file,
         recursive,
         partial: display_partial_results,
         no_header,
         no_test_report,
+        common,
     } = args;
+
+    let print_utils_config = PrintUtilsConfig {
+        sig_figs: common.sig_figs,
+    };
 
     let test_print_config = TestPrintConfig {
         no_header,
         no_test_report,
         recursive,
-        display_partial_results,
-        show_internal_errors,
-        print_utils_config: PrintUtilsConfig { sig_figs },
+        print_utils_config,
     };
 
     let mut runtime = Runtime::new();
     let (model_opt, errors) = runtime.eval_model(&file);
 
     for error in errors.to_vec() {
-        print_error::print(error, show_internal_errors);
+        print_error::print(error, common.dev_show_internal_errors);
     }
 
     if !errors.is_empty() && !display_partial_results {
@@ -609,7 +629,7 @@ fn handle_test_command(args: TestArgs, show_internal_errors: bool, sig_figs: usi
     }
 }
 
-fn handle_tree_command(args: TreeArgs, show_internal_errors: bool, sig_figs: usize) {
+fn handle_tree_command(args: TreeArgs) {
     enum TreeResults {
         ReferenceTrees(Vec<(ParameterName, Option<Tree<ReferenceTreeValue>>)>),
         DependencyTrees(Vec<(ParameterName, Option<Tree<DependencyTreeValue>>)>),
@@ -622,12 +642,17 @@ fn handle_tree_command(args: TreeArgs, show_internal_errors: bool, sig_figs: usi
         recursive,
         depth,
         partial: display_partial_results,
+        common,
     } = args;
+
+    let print_utils_config = PrintUtilsConfig {
+        sig_figs: common.sig_figs,
+    };
 
     let tree_print_config = TreePrintConfig {
         recursive,
         depth,
-        print_utils_config: PrintUtilsConfig { sig_figs },
+        print_utils_config,
     };
 
     let mut runtime = Runtime::new();
@@ -661,7 +686,7 @@ fn handle_tree_command(args: TreeArgs, show_internal_errors: bool, sig_figs: usi
     let errors_vec = errors.to_vec();
 
     for error in &errors_vec {
-        print_error::print(error, show_internal_errors);
+        print_error::print(error, common.dev_show_internal_errors);
         eprintln!();
     }
 
@@ -715,59 +740,88 @@ fn print_param_not_found(param: &ParameterName) {
     eprintln!("{error_label} parameter \"{param_name}\" not found in model");
 }
 
-fn handle_builtins_command(command: Option<BuiltinsCommand>, sig_figs: usize) {
+fn handle_builtins_command(command: BuiltinsCommand) {
     let runtime = Runtime::new();
-    let print_utils_config = PrintUtilsConfig { sig_figs };
     match command {
-        None | Some(BuiltinsCommand::All) => {
+        BuiltinsCommand::All { common } => {
+            let print_utils_config = PrintUtilsConfig {
+                sig_figs: common.sig_figs,
+            };
             print_builtins::print_builtins_all(&runtime, print_utils_config);
         }
-        Some(BuiltinsCommand::Units {
+        BuiltinsCommand::Units {
             unit_name: Some(unit_name),
-        }) => print_builtins::search_builtins_units(&runtime, &unit_name),
-        Some(BuiltinsCommand::Units { unit_name: None }) => {
+            common: _,
+        } => print_builtins::search_builtins_units(&runtime, &unit_name),
+        BuiltinsCommand::Units {
+            unit_name: None,
+            common: _,
+        } => {
             print_builtins::print_builtins_units(&runtime);
         }
-        Some(BuiltinsCommand::Functions {
+        BuiltinsCommand::Functions {
             function_name: Some(function_name),
-        }) => print_builtins::search_builtins_functions(&runtime, &function_name),
-        Some(BuiltinsCommand::Functions {
+            common: _,
+        } => print_builtins::search_builtins_functions(&runtime, &function_name),
+        BuiltinsCommand::Functions {
             function_name: None,
-        }) => print_builtins::print_builtins_functions(&runtime),
-        Some(BuiltinsCommand::Values {
+            common: _,
+        } => print_builtins::print_builtins_functions(&runtime),
+        BuiltinsCommand::Values {
             value_name: Some(value_name),
-        }) => print_builtins::search_builtins_values(&runtime, &value_name, print_utils_config),
-        Some(BuiltinsCommand::Values { value_name: None }) => {
+            common,
+        } => {
+            let print_utils_config = PrintUtilsConfig {
+                sig_figs: common.sig_figs,
+            };
+            print_builtins::search_builtins_values(&runtime, &value_name, print_utils_config);
+        }
+        BuiltinsCommand::Values {
+            value_name: None,
+            common,
+        } => {
+            let print_utils_config = PrintUtilsConfig {
+                sig_figs: common.sig_figs,
+            };
             print_builtins::print_builtins_values(&runtime, print_utils_config);
         }
-        Some(BuiltinsCommand::Prefixes {
+        BuiltinsCommand::Prefixes {
             prefix_name: Some(prefix_name),
-        }) => print_builtins::search_builtins_prefixes(&runtime, &prefix_name),
-        Some(BuiltinsCommand::Prefixes { prefix_name: None }) => {
+            common: _,
+        } => print_builtins::search_builtins_prefixes(&runtime, &prefix_name),
+        BuiltinsCommand::Prefixes {
+            prefix_name: None,
+            common: _,
+        } => {
             print_builtins::print_builtins_prefixes(&runtime);
         }
     }
 }
 
-fn handle_independent_command(args: IndependentArgs, show_internal_errors: bool, sig_figs: usize) {
+fn handle_independent_command(args: IndependentArgs) {
     let IndependentArgs {
         file,
         recursive,
         values: print_values,
         partial: display_partial_results,
+        common,
     } = args;
+
+    let print_utils_config = PrintUtilsConfig {
+        sig_figs: common.sig_figs,
+    };
 
     let independent_print_config = IndependentPrintConfig {
         print_values,
         recursive,
-        print_utils_config: crate::print_utils::PrintUtilsConfig { sig_figs },
+        print_utils_config,
     };
 
     let mut runtime = Runtime::new();
     let (independents, errors) = runtime.get_independents(&file);
 
     for error in errors.to_vec() {
-        print_error::print(error, show_internal_errors);
+        print_error::print(error, common.dev_show_internal_errors);
     }
 
     if !errors.is_empty() && !display_partial_results {

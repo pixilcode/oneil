@@ -15,11 +15,43 @@ use std::{fmt, path::Path, str};
 #[derive(Parser)]
 #[command(name = "oneil")]
 #[command(version, about = "Oneil language tooling", long_about = None)]
+#[clap(args_conflicts_with_subcommands = true)]
 pub struct CliCommand {
     /// The subcommand to execute
     #[command(subcommand)]
-    pub command: Commands,
+    command: Option<Commands>,
 
+    /// When no subcommand is given, arguments are parsed as for `oneil eval`.
+    #[command(flatten)]
+    default_eval: EvalArgs,
+}
+
+impl CliCommand {
+    pub const fn get_common_args(&self) -> &CommonArgs {
+        match &self.command {
+            Some(Commands::Eval(args)) => &args.common,
+            Some(Commands::Test(args)) => &args.common,
+            Some(Commands::Tree(args)) => &args.common,
+            Some(Commands::Builtins(args)) => args.get_common_args(),
+            Some(Commands::Independent(args)) => &args.common,
+            Some(Commands::Lsp(args)) => &args.common,
+            Some(Commands::Dev(args)) => args.get_common_args(),
+            None => &self.default_eval.common,
+        }
+    }
+
+    /// Builds a [`Commands`] value, treating the default-eval parse as [`Commands::Eval`].
+    pub fn get_command(&self) -> Commands {
+        self.command.as_ref().map_or_else(
+            || Commands::Eval(self.default_eval.clone()),
+            Commands::clone,
+        )
+    }
+}
+
+/// Flags shared by every top-level CLI subcommand.
+#[derive(Args, Clone, Debug, PartialEq, Eq)]
+pub struct CommonArgs {
     /// Number of significant figures to print
     #[arg(long, default_value_t = 4)]
     pub sig_figs: usize,
@@ -46,7 +78,7 @@ pub struct CliCommand {
 }
 
 /// Available top-level commands for the Oneil CLI
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum Commands {
     /// Evaluate an Oneil model
     #[clap(visible_alias = "e")]
@@ -60,17 +92,13 @@ pub enum Commands {
     Tree(TreeArgs),
 
     /// Print the builtins for the Oneil language
-    Builtins {
-        /// The builtins to print
-        #[command(subcommand)]
-        command: Option<BuiltinsCommand>,
-    },
+    Builtins(BuiltinsArgs),
 
     /// Print the independent parameters in a model
     Independent(IndependentArgs),
 
     /// Run the LSP
-    Lsp {},
+    Lsp(LspArgs),
 
     /// Development tools for debugging and testing Oneil source files
     ///
@@ -78,22 +106,34 @@ pub enum Commands {
     /// from the help output. However, they can still be used. See `oneil dev --help`
     /// for more information.
     #[clap(hide = true)]
-    Dev {
-        /// The specific development command to execute
-        #[command(subcommand)]
-        command: DevCommand,
-    },
+    #[command(subcommand)]
+    Dev(DevCommand),
+}
+
+/// Arguments for `oneil lsp`.
+#[derive(Args, Clone)]
+pub struct LspArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
 }
 
 #[expect(
     clippy::struct_excessive_bools,
     reason = "this is a configuration struct for evaluating a model"
 )]
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct EvalArgs {
     /// Path to the Oneil model file to evaluate
-    #[arg(value_name = "FILE", value_parser = parse_model_path)]
-    pub file: ModelPath,
+    //
+    // This needs to be an `Option` and marked as required
+    // because it is the default when no subcommand is given,
+    // but if a subcommand is given, `EvalArgs` needs to have
+    // a default value for each field.
+    //
+    // See https://github.com/clap-rs/clap/issues/3857#issuecomment-1239419407
+    // for more information.
+    #[arg(value_name = "FILE", value_parser = parse_model_path, required = true)]
+    pub file: Option<ModelPath>,
 
     /// When provided, selects which parameters to print
     ///
@@ -182,13 +222,16 @@ pub struct EvalArgs {
     /// Note that this overrides the `--params` and `--print-mode` options.
     #[arg(long)]
     pub no_parameters: bool,
+
+    #[command(flatten)]
+    pub common: CommonArgs,
 }
 
 #[expect(
     clippy::struct_excessive_bools,
     reason = "this is a configuration struct for running tests in a model"
 )]
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct TestArgs {
     /// Path to the Oneil model file to run tests in
     #[arg(value_name = "FILE", value_parser = parse_model_path)]
@@ -215,9 +258,12 @@ pub struct TestArgs {
     /// Don't print the test report
     #[arg(long)]
     pub no_test_report: bool,
+
+    #[command(flatten)]
+    pub common: CommonArgs,
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct TreeArgs {
     /// Path to the Oneil model file to print the tree for
     #[arg(value_name = "FILE", value_parser = parse_model_path)]
@@ -255,6 +301,46 @@ pub struct TreeArgs {
     /// then the partial trees will be printed.
     #[arg(long)]
     pub partial: bool,
+
+    #[command(flatten)]
+    pub common: CommonArgs,
+}
+
+/// Arguments for `oneil builtins`.
+#[derive(Args, Clone)]
+#[clap(args_conflicts_with_subcommands = true)]
+pub struct BuiltinsArgs {
+    /// The builtins to print
+    #[command(subcommand)]
+    pub command: Option<BuiltinsCommand>,
+
+    /// When no subcommand is given, only common flags apply; behavior matches `builtins all`.
+    #[command(flatten)]
+    pub default_common: CommonArgs,
+}
+
+impl BuiltinsArgs {
+    pub const fn get_common_args(&self) -> &CommonArgs {
+        match &self.command {
+            Some(
+                BuiltinsCommand::All { common }
+                | BuiltinsCommand::Units { common, .. }
+                | BuiltinsCommand::Functions { common, .. }
+                | BuiltinsCommand::Values { common, .. }
+                | BuiltinsCommand::Prefixes { common, .. },
+            ) => common,
+            None => &self.default_common,
+        }
+    }
+
+    pub fn get_command(&self) -> BuiltinsCommand {
+        self.command.as_ref().map_or_else(
+            || BuiltinsCommand::All {
+                common: self.default_common.clone(),
+            },
+            BuiltinsCommand::clone,
+        )
+    }
 }
 
 /// Available subcommands for the `Builtins` command
@@ -262,7 +348,10 @@ pub struct TreeArgs {
 pub enum BuiltinsCommand {
     /// Print all the builtins
     #[command(name = "all")]
-    All,
+    All {
+        #[command(flatten)]
+        common: CommonArgs,
+    },
 
     /// Print the builtin units or search for a specific unit
     #[command(name = "unit")]
@@ -270,6 +359,9 @@ pub enum BuiltinsCommand {
         /// The unit to search for
         #[arg(value_name = "UNIT")]
         unit_name: Option<UnitBaseName>,
+
+        #[command(flatten)]
+        common: CommonArgs,
     },
 
     /// Print the builtin functions or search for a specific function
@@ -278,6 +370,9 @@ pub enum BuiltinsCommand {
         /// The function to search for
         #[arg(value_name = "FUNCTION")]
         function_name: Option<BuiltinFunctionName>,
+
+        #[command(flatten)]
+        common: CommonArgs,
     },
 
     /// Print the builtin values or search for a specific value
@@ -286,6 +381,9 @@ pub enum BuiltinsCommand {
         /// The value to search for
         #[arg(value_name = "VALUE")]
         value_name: Option<BuiltinValueName>,
+
+        #[command(flatten)]
+        common: CommonArgs,
     },
 
     /// Print the builtin unit prefixes or search for a specific prefix
@@ -294,10 +392,13 @@ pub enum BuiltinsCommand {
         /// The prefix to search for
         #[arg(value_name = "PREFIX")]
         prefix_name: Option<UnitPrefix>,
+
+        #[command(flatten)]
+        common: CommonArgs,
     },
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct IndependentArgs {
     /// Path to the Oneil model file to print the independent parameters for
     #[arg(value_name = "FILE", value_parser = parse_model_path)]
@@ -317,6 +418,9 @@ pub struct IndependentArgs {
     /// then the partial results will be printed.
     #[arg(long)]
     pub partial: bool,
+
+    #[command(flatten)]
+    pub common: CommonArgs,
 }
 
 /// Development-specific commands for the Oneil CLI
@@ -324,7 +428,7 @@ pub struct IndependentArgs {
     clippy::enum_variant_names,
     reason = "the names are descriptive and just happen to start with the same word; in the future, other commands may be added that don't start with the same word"
 )]
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum DevCommand {
     /// Print the Abstract Syntax Tree (AST) of a Oneil source file
     PrintAst {
@@ -338,6 +442,9 @@ pub enum DevCommand {
         /// parsed. Useful for debugging incomplete or malformed code.
         #[arg(long)]
         partial: bool,
+
+        #[command(flatten)]
+        common: CommonArgs,
     },
     /// Print the Intermediate Representation (IR) of a Oneil source file
     PrintIr {
@@ -369,6 +476,9 @@ pub enum DevCommand {
         /// Omit parameter values, limits, and test expressions from the output
         #[arg(long)]
         no_values: bool,
+
+        #[command(flatten)]
+        common: CommonArgs,
     },
     /// Print the results of evaluating an Oneil model
     ///
@@ -403,6 +513,9 @@ pub enum DevCommand {
         /// Omit parameter values from the output
         #[arg(long)]
         no_values: bool,
+
+        #[command(flatten)]
+        common: CommonArgs,
     },
     /// Print Python imports from Oneil source file(s)
     #[cfg(feature = "python")]
@@ -410,7 +523,22 @@ pub enum DevCommand {
         /// Path(s) to the Oneil source file(s) to inspect
         #[arg(value_name = "FILE", num_args = 1.., value_parser = parse_python_path)]
         files: Vec<PythonPath>,
+
+        #[command(flatten)]
+        common: CommonArgs,
     },
+}
+
+impl DevCommand {
+    pub const fn get_common_args(&self) -> &CommonArgs {
+        match self {
+            Self::PrintAst { common, .. }
+            | Self::PrintIr { common, .. }
+            | Self::PrintModelResult { common, .. } => common,
+            #[cfg(feature = "python")]
+            Self::PrintPythonImports { common, .. } => common,
+        }
+    }
 }
 
 /// Section of the IR that can be selected for `dev print-ir --include`.
