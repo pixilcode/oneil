@@ -1,6 +1,7 @@
 //! Shared printing utilities for the Oneil CLI
 
 use anstream::print;
+use oneil_output::util::float_to_string;
 use oneil_runtime::output::{Number, Unit, Value};
 
 use crate::stylesheet;
@@ -28,13 +29,16 @@ pub fn print_value(value: &Value, config: PrintUtilsConfig) {
 pub fn print_number_value(value: &Number, config: PrintUtilsConfig) {
     let sig_figs = config.sig_figs;
     match value {
-        Number::Scalar(scalar) => print!("{scalar:.sig_figs$}"),
+        Number::Scalar(scalar) => {
+            let value = float_to_string(*scalar, sig_figs);
+            print!("{value}");
+        }
         Number::Interval(interval) if interval.is_empty() => print!("<empty interval>"),
-        Number::Interval(interval) => print!(
-            "{:.sig_figs$} | {:.sig_figs$}",
-            interval.min(),
-            interval.max()
-        ),
+        Number::Interval(interval) => {
+            let min = float_to_string(interval.min(), sig_figs);
+            let max = float_to_string(interval.max(), sig_figs);
+            print!("{min} | {max}");
+        }
     }
 }
 

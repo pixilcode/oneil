@@ -718,6 +718,7 @@ dependencies = [
  "indexmap",
  "notify",
  "oneil_lsp",
+ "oneil_output",
  "oneil_runtime",
  "oneil_shared",
  "owo-colors",

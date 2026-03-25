@@ -2,7 +2,10 @@
 
 use std::{fmt, ops};
 
-use crate::{Interval, NumberType, util::is_close};
+use crate::{
+    Interval, NumberType,
+    util::{DEFAULT_SIG_FIGS, float_to_string, is_close},
+};
 
 /// A number value in Oneil.
 ///
@@ -494,8 +497,15 @@ impl ops::Rem for Number {
 impl fmt::Display for Number {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Scalar(value) => write!(f, "{value}"),
-            Self::Interval(interval) => write!(f, "{} | {}", interval.min(), interval.max()),
+            Self::Scalar(value) => {
+                let value = float_to_string(*value, DEFAULT_SIG_FIGS);
+                write!(f, "{value}")
+            }
+            Self::Interval(interval) => {
+                let min = float_to_string(interval.min(), DEFAULT_SIG_FIGS);
+                let max = float_to_string(interval.max(), DEFAULT_SIG_FIGS);
+                write!(f, "{min} | {max}")
+            }
         }
     }
 }
