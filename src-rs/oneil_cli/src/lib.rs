@@ -638,7 +638,8 @@ fn handle_tree_command(args: TreeArgs) {
     let TreeArgs {
         file,
         params,
-        list_refs,
+        up,
+        down: _, // down is ignored since it is the default behavior anyway
         recursive,
         depth,
         partial: display_partial_results,
@@ -657,7 +658,7 @@ fn handle_tree_command(args: TreeArgs) {
 
     let mut runtime = Runtime::new();
 
-    let (trees, errors) = if list_refs {
+    let (trees, errors) = if up {
         let mut trees = Vec::new();
         let mut errors = RuntimeErrors::new();
 

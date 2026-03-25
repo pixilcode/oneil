@@ -263,6 +263,10 @@ pub struct TestArgs {
     pub common: CommonArgs,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "this is a configuration struct for printing a tree of parameters"
+)]
 #[derive(Args, Clone)]
 pub struct TreeArgs {
     /// Path to the Oneil model file to print the tree for
@@ -273,13 +277,19 @@ pub struct TreeArgs {
     #[arg(value_name = "PARAM", required = true)]
     pub params: Vec<ParameterName>,
 
-    /// Print the tree of parameter references
+    /// Print the tree of parameters that reference the given parameters
     ///
-    /// By default, the tree printed represents the dependencies
-    /// of the provided parameters. When enabled, the tree instead
-    /// represents parameters where the provided parameters are referenced.
-    #[arg(long)]
-    pub list_refs: bool,
+    /// Cannot be used with `--down`.
+    #[arg(long, conflicts_with = "down")]
+    pub up: bool,
+
+    /// Print the tree of dependencies of the given parameters
+    ///
+    /// This is the default when neither `--up` nor `--down` is given.
+    ///
+    /// Cannot be used with `--up`.
+    #[arg(long, conflicts_with = "up")]
+    pub down: bool,
 
     /// Print submodel values in the tree
     ///
