@@ -16,10 +16,7 @@ use oneil_shared::{
 use oneil_shared::{paths::PythonPath, symbols::PyFunctionName};
 
 use super::Runtime;
-use crate::{
-    error::RuntimeUnitConversionError,
-    output::{self, error::RuntimeErrors, ir},
-};
+use crate::output::{self, error::RuntimeErrors, ir};
 
 type EvalModelAndExpressionsResult<'runtime, 'expr> = (
     Option<(
@@ -129,12 +126,7 @@ impl Runtime {
         let mut results = IndexMap::new();
         let mut errors = Vec::new();
 
-        for (index, full_expression) in expressions.iter().enumerate() {
-            let ExprRequest {
-                expression,
-                target_unit,
-            } = parse_expr_request(full_expression);
-
+        for (index, expression) in expressions.iter().enumerate() {
             // a pseudo path for the expression, to be used for error reporting
             // this is not a real path, but it is a unique path for the expression
             let pseudo_path = format!("/oneil-eval/expr-{index}");
@@ -144,7 +136,7 @@ impl Runtime {
                 Ok(expr_ast) => expr_ast,
                 Err(error) => {
                     let oneil_error =
-                        OneilError::from_error_with_source(&error, pseudo_path, full_expression);
+                        OneilError::from_error_with_source(&error, pseudo_path, expression);
 
                     errors.push(oneil_error);
 
@@ -156,11 +148,7 @@ impl Runtime {
                 Ok(expr_ir) => expr_ir,
                 Err(resolution_errors) => {
                     let oneil_errors = resolution_errors.into_iter().map(|error| {
-                        OneilError::from_error_with_source(
-                            &error,
-                            pseudo_path.clone(),
-                            full_expression,
-                        )
+                        OneilError::from_error_with_source(&error, pseudo_path.clone(), expression)
                     });
 
                     errors.extend(oneil_errors);
@@ -173,11 +161,7 @@ impl Runtime {
                 Ok(eval_result) => eval_result,
                 Err(eval_errors) => {
                     let oneil_errors = eval_errors.into_iter().map(|error| {
-                        OneilError::from_error_with_source(
-                            &error,
-                            pseudo_path.clone(),
-                            full_expression,
-                        )
+                        OneilError::from_error_with_source(&error, pseudo_path.clone(), expression)
                     });
 
                     errors.extend(oneil_errors);
@@ -186,67 +170,7 @@ impl Runtime {
                 }
             };
 
-            let Some(target_unit) = target_unit else {
-                // no target unit, so we just use the result as is
-                results.insert(full_expression.as_str(), eval_result);
-                continue;
-            };
-
-            // parse the target unit
-            let unit_ast = match Self::parse_unit(target_unit) {
-                Ok(unit_ast) => unit_ast,
-                Err(error) => {
-                    let oneil_error = OneilError::from_error_with_source(
-                        &error,
-                        pseudo_path.clone(),
-                        target_unit,
-                    );
-                    errors.push(oneil_error);
-
-                    continue;
-                }
-            };
-
-            // resolve the target unit
-            let target_unit_ir = match self.resolve_unit(&unit_ast) {
-                Ok(target_unit_ir) => target_unit_ir,
-                Err(resolution_errors) => {
-                    let oneil_errors = resolution_errors.into_iter().map(|error| {
-                        OneilError::from_error_with_source(&error, pseudo_path.clone(), target_unit)
-                    });
-                    errors.extend(oneil_errors);
-
-                    continue;
-                }
-            };
-
-            // evaluate the target unit
-            let target_unit_result = self.eval_unit(&target_unit_ir);
-
-            // convert the result to the target unit
-            let eval_result = match eval_result.with_unit(target_unit_result) {
-                Ok(eval_result) => eval_result,
-                Err(error) => {
-                    // TODO: because the unit is parsed seperately from the expression,
-                    //       the unit_ast.span() is not the correct span for the error.
-                    //
-                    //       Either we need to update how we're parsing the unit, or we
-                    //       need to have a way to adjust the unit span.
-                    let conversion_error =
-                        RuntimeUnitConversionError::new(error, expr_ast.span(), unit_ast.span());
-
-                    let oneil_error = OneilError::from_error_with_source(
-                        &conversion_error,
-                        pseudo_path.clone(),
-                        expression,
-                    );
-
-                    errors.push(oneil_error);
-                    continue;
-                }
-            };
-
-            results.insert(expression, eval_result);
+            results.insert(expression.as_str(), eval_result);
         }
 
         (results, errors)
@@ -260,39 +184,6 @@ impl Runtime {
         model_path: &ModelPath,
     ) -> Result<Value, Vec<eval::EvalError>> {
         eval::eval_expr_in_model(expr_ir, model_path, self)
-    }
-
-    /// Evaluates a composite unit and returns the resulting sized unit.
-    fn eval_unit(&mut self, unit_ir: &output::ir::CompositeUnit) -> Unit {
-        eval::eval_unit(unit_ir, self)
-    }
-}
-
-/// Parsed representation of an `--expr` argument.
-#[derive(Debug, Clone, Copy)]
-struct ExprRequest<'expr> {
-    expression: &'expr str,
-    target_unit: Option<&'expr str>,
-}
-
-/// Parses an expression request that can optionally end with `: <unit>`.
-fn parse_expr_request(expression: &str) -> ExprRequest<'_> {
-    let maybe_split = expression.rsplit_once(':').and_then(|(expression, unit)| {
-        let expression = expression.trim_end();
-        let unit = unit.trim();
-
-        (!expression.is_empty() && !unit.is_empty()).then_some((expression, unit))
-    });
-
-    match maybe_split {
-        Some((expression, target_unit)) => ExprRequest {
-            expression,
-            target_unit: Some(target_unit),
-        },
-        None => ExprRequest {
-            expression,
-            target_unit: None,
-        },
     }
 }
 

@@ -2,10 +2,7 @@
 
 use indexmap::IndexSet;
 use oneil_ir as ir;
-use oneil_resolver::{
-    self as resolver,
-    error::{UnitResolutionError, VariableResolutionError},
-};
+use oneil_resolver::{self as resolver, error::VariableResolutionError};
 use oneil_shared::{
     load_result::LoadResult,
     paths::{ModelPath, PythonPath},
@@ -74,14 +71,6 @@ impl Runtime {
         model_path: &ModelPath,
     ) -> Result<output::ir::Expr, Vec<VariableResolutionError>> {
         resolver::resolve_expr_in_model(expr_ast, model_path, self)
-    }
-
-    /// Resolves an AST unit expression into a composite unit representation.
-    pub(super) fn resolve_unit(
-        &mut self,
-        unit_ast: &ast::UnitExprNode,
-    ) -> Result<ir::CompositeUnit, Vec<UnitResolutionError>> {
-        resolver::resolve_unit(unit_ast, self)
     }
 }
 
