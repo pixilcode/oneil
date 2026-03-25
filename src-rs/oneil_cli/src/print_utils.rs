@@ -41,5 +41,5 @@ pub fn print_number_value(value: &Number, config: PrintUtilsConfig) {
 /// Prints a number unit.
 pub fn print_number_unit(unit: &Unit) {
     let styled_display_unit = stylesheet::PARAMETER_UNIT.style(unit.display_unit.to_string());
-    print!(" :{styled_display_unit}");
+    print!(" : {styled_display_unit}");
 }

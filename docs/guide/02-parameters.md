@@ -26,7 +26,7 @@ Tests: 0/0 (PASS)
 x = 1  # Hello
 ```
 
-`oneil eval <model>.on` is how you run an Oneil file. The output shows the model path, test summary, and each parameter’s identifier, value, and label (after `#`).
+`oneil eval <model>.on` is how you run an Oneil file. The output shows the model path, test summary, and each parameter’s identifier, value, and label (after `#`). In addition, both `oneil e <model>.on` and `oneil <model>.on` can be used as an equivalent to `oneil eval <model>.on`.
 
 
 ## Required parts of a parameter
@@ -236,4 +236,14 @@ For a full list of options, run:
 
 ```sh
 oneil eval --help
+```
+
+## Comments
+
+Comments in Oneil are prefixed by `#` and go until the end of the line.
+
+```oneil
+# this is a comment
+My param: p = 10
+My other param: o = 5  # comments don't have to start at the beginning of a line
 ```

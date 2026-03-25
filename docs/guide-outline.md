@@ -105,6 +105,7 @@ which will be covered later.
 
 ## Units
 
+A parameter can be assigned a unit
 
 ## Intervals
 
