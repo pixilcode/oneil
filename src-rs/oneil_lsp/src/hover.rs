@@ -72,6 +72,7 @@ pub fn hover_markdown(
         SymbolAtPosition::PythonFunctionReference {
             python_path, name, ..
         } => Some(format_python_function_hover(
+            runtime,
             python_path,
             name,
             workspace_roots,
@@ -146,17 +147,31 @@ fn format_python_import_hover(
 
     #[cfg(feature = "python")]
     {
-        if let Ok(names) = runtime.load_python_import(path)
-            && !names.is_empty()
-        {
-            let mut function_list = "**Functions:**\n".to_string();
-            for name in names {
-                writeln!(function_list, "- `{}`", name.as_str())
-                    .expect("writing to string should never fail");
-            }
-            let functions = MarkedString::from_markdown(function_list);
+        let doc_string = runtime
+            .lookup_python_import_docs(path)
+            .map(|docs| MarkedString::from_markdown(docs.to_string()));
 
-            return HoverContents::Array(vec![path_string, functions]);
+        let functions = runtime
+            .load_python_import(path)
+            .ok()
+            .filter(|functions| !functions.is_empty())
+            .map(|functions| {
+                let mut function_list = "**Functions:**\n".to_string();
+                for function in functions {
+                    writeln!(function_list, "- `{}`", function.as_str())
+                        .expect("writing to string should never fail");
+                }
+
+                MarkedString::from_markdown(function_list)
+            });
+
+        if doc_string.is_some() || functions.is_some() {
+            return HoverContents::Array(
+                std::iter::once(path_string)
+                    .chain(doc_string)
+                    .chain(functions)
+                    .collect(),
+            );
         }
     }
 
@@ -165,17 +180,27 @@ fn format_python_import_hover(
 
 /// Plaintext hover for a Python call: module file path and function name.
 fn format_python_function_hover(
+    runtime: &Runtime,
     python_path: &PythonPath,
     function_name: &PyFunctionName,
     workspace_roots: &[PathBuf],
 ) -> HoverContents {
+    let function_docs = runtime
+        .lookup_python_function(python_path, function_name)
+        .and_then(|function| function.get_docs())
+        .map(|docs| MarkedString::from_markdown(docs.to_string()));
+
     let path = path_as_marked_string(python_path.as_path(), workspace_roots);
     let name = MarkedString::from_language_code(
         PLAINTEXT_LANG_CODE.to_string(),
         function_name.as_str().to_string(),
     );
 
-    HoverContents::Array(vec![path, name])
+    if let Some(function_docs) = function_docs {
+        HoverContents::Array(vec![path, name, function_docs])
+    } else {
+        HoverContents::Array(vec![path, name])
+    }
 }
 
 const BUILTIN_PSEUDO_PATH: &str = "(builtin)";

@@ -10,7 +10,7 @@ mod definition;
 mod diagnostics;
 mod doc_store;
 mod hover;
-mod lsp_span;
+mod location;
 mod path;
 mod symbol_lookup;
 
@@ -33,7 +33,7 @@ use definition::resolve_definition;
 use diagnostics::diagnostics_from_runtime_errors;
 use doc_store::DocumentStore;
 use hover::hover_markdown;
-use lsp_span::span_to_range;
+use location::span_to_range;
 
 #[tokio::main]
 pub async fn run() {

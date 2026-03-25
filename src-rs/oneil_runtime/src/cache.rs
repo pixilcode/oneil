@@ -136,8 +136,7 @@ pub type EvalCache = ModelCache<output::Model, eval::EvalErrors>;
 #[cfg(feature = "python")]
 #[derive(Debug)]
 pub struct PythonImportCache {
-    entries:
-        IndexMap<PythonPath, Result<oneil_python::function::PythonFunctionMap, PythonImportError>>,
+    entries: IndexMap<PythonPath, Result<oneil_python::function::PythonModule, PythonImportError>>,
 }
 
 #[cfg(feature = "python")]
@@ -162,7 +161,7 @@ impl PythonImportCache {
     pub fn get_entry(
         &self,
         path: &PythonPath,
-    ) -> Option<&Result<oneil_python::function::PythonFunctionMap, PythonImportError>> {
+    ) -> Option<&Result<oneil_python::function::PythonModule, PythonImportError>> {
         self.entries.get(path)
     }
 
@@ -170,7 +169,7 @@ impl PythonImportCache {
     pub fn insert(
         &mut self,
         path: PythonPath,
-        result: Result<oneil_python::function::PythonFunctionMap, PythonImportError>,
+        result: Result<oneil_python::function::PythonModule, PythonImportError>,
     ) {
         self.entries.insert(path, result);
     }

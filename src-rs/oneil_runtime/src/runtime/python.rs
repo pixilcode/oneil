@@ -2,7 +2,7 @@
 
 use indexmap::IndexSet;
 use oneil_eval::EvalError;
-use oneil_python::{PythonEvalError, function::PythonFunctionMap};
+use oneil_python::{PythonEvalError, PythonFunction, function::PythonModule};
 
 use crate::error::PythonImportError;
 use oneil_shared::{paths::PythonPath, span::Span, symbols::PyFunctionName};
@@ -11,6 +11,30 @@ use super::Runtime;
 use crate::output::{self, error::RuntimeErrors};
 
 impl Runtime {
+    /// Looks up the documentation string for a Python import.
+    #[must_use]
+    pub fn lookup_python_import_docs(&self, path: &PythonPath) -> Option<&str> {
+        self.python_import_cache
+            .get_entry(path)?
+            .as_ref()
+            .ok()?
+            .get_docs()
+    }
+
+    /// Looks up a Python function by path and name.
+    #[must_use]
+    pub fn lookup_python_function(
+        &self,
+        python_path: &PythonPath,
+        name: &PyFunctionName,
+    ) -> Option<&PythonFunction> {
+        self.python_import_cache
+            .get_entry(python_path)?
+            .as_ref()
+            .ok()?
+            .get_function(name)
+    }
+
     /// Loads a Python module from a file path and returns the set of callable names.
     ///
     /// Source is read from the file and passed to the Python loader. Results are
@@ -39,7 +63,7 @@ impl Runtime {
     pub(super) fn load_python_import_internal(
         &mut self,
         path: &PythonPath,
-    ) -> &Result<PythonFunctionMap, PythonImportError> {
+    ) -> &Result<PythonModule, PythonImportError> {
         // load the source code from the file
         let Ok(source) = self.load_source_internal(&path.into()) else {
             self.python_import_cache

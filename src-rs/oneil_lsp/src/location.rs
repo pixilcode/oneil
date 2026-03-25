@@ -1,6 +1,9 @@
 //! Converting Oneil [`Span`] values to LSP types.
 
-use oneil_shared::{paths::ModelPath, span::Span};
+use oneil_shared::{
+    paths::{ModelPath, PythonPath},
+    span::Span,
+};
 use tower_lsp_server::{
     UriExt,
     lsp_types::{Location, Position, Range, Uri},
@@ -36,5 +39,29 @@ pub fn span_to_location(model_path: &ModelPath, span: Span) -> Location {
     Location {
         uri,
         range: span_to_range(span),
+    }
+}
+
+/// Converts a Python function line number to an LSP [`Location`].
+pub fn python_function_line_to_location(python_path: &PythonPath, line_no: u32) -> Location {
+    let uri = Uri::from_file_path(python_path.as_path()).unwrap_or_else(|| {
+        panic!(
+            "Failed to convert Python path to URI: {}",
+            python_path.as_path().display()
+        )
+    });
+
+    Location {
+        uri,
+        range: Range {
+            start: Position {
+                line: line_no - 1,
+                character: 0,
+            },
+            end: Position {
+                line: line_no - 1,
+                character: 0,
+            },
+        },
     }
 }

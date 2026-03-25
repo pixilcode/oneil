@@ -7,7 +7,10 @@ use tower_lsp_server::{
     lsp_types::{Location, Position, Range, Uri},
 };
 
-use crate::{lsp_span::span_to_location, symbol_lookup::SymbolAtPosition};
+use crate::{
+    location::{python_function_line_to_location, span_to_location},
+    symbol_lookup::SymbolAtPosition,
+};
 
 /// Resolves a symbol to its definition location.
 pub fn resolve_definition(
@@ -79,18 +82,14 @@ pub fn resolve_definition(
             })
         }
         SymbolAtPosition::PythonFunctionReference {
-            python_path,
-            name: _,
-            ..
+            python_path, name, ..
         } => {
-            let (model, _errors) = runtime.load_ir(current_model_path);
-            let model = model?;
+            let function = runtime.lookup_python_function(python_path, name)?;
+            let function_line_no = function.get_line_no()?;
 
-            let python_imports = model.python_imports();
-            let python_import = python_imports.get(python_path)?;
-            Some(span_to_location(
-                current_model_path,
-                *python_import.import_path_span(),
+            Some(python_function_line_to_location(
+                python_path,
+                function_line_no,
             ))
         }
         SymbolAtPosition::BuiltinValueReference { .. }

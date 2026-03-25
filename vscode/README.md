@@ -5,8 +5,8 @@ This VS Code extension adds language support for the Oneil programming language.
 ## Current Features
 
 - **Syntax Highlighting**: Enhances code readability with semantic syntax highlighting for Oneil language constructs.
-- **Go to Definition**: Jump to the definition of parameters, models, and imported Python files
-- **Hover Information**: View the labels and notes associated with a parameter or model by hovering
+- **Go to Definition**: Jump to the definition of parameters, models, and imported Python files and functions
+- **Hover Information**: View the labels and notes associated with a parameter, model, function, or Python module by hovering
 
 ## Planned Features
 
