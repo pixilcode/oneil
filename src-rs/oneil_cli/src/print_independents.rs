@@ -11,7 +11,6 @@ use crate::{
 };
 
 pub struct IndependentPrintConfig {
-    pub print_values: bool,
     pub recursive: bool,
     pub print_utils_config: PrintUtilsConfig,
 }
@@ -63,12 +62,8 @@ fn print_model_independents(
 fn print_parameter(name: &ParameterName, value: &Value, config: &IndependentPrintConfig) {
     let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(name.as_str());
 
-    if config.print_values {
-        print!("{styled_ident} = ");
-        print_utils::print_value(value, config.print_utils_config);
-    } else {
-        print!("{styled_ident}");
-    }
+    print!("{styled_ident} = ");
+    print_utils::print_value(value, config.print_utils_config);
 
     println!();
 }

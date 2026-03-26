@@ -179,7 +179,7 @@ pub struct EvalArgs {
     pub debug: bool,
 
     /// Watch files for changes and re-evaluate the model
-    #[arg(long)]
+    #[arg(long, short = 'w')]
     pub watch: bool,
 
     /// Evaluate expression(s). The expressions are evaluated in the context
@@ -280,7 +280,7 @@ pub struct TreeArgs {
     /// Print the tree of parameters that reference the given parameters
     ///
     /// Cannot be used with `--down`.
-    #[arg(long, conflicts_with = "down")]
+    #[arg(long, short = 'u', conflicts_with = "down")]
     pub up: bool,
 
     /// Print the tree of dependencies of the given parameters
@@ -288,7 +288,7 @@ pub struct TreeArgs {
     /// This is the default when neither `--up` nor `--down` is given.
     ///
     /// Cannot be used with `--up`.
-    #[arg(long, conflicts_with = "up")]
+    #[arg(long, short = 'd', conflicts_with = "up")]
     pub down: bool,
 
     /// Print submodel values in the tree
@@ -417,10 +417,6 @@ pub struct IndependentArgs {
     /// Print the independent parameters in submodels as well as the top model
     #[arg(long, short = 'r')]
     pub recursive: bool,
-
-    /// Print the parameter values
-    #[arg(long)]
-    pub values: bool,
 
     /// Display partial results even if there are errors
     ///

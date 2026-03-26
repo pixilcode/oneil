@@ -803,7 +803,6 @@ fn handle_independent_command(args: IndependentArgs) {
     let IndependentArgs {
         file,
         recursive,
-        values: print_values,
         partial: display_partial_results,
         common,
     } = args;
@@ -813,7 +812,6 @@ fn handle_independent_command(args: IndependentArgs) {
     };
 
     let independent_print_config = IndependentPrintConfig {
-        print_values,
         recursive,
         print_utils_config,
     };
