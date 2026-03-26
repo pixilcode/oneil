@@ -14,7 +14,7 @@ use crate::{
 
 pub struct TreePrintConfig {
     pub recursive: bool,
-    pub depth: Option<usize>,
+    pub depth: usize,
     pub print_utils_config: PrintUtilsConfig,
 }
 
@@ -68,9 +68,7 @@ fn print_tree_node<T: PrintableTreeValue>(
     let children = tree.children();
 
     // Check if we've reached the maximum depth
-    let has_reached_max_depth = config
-        .depth
-        .is_some_and(|max_depth| current_depth >= max_depth);
+    let has_reached_max_depth = current_depth >= config.depth;
 
     // Build the prefix for this node
     let (first_prefix, rest_prefix) = if current_depth == 0 {
@@ -99,12 +97,7 @@ fn print_tree_node<T: PrintableTreeValue>(
     //            = equation
     // ```
     if let Some(display_info) = value.get_display_info() {
-        let is_in_top_model = display_info.0 == *top_model_path;
-
-        let value_model_will_print = is_in_top_model || config.recursive;
-
-        let will_print_children =
-            !children.is_empty() && !has_reached_max_depth && value_model_will_print;
+        let will_print_children = !children.is_empty();
 
         let (maybe_bar, equation_indent) = if will_print_children {
             // include the bar if we're printing children
@@ -131,11 +124,19 @@ fn print_tree_node<T: PrintableTreeValue>(
 
     // Check if we've exceeded the depth limit
     if has_reached_max_depth {
+        if !children.is_empty() {
+            print_truncated_node(&indent, rest_prefix);
+        }
+
         return;
     }
 
     // Check if the parameter is outside the top model
     if !config.recursive && value.is_outside_top_model(top_model_path) {
+        if !children.is_empty() {
+            print_truncated_node(&indent, rest_prefix);
+        }
+
         return;
     }
 
@@ -216,6 +217,10 @@ fn get_equation_str(
                 span.start().column
             )
         })
+}
+
+fn print_truncated_node(indent: &str, rest_prefix: &str) {
+    println!("{indent}{rest_prefix}└──╶╶╶");
 }
 
 trait PrintableTreeValue {
