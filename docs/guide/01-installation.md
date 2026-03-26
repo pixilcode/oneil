@@ -10,7 +10,7 @@ Optional, for full functionality:
 
 - **Python 3.10+** (for Python functions and optional runtime features). The CLI can run without it; Python is only needed when your models import Python-defined functions.
 
-## Option 1: Download a release from GitHub (recommended)
+## Option 1: Download a release from GitHub (NOT AVAILABLE YET)
 
 Pre-built binaries are published on the [Releases](https://github.com/careweather/oneil/releases) page for:
 
@@ -112,6 +112,10 @@ cargo build -p oneil
 # or run directly:
 cargo run -p oneil -- path/to/model.on
 ```
+
+## Updating
+
+Currently, there is no dedicated way to update Oneil. If you installed from source, update the source code with `git`, then re-install Oneil. If you downloaded a release from GitHub, download the new version and replace the previous `oneil` binary with the new one.
 
 ## Editor and tooling (optional)
 
