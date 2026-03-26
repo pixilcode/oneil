@@ -171,10 +171,10 @@ pub struct EvalArgs {
     #[arg(long, short = 'P', default_value_t)]
     pub print: PrintMode,
 
-    /// Print debug information
+    /// Display partial results even if there are errors
     ///
-    /// For parameters marked with `**`, this will print the
-    /// values of variables used to evaluate the parameter.
+    /// If errors occurred during evaluation, errors will be printed,
+    /// then the partial results will be printed.
     #[arg(long, short = 'D')]
     pub debug: bool,
 
@@ -201,13 +201,6 @@ pub struct EvalArgs {
     /// By default, Oneil will only print the results of the top model.
     #[arg(long, short = 'r')]
     pub recursive: bool,
-
-    /// Display partial results even if there are errors
-    ///
-    /// If errors occurred during evaluation, errors will be printed,
-    /// then the partial results will be printed.
-    #[arg(long)]
-    pub partial: bool,
 
     /// Don't print the results header
     #[arg(long)]
@@ -248,8 +241,8 @@ pub struct TestArgs {
     ///
     /// If errors occurred during evaluation, errors will be printed,
     /// then the partial results will be printed.
-    #[arg(long)]
-    pub partial: bool,
+    #[arg(long, short = 'D')]
+    pub debug: bool,
 
     /// Don't print the results header
     #[arg(long)]
@@ -309,8 +302,8 @@ pub struct TreeArgs {
     ///
     /// If errors occurred during evaluation, errors will be printed,
     /// then the partial trees will be printed.
-    #[arg(long)]
-    pub partial: bool,
+    #[arg(long, short = 'D')]
+    pub debug: bool,
 
     #[command(flatten)]
     pub common: CommonArgs,
@@ -422,8 +415,8 @@ pub struct IndependentArgs {
     ///
     /// If errors occurred during evaluation, errors will be printed,
     /// then the partial results will be printed.
-    #[arg(long)]
-    pub partial: bool,
+    #[arg(long, short = 'D')]
+    pub debug: bool,
 
     #[command(flatten)]
     pub common: CommonArgs,
@@ -446,8 +439,8 @@ pub enum DevCommand {
         ///
         /// When enabled, shows the portion of the AST that was successfully
         /// parsed. Useful for debugging incomplete or malformed code.
-        #[arg(long)]
-        partial: bool,
+        #[arg(long, short = 'D')]
+        debug: bool,
 
         #[command(flatten)]
         common: CommonArgs,
@@ -462,8 +455,8 @@ pub enum DevCommand {
         ///
         /// When enabled, shows the portion of the IR that was successfully generated
         /// before encountering errors. Useful for debugging model loading issues.
-        #[arg(long)]
-        partial: bool,
+        #[arg(long, short = 'D')]
+        debug: bool,
 
         /// Print submodel IR recursively
         ///
@@ -499,8 +492,8 @@ pub enum DevCommand {
         ///
         /// When enabled, shows the portion of the results that were successfully generated
         /// before encountering errors. Useful for debugging model evaluation issues.
-        #[arg(long)]
-        partial: bool,
+        #[arg(long, short = 'D')]
+        debug: bool,
 
         /// Print submodel and reference results recursively
         ///

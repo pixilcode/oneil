@@ -87,12 +87,12 @@ fn handle_dev_command(command: DevCommand) {
     match command {
         DevCommand::PrintAst {
             files,
-            partial: display_partial,
+            debug: display_partial,
             common,
         } => handle_print_ast(&files, display_partial, common.dev_show_internal_errors),
         DevCommand::PrintIr {
             file,
-            partial: display_partial,
+            debug: display_partial,
             recursive,
             include,
             no_values,
@@ -110,7 +110,7 @@ fn handle_dev_command(command: DevCommand) {
         }
         DevCommand::PrintModelResult {
             file,
-            partial: display_partial,
+            debug: display_partial_results,
             recursive,
             include,
             no_values,
@@ -119,7 +119,7 @@ fn handle_dev_command(command: DevCommand) {
             let sections = model_result_sections_from_include(include.as_deref());
             handle_print_model_result(
                 &file,
-                display_partial,
+                display_partial_results,
                 recursive,
                 &sections,
                 no_values,
@@ -336,7 +336,7 @@ fn model_result_sections_from_include(
 )]
 fn handle_print_model_result(
     file: &ModelPath,
-    display_partial: bool,
+    display_partial_results: bool,
     recursive: bool,
     sections: &print_debug_model_result::ModelResultSections,
     no_values: bool,
@@ -355,7 +355,7 @@ fn handle_print_model_result(
         print_error::print(error, show_internal_errors);
     }
 
-    if !errors.is_empty() && !display_partial {
+    if !errors.is_empty() && !display_partial_results {
         return;
     }
 
@@ -369,11 +369,10 @@ fn handle_eval_command(args: EvalArgs) {
         file,
         params: variables,
         print: print_mode,
-        debug: print_debug_info,
+        debug: display_partial_results,
         watch,
         expr: eval_expressions,
         recursive,
-        partial: display_partial_results,
         no_header,
         no_test_report,
         no_parameters,
@@ -388,7 +387,7 @@ fn handle_eval_command(args: EvalArgs) {
 
     let model_print_config = ModelPrintConfig {
         print_mode,
-        print_debug_info,
+        print_debug_info: display_partial_results, // for now, we use the same flag for both
         variables,
         recursive,
         no_header,
@@ -596,7 +595,7 @@ fn handle_test_command(args: TestArgs) {
     let TestArgs {
         file,
         recursive,
-        partial: display_partial_results,
+        debug: display_partial_results,
         no_header,
         no_test_report,
         common,
@@ -642,7 +641,7 @@ fn handle_tree_command(args: TreeArgs) {
         down: _, // down is ignored since it is the default behavior anyway
         recursive,
         depth,
-        partial: display_partial_results,
+        debug: display_partial_results,
         common,
     } = args;
 
@@ -803,7 +802,7 @@ fn handle_independent_command(args: IndependentArgs) {
     let IndependentArgs {
         file,
         recursive,
-        partial: display_partial_results,
+        debug: display_partial_results,
         common,
     } = args;
 
