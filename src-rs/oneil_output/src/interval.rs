@@ -565,9 +565,7 @@ impl Interval {
     /// interval under the tangent function, or the entire real line if the
     /// interval contains a singularity (e.g. π/2 + nπ).
     ///
-    /// The domain of the point function is ℝ ∖ {(n + 1/2)π ∣ n ∈ ℤ}; the range is ℝ.
-    ///
-    /// Based on the [inari crate](https://github.com/unageek/inari) implementation.
+    /// The domain of the point function is ℝ; the range is ℝ.
     #[must_use]
     pub fn tan(self) -> Self {
         if self.is_empty() {
@@ -577,40 +575,36 @@ impl Interval {
         let min = self.min;
         let max = self.max;
 
-        // short circuit for the case where the interval is greater than pi
+        // short circuit for the case where the interval is
+        // greater than or equal to pi
         //
-        // even though this is technically accounted for below, it appears that
-        // large numbers (for example, `1.0e34`) will cause the calculation to
-        // be incorrect.
-        if (max - min) > std::f64::consts::PI {
+        // `tan` cycles every pi, so if the interval is greater
+        // than or equal to pi, the result includes negative and
+        // positive infinity.
+        if (max - min) >= std::f64::consts::PI {
             return Self::new(f64::NEG_INFINITY, f64::INFINITY);
         }
 
-        let frac_pi_2 = Self::from(std::f64::consts::FRAC_PI_2);
+        // also short circuit for the case where either interval
+        // is infinite, since that implies that a full `tan` cycle
+        // is included in the interval.
+        if min.is_infinite() || max.is_infinite() {
+            return Self::new(f64::NEG_INFINITY, f64::INFINITY);
+        }
 
-        let step = (self / frac_pi_2).floor();
-        let step_min = step.min;
-        let step_max = step.max;
+        let min_tan = min.tan();
+        let max_tan = max.tan();
 
-        #[expect(
-            clippy::float_cmp,
-            reason = "we want to compare the exact values of the floats"
-        )]
-        let step_delta = if min == max { 0.0 } else { step_max - step_min };
-
-        let min_step_modulo = step_min.rem_euclid(2.0);
-
-        let continuous = step_max != f64::INFINITY && max <= step_max * std::f64::consts::FRAC_PI_2;
-
-        let monotonic = (is_close(min_step_modulo, 0.0)
-            && (step_delta < 1.0 || (is_close(step_delta, 1.0) && continuous)))
-            || (is_close(min_step_modulo, 1.0)
-                && (step_delta < 2.0 || (is_close(step_delta, 2.0) && continuous)));
-
-        if monotonic {
-            Self::new(min.tan(), max.tan())
-        } else {
+        if min_tan > max_tan {
+            // if the tangent of the minimum is greater than the
+            // tangent of the maximum, the result must pass through
+            // negative infinity and positive infinity.
             Self::new(f64::NEG_INFINITY, f64::INFINITY)
+        } else {
+            // otherwise, because `tan` increases monotonically,
+            // the result is the interval between the tangent of
+            // the minimum and the tangent of the maximum.
+            Self::new(min_tan, max_tan)
         }
     }
 
