@@ -18,6 +18,12 @@ pub struct TreePrintConfig {
     pub print_utils_config: PrintUtilsConfig,
 }
 
+pub struct TreePrintContext<'input> {
+    pub current_depth: usize,
+    pub is_first: bool,
+    pub top_model_path: &'input ModelPath,
+}
+
 /// Prints a reference tree showing which parameters reference a given parameter.
 pub fn print_reference_tree(
     top_model_path: &ModelPath,
@@ -25,12 +31,16 @@ pub fn print_reference_tree(
     tree_print_config: &TreePrintConfig,
     file_cache: &mut HashMap<PathBuf, String>,
 ) {
+    let start_context = TreePrintContext {
+        current_depth: 0,
+        is_first: true,
+        top_model_path,
+    };
+
     print_tree_node(
         reference_tree,
         tree_print_config,
-        0,
-        true,
-        top_model_path,
+        &start_context,
         &mut Vec::new(),
         file_cache,
     );
@@ -43,12 +53,16 @@ pub fn print_dependency_tree(
     tree_print_config: &TreePrintConfig,
     file_cache: &mut HashMap<PathBuf, String>,
 ) {
+    let start_context = TreePrintContext {
+        current_depth: 0,
+        is_first: true,
+        top_model_path,
+    };
+
     print_tree_node(
         dependency_tree,
         tree_print_config,
-        0,
-        true,
-        top_model_path,
+        &start_context,
         &mut Vec::new(),
         file_cache,
     );
@@ -58,29 +72,31 @@ pub fn print_dependency_tree(
 fn print_tree_node<T: PrintableTreeValue>(
     tree: &Tree<T>,
     config: &TreePrintConfig,
-    current_depth: usize,
-    is_last: bool,
-    top_model_path: &ModelPath,
+    context: &TreePrintContext<'_>,
     parent_prefixes: &mut Vec<bool>,
     file_cache: &mut HashMap<PathBuf, String>,
 ) {
     let value = tree.value();
-    let children = tree.children();
-
-    // Check if we've reached the maximum depth
-    let has_reached_max_depth = config
-        .depth
-        .is_some_and(|max_depth| current_depth >= max_depth);
 
     // Build the prefix for this node
-    let (first_prefix, rest_prefix) = if current_depth == 0 {
+    let (first_prefix, rest_prefix) = if context.current_depth == 0 {
         ("", "")
-    } else if is_last {
-        ("└── ", "    ")
+    } else if context.is_first {
+        ("┌── ", "│   ")
     } else {
         ("├── ", "│   ")
     };
     let indent = build_indent(parent_prefixes);
+
+    print_children(
+        tree,
+        config,
+        context,
+        parent_prefixes,
+        file_cache,
+        rest_prefix,
+        &indent,
+    );
 
     // Print the parameter name and value
     let value_name = value.get_styled_value_name();
@@ -99,15 +115,7 @@ fn print_tree_node<T: PrintableTreeValue>(
     //            = equation
     // ```
     if let Some(display_info) = value.get_display_info() {
-        let will_print_children = !children.is_empty();
-
-        let (maybe_bar, equation_indent) = if will_print_children {
-            // include the bar if we're printing children
-            ("│", " ".repeat(value.get_value_name_len() - 1)) // -1 to account for the bar
-        } else {
-            // replace the bar with a space if we're not printing children
-            ("", " ".repeat(value.get_value_name_len()))
-        };
+        let equation_indent = " ".repeat(value.get_value_name_len());
 
         let equation_str = get_equation_str(display_info, file_cache);
 
@@ -115,7 +123,7 @@ fn print_tree_node<T: PrintableTreeValue>(
             Ok(equation_str) => {
                 let equation_str = format!(" = {equation_str}");
                 let equation_str = stylesheet::TREE_VALUE_EQUATION.style(equation_str);
-                println!("{indent}{rest_prefix}{maybe_bar}{equation_indent}{equation_str}");
+                println!("{indent}{rest_prefix}{equation_indent}{equation_str}");
             }
             Err(error) => {
                 let error_label = stylesheet::ERROR_COLOR.style("error");
@@ -123,40 +131,44 @@ fn print_tree_node<T: PrintableTreeValue>(
             }
         }
     }
+}
 
-    // Check if we've exceeded the depth limit
-    if has_reached_max_depth {
-        if !children.is_empty() {
-            print_truncated_node(&indent, rest_prefix);
-        }
+fn print_children<T: PrintableTreeValue>(
+    tree: &Tree<T>,
+    config: &TreePrintConfig,
+    context: &TreePrintContext<'_>,
+    parent_prefixes: &mut Vec<bool>,
+    file_cache: &mut HashMap<PathBuf, String>,
+    rest_prefix: &str,
+    indent: &str,
+) {
+    let value = tree.value();
+    let children = tree.children();
 
-        return;
-    }
+    // Check if we've reached the maximum depth
+    let has_reached_max_depth = config
+        .depth
+        .is_some_and(|max_depth| context.current_depth >= max_depth);
 
-    // Check if the parameter is outside the top model
-    if !config.recursive && value.is_outside_top_model(top_model_path) {
-        if !children.is_empty() {
-            print_truncated_node(&indent, rest_prefix);
-        }
+    // Print the children first if they should be printed
+    let has_children = !children.is_empty();
+    let skip_printing_children = has_reached_max_depth
+        || (!config.recursive && value.is_outside_top_model(context.top_model_path));
 
-        return;
-    }
-
-    // Print children
-    if !children.is_empty() {
-        parent_prefixes.push(is_last);
+    if has_children && skip_printing_children {
+        print_truncated_node(indent, rest_prefix);
+    } else if has_children {
+        parent_prefixes.push(context.is_first);
 
         for (i, child) in children.iter().enumerate() {
-            let is_last_child = i == children.len() - 1;
-            print_tree_node(
-                child,
-                config,
-                current_depth + 1,
-                is_last_child,
-                top_model_path,
-                parent_prefixes,
-                file_cache,
-            );
+            let is_first_child = i == 0;
+            let child_context = TreePrintContext {
+                current_depth: context.current_depth + 1,
+                is_first: is_first_child,
+                top_model_path: context.top_model_path,
+            };
+
+            print_tree_node(child, config, &child_context, parent_prefixes, file_cache);
         }
 
         parent_prefixes.pop();
@@ -222,7 +234,7 @@ fn get_equation_str(
 }
 
 fn print_truncated_node(indent: &str, rest_prefix: &str) {
-    println!("{indent}{rest_prefix}└──╶╶╶");
+    println!("{indent}{rest_prefix}┌──╶╶╶");
 }
 
 trait PrintableTreeValue {
