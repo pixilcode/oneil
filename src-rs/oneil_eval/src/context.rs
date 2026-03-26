@@ -1,11 +1,17 @@
-use std::path::{Path, PathBuf};
-
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 
 use oneil_ir as ir;
 use oneil_output as output;
-use oneil_shared::span::Span;
-use oneil_shared::{load_result::LoadResult, partial::MaybePartialResult};
+use oneil_shared::{
+    load_result::LoadResult,
+    partial::MaybePartialResult,
+    paths::{ModelPath, PythonPath},
+    span::Span,
+    symbols::{
+        BuiltinFunctionName, BuiltinValueName, ParameterName, PyFunctionName, ReferenceName,
+        SubmodelName, TestIndex, UnitBaseName, UnitPrefix,
+    },
+};
 
 use crate::error::{EvalError, EvalErrors};
 
@@ -16,10 +22,10 @@ pub struct IrLoadError;
 /// Context provided by the runtime for resolving IR, builtins, and units during evaluation.
 pub trait ExternalEvaluationContext {
     /// Returns the IR model at the given path if it has been loaded.
-    fn lookup_ir(&self, path: impl AsRef<Path>) -> Option<LoadResult<&ir::Model, IrLoadError>>;
+    fn lookup_ir(&self, path: &ModelPath) -> Option<LoadResult<&ir::Model, IrLoadError>>;
 
     /// Returns the value of a builtin variable by identifier, if it exists.
-    fn lookup_builtin_variable(&self, identifier: &ir::Identifier) -> Option<&output::Value>;
+    fn lookup_builtin_variable(&self, name: &BuiltinValueName) -> Option<&output::Value>;
 
     /// Evaluates a builtin function by identifier with the given arguments, if it exists.
     ///
@@ -30,8 +36,8 @@ pub trait ExternalEvaluationContext {
     /// Returns an error if there was an error evaluating the builtin function.
     fn evaluate_builtin_function(
         &self,
-        identifier: &ir::Identifier,
-        identifier_span: Span,
+        name: &BuiltinFunctionName,
+        name_span: Span,
         args: Vec<(output::Value, Span)>,
     ) -> Option<Result<output::Value, Vec<EvalError>>>;
 
@@ -45,31 +51,32 @@ pub trait ExternalEvaluationContext {
     #[cfg(feature = "python")]
     fn evaluate_imported_function(
         &self,
-        python_path: &ir::PythonPath,
-        identifier: &ir::Identifier,
+        python_path: &PythonPath,
+        identifier: &PyFunctionName,
         function_call_span: Span,
         args: Vec<(output::Value, Span)>,
     ) -> Option<Result<output::Value, Box<EvalError>>>;
 
     /// Returns a unit by name if it is defined in the builtin context.
-    fn lookup_unit(&self, name: &str) -> Option<&output::Unit>;
+    fn lookup_unit(&self, name: &UnitBaseName) -> Option<&output::Unit>;
 
     /// Returns a prefix by name if it is defined in the builtin context.
-    fn lookup_prefix(&self, name: &str) -> Option<f64>;
+    fn lookup_prefix(&self, name: &UnitPrefix) -> Option<f64>;
 
     /// Returns pre-loaded evaluated models.
     fn get_preloaded_models(
         &self,
-    ) -> impl Iterator<Item = (PathBuf, &LoadResult<output::Model, EvalErrors>)>;
+    ) -> impl Iterator<Item = (ModelPath, &LoadResult<output::Model, EvalErrors>)>;
 }
 
 /// Represents a model in progress of being evaluated.
 #[derive(Debug, Clone)]
 struct ModelInProgress {
-    parameters: IndexMap<String, Result<output::Parameter, Vec<EvalError>>>,
-    submodels: IndexMap<String, String>,
-    references: IndexMap<String, PathBuf>,
-    tests: Vec<Result<output::Test, Vec<EvalError>>>,
+    parameters: IndexMap<ParameterName, Result<output::Parameter, Vec<EvalError>>>,
+    submodels: IndexMap<SubmodelName, ReferenceName>,
+    references: IndexMap<ReferenceName, ModelPath>,
+    references_with_errors: IndexSet<ModelPath>,
+    tests: IndexMap<TestIndex, Result<output::Test, Vec<EvalError>>>,
 }
 
 impl ModelInProgress {
@@ -79,7 +86,8 @@ impl ModelInProgress {
             parameters: IndexMap::new(),
             submodels: IndexMap::new(),
             references: IndexMap::new(),
-            tests: Vec::new(),
+            references_with_errors: IndexSet::new(),
+            tests: IndexMap::new(),
         }
     }
 }
@@ -98,8 +106,8 @@ impl Default for ModelInProgress {
 /// - External context
 #[derive(Debug)]
 pub struct EvalContext<'external, E: ExternalEvaluationContext> {
-    models: IndexMap<PathBuf, ModelInProgress>,
-    active_models: Vec<PathBuf>,
+    models: IndexMap<ModelPath, ModelInProgress>,
+    active_models: Vec<ModelPath>,
     external_context: &'external mut E,
 }
 
@@ -129,7 +137,12 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                             .collect(),
                         submodels: model.submodels.clone(),
                         references: model.references.clone(),
-                        tests: model.tests.iter().cloned().map(Ok).collect(),
+                        references_with_errors: IndexSet::new(),
+                        tests: model
+                            .tests
+                            .iter()
+                            .map(|(index, test)| (*index, Ok(test.clone())))
+                            .collect(),
                     },
 
                     LoadResult::Partial(model, errors) => ModelInProgress {
@@ -147,12 +160,17 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
 
                         submodels: model.submodels.clone(),
                         references: model.references.clone(),
+                        references_with_errors: errors.references.clone(),
                         tests: model
                             .tests
                             .iter()
-                            .cloned()
-                            .map(Ok)
-                            .chain(errors.tests.iter().cloned().map(|error| Err(vec![error])))
+                            .map(|(index, test)| (*index, Ok(test.clone())))
+                            .chain(
+                                errors
+                                    .tests
+                                    .iter()
+                                    .map(|(index, errs)| (*index, Err(errs.clone()))),
+                            )
                             .collect(),
                     },
 
@@ -177,7 +195,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// any [`EvalErrors`] that occurred during evaluation (e.g. from parameters
     /// or tests that failed).
     #[must_use]
-    pub fn into_result(self) -> IndexMap<PathBuf, MaybePartialResult<output::Model, EvalErrors>> {
+    pub fn into_result(self) -> IndexMap<ModelPath, MaybePartialResult<output::Model, EvalErrors>> {
         let mut result = IndexMap::new();
 
         // for each model, collect the parameters and tests, and any errors
@@ -198,13 +216,15 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
             }
 
             // collect the tests and any errors
-            let mut tests = Vec::new();
-            let mut test_errors = Vec::new();
-            for test in model.tests {
+            let mut tests = IndexMap::new();
+            let mut test_errors = IndexMap::new();
+            for (index, test) in model.tests {
                 match test {
-                    Ok(test) => tests.push(test),
+                    Ok(test) => {
+                        tests.insert(index, test);
+                    }
                     Err(errs) => {
-                        test_errors.extend(errs);
+                        test_errors.insert(index, errs);
                     }
                 }
             }
@@ -218,7 +238,10 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 tests,
             };
 
-            if parameter_errors.is_empty() && test_errors.is_empty() {
+            if parameter_errors.is_empty()
+                && test_errors.is_empty()
+                && model.references_with_errors.is_empty()
+            {
                 result.insert(path, MaybePartialResult::ok(output_model));
             } else {
                 result.insert(
@@ -228,6 +251,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                         EvalErrors {
                             parameters: parameter_errors,
                             tests: test_errors,
+                            references: model.references_with_errors,
                         },
                     ),
                 );
@@ -242,7 +266,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// # Panics
     ///
     /// Panics if the model is not found. This should never be the case.
-    pub fn get_ir(&self, path: impl AsRef<Path>) -> LoadResult<ir::Model, IrLoadError> {
+    pub fn get_ir(&self, path: &ModelPath) -> LoadResult<ir::Model, IrLoadError> {
         self.external_context
             .lookup_ir(path)
             .expect("model should be found")
@@ -258,9 +282,9 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// If it is, then there is a bug either in the model resolver when it resolves builtin variables
     /// or in the builtin map when it defines the builtin values.
     #[must_use]
-    pub fn lookup_builtin_variable(&self, identifier: &ir::Identifier) -> output::Value {
+    pub fn lookup_builtin_variable(&self, name: &BuiltinValueName) -> output::Value {
         self.external_context
-            .lookup_builtin_variable(identifier)
+            .lookup_builtin_variable(name)
             .expect("builtin value should be defined (checked during resolution)")
             .clone()
     }
@@ -272,7 +296,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// Panics if no current model is set or if the parameter is not defined in the model.
     pub fn lookup_parameter_value(
         &self,
-        parameter_name: &ir::ParameterName,
+        parameter_name: &ParameterName,
         variable_span: Span,
     ) -> Result<output::Value, Vec<EvalError>> {
         let current_model = self
@@ -291,22 +315,17 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// Looks up a parameter value in a specific model.
     pub fn lookup_model_parameter_value(
         &self,
-        model: &ir::ModelPath,
-        parameter_name: &ir::ParameterName,
+        model: &ModelPath,
+        parameter_name: &ParameterName,
         variable_span: Span,
     ) -> Result<output::Value, Vec<EvalError>> {
-        self.lookup_model_parameter_value_internal(
-            model.as_ref(),
-            parameter_name,
-            variable_span,
-            false,
-        )
+        self.lookup_model_parameter_value_internal(model, parameter_name, variable_span, false)
     }
 
     fn lookup_model_parameter_value_internal(
         &self,
-        model_path: &Path,
-        parameter_name: &ir::ParameterName,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
         variable_span: Span,
         is_current_model: bool,
     ) -> Result<output::Value, Vec<EvalError>> {
@@ -317,7 +336,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
 
         model
             .parameters
-            .get(parameter_name.as_str())
+            .get(parameter_name)
             .expect("parameter should be defined")
             .clone()
             .map(|parameter| parameter.value)
@@ -325,12 +344,12 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 let model_path = if is_current_model {
                     None
                 } else {
-                    Some(model_path.to_path_buf())
+                    Some(model_path.clone())
                 };
 
                 vec![EvalError::ParameterHasError {
                     model_path,
-                    parameter_name: parameter_name.as_str().to_string(),
+                    parameter_name: parameter_name.clone(),
                     variable_span,
                 }]
             })
@@ -343,60 +362,63 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// Panics if the builtin function is not defined. This should never be the case.
     pub fn evaluate_builtin_function(
         &self,
-        identifier: &ir::Identifier,
-        identifier_span: Span,
+        name: &BuiltinFunctionName,
+        name_span: Span,
         args: Vec<(output::Value, Span)>,
     ) -> Result<output::Value, Vec<EvalError>> {
         self.external_context
-            .evaluate_builtin_function(identifier, identifier_span, args)
+            .evaluate_builtin_function(name, name_span, args)
             .expect("builtin function should be defined (checked during resolution)")
     }
 
     /// Evaluates an imported function with the given arguments.
     pub fn evaluate_imported_function(
         &self,
-        python_path: &ir::PythonPath,
-        identifier: &ir::Identifier,
+        python_path: &PythonPath,
+        name: &PyFunctionName,
         function_call_span: Span,
         args: Vec<(output::Value, Span)>,
     ) -> Result<output::Value, Box<EvalError>> {
         #[cfg(feature = "python")]
         {
             self.external_context
-                .evaluate_imported_function(python_path, identifier, function_call_span, args)
+                .evaluate_imported_function(python_path, name, function_call_span, args)
                 .expect("imported function should be defined (checked during resolution)")
         }
 
         #[cfg(not(feature = "python"))]
         {
-            Err(EvalError::PythonNotEnabled { identifier_span })
+            let _ = (self, python_path, name, args);
+            Err(Box::new(EvalError::PythonNotEnabled {
+                relevant_span: function_call_span,
+            }))
         }
     }
 
     /// Looks up a unit by name.
     #[must_use]
-    pub fn lookup_unit(&self, name: &str) -> Option<output::Unit> {
+    pub fn lookup_unit(&self, name: &UnitBaseName) -> Option<output::Unit> {
         self.external_context.lookup_unit(name).cloned()
     }
 
     /// Looks up a prefix by name.
     #[must_use]
-    pub fn lookup_prefix(&self, name: &str) -> Option<f64> {
+    pub fn lookup_prefix(&self, name: &UnitPrefix) -> Option<f64> {
         self.external_context.lookup_prefix(name)
     }
 
     /// Pushes the active model for evaluation.
     ///
     /// Creates a new model entry if it doesn't exist.
-    pub fn push_active_model(&mut self, model_path: PathBuf) {
+    pub fn push_active_model(&mut self, model_path: ModelPath) {
         self.models.entry(model_path.clone()).or_default();
 
         self.active_models.push(model_path);
     }
 
     /// Clears the active model.
-    pub fn pop_active_model(&mut self, model_path: &Path) {
-        assert_eq!(self.active_models.last(), Some(&model_path.to_path_buf()));
+    pub fn pop_active_model(&mut self, model_path: &ModelPath) {
+        assert_eq!(self.active_models.last(), Some(model_path));
 
         self.active_models.pop();
     }
@@ -408,7 +430,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// Panics if no current model is set or if the current model was not created.
     pub fn add_parameter_result(
         &mut self,
-        parameter_name: String,
+        parameter_name: ParameterName,
         result: Result<output::Parameter, Vec<EvalError>>,
     ) {
         // TODO: Maybe use type state pattern to enforce this?
@@ -429,7 +451,11 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// # Panics
     ///
     /// Panics if no current model is set or if the current model was not created.
-    pub(crate) fn add_submodel(&mut self, submodel_name: &str, submodel_reference_name: &str) {
+    pub(crate) fn add_submodel(
+        &mut self,
+        submodel_name: &SubmodelName,
+        submodel_reference_name: &ReferenceName,
+    ) {
         let Some(current_model) = self.active_models.last() else {
             panic!("current model should be set when adding a submodel");
         };
@@ -439,10 +465,9 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
             .get_mut(current_model)
             .expect("current model should be created when set");
 
-        model.submodels.insert(
-            submodel_name.to_string(),
-            submodel_reference_name.to_string(),
-        );
+        model
+            .submodels
+            .insert(submodel_name.clone(), submodel_reference_name.clone());
     }
 
     /// Adds a reference to the current model.
@@ -450,7 +475,11 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// # Panics
     ///
     /// Panics if no current model is set or if the current model was not created.
-    pub(crate) fn add_reference(&mut self, reference_name: &str, reference_path: &ir::ModelPath) {
+    pub(crate) fn add_reference(
+        &mut self,
+        reference_name: &ReferenceName,
+        reference_path: &ModelPath,
+    ) {
         let Some(current_model) = self.active_models.last() else {
             panic!("current model should be set when adding a reference");
         };
@@ -460,10 +489,42 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
             .get_mut(current_model)
             .expect("current model should be created when set");
 
-        model.references.insert(
-            reference_name.to_string(),
-            reference_path.as_ref().to_path_buf(),
-        );
+        model
+            .references
+            .insert(reference_name.clone(), reference_path.clone());
+    }
+
+    /// Returns whether the model at the given path has any evaluation errors.
+    ///
+    /// A model has errors if any of its parameters failed to evaluate or any of its tests failed.
+    #[must_use]
+    pub fn reference_has_errors(&self, path: &ModelPath) -> bool {
+        let Some(model) = self.models.get(path) else {
+            return false;
+        };
+        let has_parameter_errors = model.parameters.values().any(Result::is_err);
+        let has_test_errors = model.tests.iter().any(|(_, result)| result.is_err());
+        let has_reference_errors = !model.references_with_errors.is_empty();
+
+        has_parameter_errors || has_test_errors || has_reference_errors
+    }
+
+    /// Records that the given reference path has errors on the current active model.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no current model is set or if the current model was not created.
+    pub fn add_reference_error_to_active_model(&mut self, path: &ModelPath) {
+        let Some(current_model) = self.active_models.last() else {
+            panic!("current model should be set when adding a reference error");
+        };
+
+        let model = self
+            .models
+            .get_mut(current_model)
+            .expect("current model should be created when set");
+
+        model.references_with_errors.insert(path.clone());
     }
 
     /// Adds a test evaluation result to the current model.
@@ -471,7 +532,11 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// # Panics
     ///
     /// Panics if no current model is set or if the current model was not created.
-    pub(crate) fn add_test_result(&mut self, test_result: Result<output::Test, Vec<EvalError>>) {
+    pub(crate) fn add_test_result(
+        &mut self,
+        test_index: TestIndex,
+        test_result: Result<output::Test, Vec<EvalError>>,
+    ) {
         let Some(current_model) = self.active_models.last() else {
             panic!("current model should be set when adding a test result");
         };
@@ -481,6 +546,6 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
             .get_mut(current_model)
             .expect("current model should be created when set");
 
-        model.tests.push(test_result);
+        model.tests.insert(test_index, test_result);
     }
 }

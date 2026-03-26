@@ -8,8 +8,8 @@ use nom::{
 };
 
 use oneil_ast::{
-    BinaryOp, BinaryOpNode, ComparisonOp, Expr, ExprNode, IdentifierNode, Literal, Node, UnaryOp,
-    Variable,
+    BinaryOp, BinaryOpNode, ComparisonOp, Expr, ExprNode, IdentifierNode, Literal, Node,
+    ParameterNameNode, ReferenceNameNode, UnaryOp, Variable,
 };
 use oneil_shared::span::Span;
 
@@ -20,11 +20,12 @@ use crate::{
         literal::{number, string},
         naming::identifier,
         symbol::{
-            bang_equals, bar, caret, comma, dot, equals_equals, greater_than, greater_than_equals,
-            less_than, less_than_equals, minus, minus_minus, paren_left, paren_right, percent,
-            plus, slash, slash_slash, star,
+            bang_equals, bar, caret, colon, comma, dot, equals_equals, greater_than,
+            greater_than_equals, less_than, less_than_equals, minus, minus_minus, paren_left,
+            paren_right, percent, plus, slash, slash_slash, star,
         },
     },
+    unit::parse as parse_unit,
     util::{InputSpan, Parser, Result},
 };
 
@@ -360,6 +361,7 @@ fn primary_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
             literal_node.wrap(Expr::literal)
         }),
         function_call,
+        unit_cast,
         variable,
         parenthesized_expr,
     ))
@@ -386,10 +388,36 @@ fn function_call(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
     ))
 }
 
+/// Parses a unit casting expression
+fn unit_cast(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
+    let (rest, paren_left_token) = paren_left.convert_errors().parse(input)?;
+    let (rest, expr) = expr.parse(rest)?;
+    let (rest, colon_token) = colon.convert_errors().parse(rest)?;
+    let (rest, unit) = parse_unit
+        .or_fail_with(ParserError::expr_unit_cast_missing_unit(
+            colon_token.lexeme_span,
+        ))
+        .parse(rest)?;
+    let (rest, paren_right_token) = paren_right
+        .or_fail_with(ParserError::unclosed_paren(paren_left_token.lexeme_span))
+        .parse(rest)?;
+
+    let span = Span::from_start_and_end(
+        &paren_left_token.lexeme_span,
+        &paren_right_token.lexeme_span,
+    );
+
+    let whitespace_span = paren_right_token.whitespace_span;
+
+    Ok((
+        rest,
+        Node::new(Expr::unit_cast(expr, unit), span, whitespace_span),
+    ))
+}
+
 /// Parses a variable name
 fn variable(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
     let (rest, parameter_id) = identifier.convert_errors().parse(input)?;
-    let parameter_id_node = IdentifierNode::from(parameter_id);
 
     let (rest, reference_model_id_node) = opt(|input| {
         let (rest, dot_token) = dot.convert_errors().parse(input)?;
@@ -399,14 +427,19 @@ fn variable(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
             ))
             .parse(rest)?;
 
-        let reference_model_id_node = IdentifierNode::from(reference_model_id);
+        let reference_model_id_node = ReferenceNameNode::from(reference_model_id);
 
         Ok((rest, reference_model_id_node))
     })
     .parse(rest)?;
 
-    let variable_node = match reference_model_id_node {
-        Some(reference_model_id_node) => {
+    let variable_node = reference_model_id_node.map_or_else(
+        || {
+            let parameter_id_node = IdentifierNode::from(parameter_id);
+            parameter_id_node.wrap(Variable::identifier)
+        },
+        |reference_model_id_node| {
+            let parameter_id_node = ParameterNameNode::from(parameter_id);
             let variable_span = Span::from_start_and_end(
                 &parameter_id_node.span(),
                 &reference_model_id_node.span(),
@@ -416,9 +449,8 @@ fn variable(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
             let variable = Variable::model_parameter(reference_model_id_node, parameter_id_node);
 
             Node::new(variable, variable_span, variable_whitespace_span)
-        }
-        None => parameter_id_node.wrap(Variable::identifier),
-    };
+        },
+    );
 
     let expr = variable_node.wrap(Expr::variable);
 

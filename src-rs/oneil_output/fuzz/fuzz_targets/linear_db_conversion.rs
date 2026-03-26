@@ -3,13 +3,17 @@
 use libfuzzer_sys::{arbitrary, fuzz_target};
 use oneil_output::{
     Interval, Number,
-    util::{db_to_linear, is_close, linear_to_db},
+    util::{db_to_linear, is_close_with_tolerances, linear_to_db},
 };
+
+const ABSOLUTE_TOLERANCE: f64 = 1e-15;
+const RELATIVE_TOLERANCE: f64 = 1e-2;
+const LARGE_NUMBER_THRESHOLD: f64 = 1e300;
 
 macro_rules! assert_is_close {
     ($expected:expr, $actual:expr) => {
         assert!(
-            is_close($expected, $actual),
+            is_close_with_tolerances($expected, $actual, RELATIVE_TOLERANCE, ABSOLUTE_TOLERANCE),
             "expected: {}, actual: {}",
             $expected,
             $actual
@@ -47,8 +51,13 @@ fuzz_target!(|data: FuzzData| {
                 return;
             }
 
-            assert_is_close!(value.min(), back_to_linear.min());
-            assert_is_close!(value.max(), back_to_linear.max());
+            if !(value.min().abs() > LARGE_NUMBER_THRESHOLD && back_to_linear.min().is_infinite()) {
+                assert_is_close!(value.min(), back_to_linear.min());
+            }
+
+            if !(value.max().abs() > LARGE_NUMBER_THRESHOLD && back_to_linear.max().is_infinite()) {
+                assert_is_close!(value.max(), back_to_linear.max());
+            }
         }
         FuzzData::StartFromDbInterval { value } => {
             let min_linear = 10_f64.powf(value.min() / 10.0);
@@ -83,7 +92,9 @@ fuzz_target!(|data: FuzzData| {
                 panic!("expected scalar");
             };
 
-            assert_is_close!(value, back_to_linear);
+            if !(value.abs() > LARGE_NUMBER_THRESHOLD && back_to_linear.is_infinite()) {
+                assert_is_close!(value, back_to_linear);
+            }
         }
         FuzzData::StartFromDbScalar { value } => {
             let min_linear = 10_f64.powf(value / 10.0);

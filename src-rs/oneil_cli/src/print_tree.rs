@@ -1,35 +1,46 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, path::PathBuf};
 
 use anstream::{print, println};
 use oneil_runtime::output::{
     Value,
-    tree::{DependencyTreeValue, ReferenceTreeValue, Tree},
+    tree::{DependencyName, DependencyTreeValue, ReferenceTreeValue, Tree},
 };
-use oneil_shared::span::Span;
+use oneil_shared::{paths::ModelPath, span::Span};
 
-use crate::{print_utils, stylesheet};
+use crate::{
+    print_utils::{self, PrintUtilsConfig},
+    stylesheet,
+};
 
 pub struct TreePrintConfig {
     pub recursive: bool,
     pub depth: Option<usize>,
+    pub print_utils_config: PrintUtilsConfig,
+}
+
+pub struct TreePrintContext<'input> {
+    pub current_depth: usize,
+    pub is_first: bool,
+    pub top_model_path: &'input ModelPath,
 }
 
 /// Prints a reference tree showing which parameters reference a given parameter.
 pub fn print_reference_tree(
-    top_model_path: &Path,
+    top_model_path: &ModelPath,
     reference_tree: &Tree<ReferenceTreeValue>,
     tree_print_config: &TreePrintConfig,
     file_cache: &mut HashMap<PathBuf, String>,
 ) {
+    let start_context = TreePrintContext {
+        current_depth: 0,
+        is_first: true,
+        top_model_path,
+    };
+
     print_tree_node(
         reference_tree,
         tree_print_config,
-        0,
-        true,
-        top_model_path,
+        &start_context,
         &mut Vec::new(),
         file_cache,
     );
@@ -37,17 +48,21 @@ pub fn print_reference_tree(
 
 /// Prints a dependency tree showing which parameters are referenced by a given parameter.
 pub fn print_dependency_tree(
-    top_model_path: &Path,
+    top_model_path: &ModelPath,
     dependency_tree: &Tree<DependencyTreeValue>,
     tree_print_config: &TreePrintConfig,
     file_cache: &mut HashMap<PathBuf, String>,
 ) {
+    let start_context = TreePrintContext {
+        current_depth: 0,
+        is_first: true,
+        top_model_path,
+    };
+
     print_tree_node(
         dependency_tree,
         tree_print_config,
-        0,
-        true,
-        top_model_path,
+        &start_context,
         &mut Vec::new(),
         file_cache,
     );
@@ -57,36 +72,38 @@ pub fn print_dependency_tree(
 fn print_tree_node<T: PrintableTreeValue>(
     tree: &Tree<T>,
     config: &TreePrintConfig,
-    current_depth: usize,
-    is_last: bool,
-    top_model_path: &Path,
+    context: &TreePrintContext<'_>,
     parent_prefixes: &mut Vec<bool>,
     file_cache: &mut HashMap<PathBuf, String>,
 ) {
     let value = tree.value();
-    let children = tree.children();
-
-    // Check if we've reached the maximum depth
-    let has_reached_max_depth = config
-        .depth
-        .is_some_and(|max_depth| current_depth >= max_depth);
 
     // Build the prefix for this node
-    let (first_prefix, rest_prefix) = if current_depth == 0 {
+    let (first_prefix, rest_prefix) = if context.current_depth == 0 {
         ("", "")
-    } else if is_last {
-        ("└── ", "    ")
+    } else if context.is_first {
+        ("┌── ", "│   ")
     } else {
         ("├── ", "│   ")
     };
     let indent = build_indent(parent_prefixes);
+
+    print_children(
+        tree,
+        config,
+        context,
+        parent_prefixes,
+        file_cache,
+        rest_prefix,
+        &indent,
+    );
 
     // Print the parameter name and value
     let value_name = value.get_styled_value_name();
     let styled_value_name = stylesheet::TREE_VALUE_NAME.style(&value_name);
     print!("{indent}{first_prefix}");
     print!("{styled_value_name} = ");
-    print_utils::print_value(value.get_value());
+    print_utils::print_value(value.get_value(), config.print_utils_config);
     println!();
 
     // Print the parameter equation
@@ -98,20 +115,7 @@ fn print_tree_node<T: PrintableTreeValue>(
     //            = equation
     // ```
     if let Some(display_info) = value.get_display_info() {
-        let is_in_top_model = display_info.0 == top_model_path;
-
-        let value_model_will_print = is_in_top_model || config.recursive;
-
-        let will_print_children =
-            !children.is_empty() && !has_reached_max_depth && value_model_will_print;
-
-        let (maybe_bar, equation_indent) = if will_print_children {
-            // include the bar if we're printing children
-            ("│", " ".repeat(value.get_value_name_len() - 1)) // -1 to account for the bar
-        } else {
-            // replace the bar with a space if we're not printing children
-            ("", " ".repeat(value.get_value_name_len()))
-        };
+        let equation_indent = " ".repeat(value.get_value_name_len());
 
         let equation_str = get_equation_str(display_info, file_cache);
 
@@ -119,7 +123,7 @@ fn print_tree_node<T: PrintableTreeValue>(
             Ok(equation_str) => {
                 let equation_str = format!(" = {equation_str}");
                 let equation_str = stylesheet::TREE_VALUE_EQUATION.style(equation_str);
-                println!("{indent}{rest_prefix}{maybe_bar}{equation_indent}{equation_str}");
+                println!("{indent}{rest_prefix}{equation_indent}{equation_str}");
             }
             Err(error) => {
                 let error_label = stylesheet::ERROR_COLOR.style("error");
@@ -127,32 +131,44 @@ fn print_tree_node<T: PrintableTreeValue>(
             }
         }
     }
+}
 
-    // Check if we've exceeded the depth limit
-    if has_reached_max_depth {
-        return;
-    }
+fn print_children<T: PrintableTreeValue>(
+    tree: &Tree<T>,
+    config: &TreePrintConfig,
+    context: &TreePrintContext<'_>,
+    parent_prefixes: &mut Vec<bool>,
+    file_cache: &mut HashMap<PathBuf, String>,
+    rest_prefix: &str,
+    indent: &str,
+) {
+    let value = tree.value();
+    let children = tree.children();
 
-    // Check if the parameter is outside the top model
-    if !config.recursive && value.is_outside_top_model(top_model_path) {
-        return;
-    }
+    // Check if we've reached the maximum depth
+    let has_reached_max_depth = config
+        .depth
+        .is_some_and(|max_depth| context.current_depth >= max_depth);
 
-    // Print children
-    if !children.is_empty() {
-        parent_prefixes.push(is_last);
+    // Print the children first if they should be printed
+    let has_children = !children.is_empty();
+    let skip_printing_children = has_reached_max_depth
+        || (!config.recursive && value.is_outside_top_model(context.top_model_path));
+
+    if has_children && skip_printing_children {
+        print_truncated_node(indent, rest_prefix);
+    } else if has_children {
+        parent_prefixes.push(context.is_first);
 
         for (i, child) in children.iter().enumerate() {
-            let is_last_child = i == children.len() - 1;
-            print_tree_node(
-                child,
-                config,
-                current_depth + 1,
-                is_last_child,
-                top_model_path,
-                parent_prefixes,
-                file_cache,
-            );
+            let is_first_child = i == 0;
+            let child_context = TreePrintContext {
+                current_depth: context.current_depth + 1,
+                is_first: is_first_child,
+                top_model_path: context.top_model_path,
+            };
+
+            print_tree_node(child, config, &child_context, parent_prefixes, file_cache);
         }
 
         parent_prefixes.pop();
@@ -184,20 +200,21 @@ fn build_indent(parent_prefixes: &[bool]) -> String {
 /// - The file cannot be read
 /// - The span offsets are out of bounds for the file contents
 fn get_equation_str(
-    display_info: &(PathBuf, Span),
+    display_info: &(ModelPath, Span),
     file_cache: &mut HashMap<PathBuf, String>,
 ) -> Result<String, String> {
-    let (file_path, span) = display_info;
+    let (model_path, span) = display_info;
+    let file_path = model_path.as_path().to_path_buf();
 
     // Get file contents from cache or read from disk
-    if !file_cache.contains_key(file_path) {
-        let file_contents = std::fs::read_to_string(file_path)
-            .map_err(|e| format!("couldn't read `{}` - {}", file_path.display(), e))?;
+    if !file_cache.contains_key(&file_path) {
+        let file_contents = std::fs::read_to_string(model_path.as_path())
+            .map_err(|e| format!("couldn't read `{}` - {}", model_path.as_path().display(), e))?;
         file_cache.insert(file_path.clone(), file_contents);
     }
 
     let file_contents = file_cache
-        .get(file_path)
+        .get(&file_path)
         .expect("file should be in cache after insertion");
 
     // Extract the equation string using the span offsets
@@ -216,6 +233,10 @@ fn get_equation_str(
         })
 }
 
+fn print_truncated_node(indent: &str, rest_prefix: &str) {
+    println!("{indent}{rest_prefix}┌──╶╶╶");
+}
+
 trait PrintableTreeValue {
     /// Gets the name of the value, styled for display.
     fn get_styled_value_name(&self) -> String;
@@ -229,28 +250,28 @@ trait PrintableTreeValue {
     /// Gets the display information for the value, if available.
     ///
     /// This is used to get the equation string from the source file.
-    fn get_display_info(&self) -> Option<&(PathBuf, Span)>;
+    fn get_display_info(&self) -> Option<&(ModelPath, Span)>;
     /// Checks if the value is outside the top model.
     ///
     /// This is used to determine whether to recursively print the
     /// children of the value.
-    fn is_outside_top_model(&self, top_model_path: &Path) -> bool;
+    fn is_outside_top_model(&self, top_model_path: &ModelPath) -> bool;
 }
 
 impl PrintableTreeValue for ReferenceTreeValue {
     fn get_styled_value_name(&self) -> String {
-        let model_path = self.model_path.display();
+        let model_path = self.model_path.as_path().display().to_string();
         let styled_model_path = stylesheet::MODEL_LABEL.style(model_path);
 
-        let param = &self.parameter_name;
+        let param = self.parameter_name.as_str();
         let styled_param = stylesheet::PARAMETER_IDENTIFIER.style(param);
 
         format!("{styled_model_path} {styled_param}")
     }
 
     fn get_value_name_len(&self) -> usize {
-        let model_path_len = self.model_path.as_os_str().len();
-        let param_name_len = self.parameter_name.len();
+        let model_path_len = self.model_path.as_path().as_os_str().len();
+        let param_name_len = self.parameter_name.as_str().len();
         model_path_len + 1 + param_name_len // +1 for the space
     }
 
@@ -258,41 +279,47 @@ impl PrintableTreeValue for ReferenceTreeValue {
         &self.parameter_value
     }
 
-    fn get_display_info(&self) -> Option<&(PathBuf, Span)> {
+    fn get_display_info(&self) -> Option<&(ModelPath, Span)> {
         Some(&self.display_info)
     }
 
-    fn is_outside_top_model(&self, top_model_path: &Path) -> bool {
-        self.model_path != top_model_path
+    fn is_outside_top_model(&self, top_model_path: &ModelPath) -> bool {
+        self.model_path != *top_model_path
     }
 }
 
 impl PrintableTreeValue for DependencyTreeValue {
     fn get_styled_value_name(&self) -> String {
-        let value_name = self.reference_name.as_ref().map_or_else(
-            || self.parameter_name.clone(),
-            |reference_name| format!("{}.{reference_name}", &self.parameter_name),
-        );
+        let value_name = match &self.dependency_name {
+            DependencyName::External(ref_name, param_name) => {
+                format!("{}.{}", param_name.as_str(), ref_name.as_str())
+            }
+            DependencyName::Parameter(name) => name.as_str().to_string(),
+            DependencyName::Builtin(name) => name.as_str().to_string(),
+        };
         let styled_value_name = stylesheet::PARAMETER_IDENTIFIER.style(&value_name);
         format!("{styled_value_name}")
     }
 
     fn get_value_name_len(&self) -> usize {
-        self.reference_name.as_ref().map_or_else(
-            || self.parameter_name.len(),
-            |reference_name| self.parameter_name.len() + 1 + reference_name.len(), // +1 for the dot
-        )
+        match &self.dependency_name {
+            DependencyName::External(ref_name, param_name) => {
+                param_name.as_str().len() + 1 + ref_name.as_str().len()
+            }
+            DependencyName::Parameter(name) => name.as_str().len(),
+            DependencyName::Builtin(name) => name.as_str().len(),
+        }
     }
 
     fn get_value(&self) -> &Value {
         &self.parameter_value
     }
 
-    fn get_display_info(&self) -> Option<&(PathBuf, Span)> {
+    fn get_display_info(&self) -> Option<&(ModelPath, Span)> {
         self.display_info.as_ref()
     }
 
-    fn is_outside_top_model(&self, _top_model_path: &Path) -> bool {
-        self.reference_name.is_some()
+    fn is_outside_top_model(&self, _top_model_path: &ModelPath) -> bool {
+        matches!(self.dependency_name, DependencyName::External(..))
     }
 }

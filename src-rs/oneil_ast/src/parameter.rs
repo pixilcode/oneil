@@ -3,7 +3,7 @@
 use crate::{
     debug_info::TraceLevelNode,
     expression::ExprNode,
-    naming::{IdentifierNode, LabelNode},
+    naming::{IdentifierNode, ParameterLabelNode},
     node::Node,
     note::NoteNode,
     unit::UnitExprNode,
@@ -12,7 +12,7 @@ use crate::{
 /// A parameter in an Oneil program
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parameter {
-    label: LabelNode,
+    label: ParameterLabelNode,
     ident: IdentifierNode,
     value: ParameterValueNode,
     limits: Option<LimitsNode>,
@@ -28,7 +28,7 @@ impl Parameter {
     /// Creates a new parameter with the given components
     #[must_use]
     pub const fn new(
-        label: LabelNode,
+        label: ParameterLabelNode,
         ident: IdentifierNode,
         value: ParameterValueNode,
         limits: Option<LimitsNode>,
@@ -49,7 +49,7 @@ impl Parameter {
 
     /// Returns the label of this parameter
     #[must_use]
-    pub const fn label(&self) -> &LabelNode {
+    pub const fn label(&self) -> &ParameterLabelNode {
         &self.label
     }
 

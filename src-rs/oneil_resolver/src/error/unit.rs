@@ -1,5 +1,6 @@
 use std::{error::Error, fmt};
 
+use oneil_ast as ast;
 use oneil_shared::{
     error::{AsOneilError, ErrorLocation},
     span::Span,
@@ -9,7 +10,7 @@ use oneil_shared::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnitResolutionError {
     /// The full unit name that could not be resolved
-    unit_name: String,
+    unit_name: ast::UnitIdentifier,
     /// The span of the unit name in the source
     unit_name_span: Span,
 }
@@ -17,7 +18,7 @@ pub struct UnitResolutionError {
 impl UnitResolutionError {
     /// Creates a new error indicating that a unit could not be resolved.
     #[must_use]
-    pub const fn new(unit_name: String, unit_name_span: Span) -> Self {
+    pub const fn new(unit_name: ast::UnitIdentifier, unit_name_span: Span) -> Self {
         Self {
             unit_name,
             unit_name_span,
@@ -26,7 +27,7 @@ impl UnitResolutionError {
 
     /// Returns the name of the unit that could not be resolved.
     #[must_use]
-    pub fn unit_name(&self) -> &str {
+    pub const fn unit_name(&self) -> &ast::UnitIdentifier {
         &self.unit_name
     }
 
@@ -39,7 +40,7 @@ impl UnitResolutionError {
 
 impl fmt::Display for UnitResolutionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown unit `{}`", self.unit_name)
+        write!(f, "unknown unit `{}`", self.unit_name.as_str())
     }
 }
 

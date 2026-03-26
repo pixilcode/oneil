@@ -1,7 +1,14 @@
+use std::path::PathBuf;
+
 use indexmap::IndexMap;
 
 use oneil_ir as ir;
-use oneil_shared::span::Span;
+use oneil_shared::{
+    labels::ParameterLabel,
+    paths::{ModelPath, PythonPath},
+    span::Span,
+    symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex},
+};
 
 /// Generates a span for testing purposes
 ///
@@ -11,10 +18,19 @@ fn unimportant_span() -> Span {
     Span::random_span()
 }
 
+/// Generates a model path for testing purposes
+///
+/// The path is intentionally random in order to discourage any
+/// use of the path for testing.
+fn unimportant_model_path() -> ModelPath {
+    let path = PathBuf::from("unimportant.on");
+    ModelPath::from_path_with_ext(&path)
+}
+
 // SIMPLE CONSTRUCTORS
 
-pub fn reference_name(reference_name: &str) -> ir::ReferenceName {
-    ir::ReferenceName::new(reference_name.to_string())
+pub fn reference_name(reference_name: &str) -> ReferenceName {
+    ReferenceName::new(reference_name.to_string())
 }
 
 pub fn expr_literal_number(value: f64) -> ir::Expr {
@@ -24,23 +40,24 @@ pub fn expr_literal_number(value: f64) -> ir::Expr {
 
 pub fn empty_model() -> ir::Model {
     ir::Model::new(
-        ir::ModelPath::new("unimportant"),
+        unimportant_model_path(),
         IndexMap::new(),
         IndexMap::new(),
         IndexMap::new(),
         IndexMap::new(),
         IndexMap::new(),
+        None,
     )
 }
 
 // BUILDERS
 
 pub struct ModelBuilder {
-    python_imports: IndexMap<ir::PythonPath, ir::PythonImport>,
-    submodels: IndexMap<ir::SubmodelName, ir::SubmodelImport>,
-    references: IndexMap<ir::ReferenceName, ir::ReferenceImport>,
-    parameters: IndexMap<ir::ParameterName, ir::Parameter>,
-    tests: IndexMap<ir::TestIndex, ir::Test>,
+    python_imports: IndexMap<PythonPath, ir::PythonImport>,
+    submodels: IndexMap<SubmodelName, ir::SubmodelImport>,
+    references: IndexMap<ReferenceName, ir::ReferenceImport>,
+    parameters: IndexMap<ParameterName, ir::Parameter>,
+    tests: IndexMap<TestIndex, ir::Test>,
 }
 
 impl ModelBuilder {
@@ -54,12 +71,12 @@ impl ModelBuilder {
         }
     }
 
-    pub fn with_submodel(mut self, submodel_name: &str, submodel_path: &ir::ModelPath) -> Self {
-        let submodel_name = ir::SubmodelName::new(submodel_name.to_string());
+    pub fn with_submodel(mut self, submodel_name: &str, submodel_path: &ModelPath) -> Self {
+        let submodel_name = SubmodelName::new(submodel_name.to_string());
         let submodel_name_span = unimportant_span();
 
         // the reference name is the same as the submodel name
-        let reference_name = ir::ReferenceName::new(submodel_name.to_string());
+        let reference_name = ReferenceName::new(submodel_name.as_str().to_string());
         let reference_path = submodel_path.clone();
 
         let submodel_import = ir::SubmodelImport::new(
@@ -83,25 +100,26 @@ impl ModelBuilder {
             .build();
 
         self.parameters
-            .insert(ir::ParameterName::new(ident.to_string()), parameter);
+            .insert(ParameterName::from(ident), parameter);
 
         self
     }
 
     pub fn build(self) -> ir::Model {
         ir::Model::new(
-            ir::ModelPath::new("unimportant"),
+            unimportant_model_path(),
             self.python_imports,
             self.submodels,
             self.references,
             self.parameters,
             self.tests,
+            None,
         )
     }
 }
 
 pub struct ParameterBuilder {
-    name: Option<ir::ParameterName>,
+    name: Option<ParameterName>,
     name_span: Option<Span>,
     span: Option<Span>,
     value: Option<ir::ParameterValue>,
@@ -124,7 +142,7 @@ impl ParameterBuilder {
     }
 
     pub fn with_name_str(mut self, name: &str) -> Self {
-        let name = ir::ParameterName::new(name.to_string());
+        let name = ParameterName::from(name);
         self.name = Some(name);
         let span = unimportant_span();
         self.name_span = Some(span);
@@ -145,7 +163,7 @@ impl ParameterBuilder {
         let name = self.name.expect("name must be set");
         let name_span = self.name_span.unwrap_or_else(unimportant_span);
         let span = self.span.unwrap_or_else(unimportant_span);
-        let label = ir::Label::new(name.as_str().to_string());
+        let label = ParameterLabel::from(name.as_str());
         let value = self.value.expect("value must be set");
         let limits = self.limits.unwrap_or_default();
         let is_performance = self.is_performance;
@@ -157,10 +175,12 @@ impl ParameterBuilder {
             name_span,
             span,
             label,
+            None,
             value,
             limits,
             is_performance,
             trace_level,
+            None,
         )
     }
 }

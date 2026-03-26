@@ -1,8 +1,10 @@
 //! Dependency and reference analysis for the runtime.
 
-use std::path::{Path, PathBuf};
-
 use oneil_output::DependencySet;
+use oneil_shared::{
+    paths::ModelPath,
+    symbols::{ParameterName, ReferenceName},
+};
 
 use crate::{
     context::{ExternalAnalysisContext, TreeContext},
@@ -14,9 +16,9 @@ use crate::{
 
 #[derive(Debug)]
 struct TreeValueLocation {
-    pub model_path: PathBuf,
-    pub reference_name: Option<String>,
-    pub parameter_name: String,
+    pub model_path: ModelPath,
+    pub reference_name: Option<ReferenceName>,
+    pub parameter_name: ParameterName,
 }
 
 #[derive(Debug)]
@@ -31,17 +33,17 @@ struct GetChildrenResult<T> {
 /// that the specified parameter depends on, recursively.
 #[must_use]
 pub fn get_dependency_tree<E: ExternalAnalysisContext>(
-    model_path: &Path,
-    parameter_name: &str,
+    model_path: &ModelPath,
+    parameter_name: &ParameterName,
     external_context: &mut E,
 ) -> (
     Option<output::Tree<output::DependencyTreeValue>>,
     TreeErrors,
 ) {
     let location = TreeValueLocation {
-        model_path: model_path.to_path_buf(),
+        model_path: model_path.clone(),
         reference_name: None,
-        parameter_name: parameter_name.to_string(),
+        parameter_name: parameter_name.clone(),
     };
 
     get_parameter_tree(
@@ -51,7 +53,7 @@ pub fn get_dependency_tree<E: ExternalAnalysisContext>(
         |location, tree_context| {
             get_dependency_tree_children(
                 &location.model_path,
-                location.reference_name.as_deref(),
+                location.reference_name.as_ref(),
                 &location.parameter_name,
                 tree_context,
             )
@@ -67,14 +69,21 @@ fn get_dependency_value<E: ExternalAnalysisContext>(
         tree_context.lookup_parameter_value(&location.model_path, &location.parameter_name)?;
 
     let result = parameter.map(|parameter| {
-        let parameter_name = location.parameter_name.clone();
-        let reference_name = location.reference_name.clone();
+        let dependency_name = location.reference_name.as_ref().map_or_else(
+            || output::DependencyName::Parameter(location.parameter_name.clone()),
+            |reference_name| {
+                output::DependencyName::External(
+                    reference_name.clone(),
+                    location.parameter_name.clone(),
+                )
+            },
+        );
+
         let parameter_value = parameter.value;
         let display_info = Some((location.model_path.clone(), parameter.expr_span));
 
         output::DependencyTreeValue {
-            reference_name,
-            parameter_name,
+            dependency_name,
             parameter_value,
             display_info,
         }
@@ -84,9 +93,9 @@ fn get_dependency_value<E: ExternalAnalysisContext>(
 }
 
 fn get_dependency_tree_children(
-    model_path: &Path,
-    reference_name: Option<&str>,
-    parameter_name: &str,
+    model_path: &ModelPath,
+    reference_name: Option<&ReferenceName>,
+    parameter_name: &ParameterName,
     tree_context: &TreeContext<'_, impl ExternalAnalysisContext>,
 ) -> GetChildrenResult<output::DependencyTreeValue> {
     let DependencySet {
@@ -99,13 +108,12 @@ fn get_dependency_tree_children(
         .into_iter()
         .map(|dep| {
             let parameter_value = tree_context
-                .lookup_builtin_variable(&dep.ident)
+                .lookup_builtin_variable(&dep.name)
                 .cloned()
                 .expect("the builtin value should be defined");
 
             let tree_value = output::DependencyTreeValue {
-                reference_name: None,
-                parameter_name: dep.ident,
+                dependency_name: output::DependencyName::Builtin(dep.name),
                 parameter_value,
                 display_info: None,
             };
@@ -117,8 +125,8 @@ fn get_dependency_tree_children(
     let parameter_args = parameter_dependencies
         .into_iter()
         .map(|dep| TreeValueLocation {
-            model_path: model_path.to_path_buf(),
-            reference_name: reference_name.map(String::from),
+            model_path: model_path.clone(),
+            reference_name: reference_name.cloned(),
             parameter_name: dep.parameter_name,
         });
 
@@ -145,13 +153,13 @@ fn get_dependency_tree_children(
 #[must_use]
 pub fn get_reference_tree<E: ExternalAnalysisContext>(
     external_context: &mut E,
-    model_path: &Path,
-    parameter_name: &str,
+    model_path: &ModelPath,
+    parameter_name: &ParameterName,
 ) -> (Option<output::Tree<output::ReferenceTreeValue>>, TreeErrors) {
     let location = TreeValueLocation {
-        model_path: model_path.to_path_buf(),
+        model_path: model_path.clone(),
         reference_name: None,
-        parameter_name: parameter_name.to_string(),
+        parameter_name: parameter_name.clone(),
     };
 
     get_parameter_tree(
@@ -193,8 +201,8 @@ fn get_reference_value<E: ExternalAnalysisContext>(
 }
 
 fn get_reference_tree_children(
-    model_path: &Path,
-    parameter_name: &str,
+    model_path: &ModelPath,
+    parameter_name: &ParameterName,
     tree_context: &TreeContext<'_, impl ExternalAnalysisContext>,
 ) -> GetChildrenResult<output::ReferenceTreeValue> {
     let deps = tree_context.references(model_path, parameter_name);
@@ -203,7 +211,7 @@ fn get_reference_tree_children(
         .parameter_references
         .iter()
         .map(|dep| TreeValueLocation {
-            model_path: model_path.to_path_buf(),
+            model_path: model_path.clone(),
             reference_name: None,
             parameter_name: dep.parameter_name.clone(),
         });
@@ -331,9 +339,9 @@ fn get_dependency_graph<E: ExternalAnalysisContext>(
             for builtin_dep in dependencies.builtin().keys() {
                 dependency_graph.add_depends_on_builtin(
                     model_path.clone(),
-                    parameter_name.as_str().to_string(),
+                    parameter_name.clone(),
                     oneil_output::BuiltinDependency {
-                        ident: builtin_dep.as_str().to_string(),
+                        name: builtin_dep.clone(),
                     },
                 );
             }
@@ -341,9 +349,9 @@ fn get_dependency_graph<E: ExternalAnalysisContext>(
             for parameter_dep in dependencies.parameter().keys() {
                 dependency_graph.add_depends_on_parameter(
                     model_path.clone(),
-                    parameter_name.as_str().to_string(),
+                    parameter_name.clone(),
                     oneil_output::ParameterDependency {
-                        parameter_name: parameter_dep.as_str().to_string(),
+                        parameter_name: parameter_dep.clone(),
                     },
                 );
             }
@@ -353,11 +361,11 @@ fn get_dependency_graph<E: ExternalAnalysisContext>(
             {
                 dependency_graph.add_depends_on_external(
                     model_path.clone(),
-                    parameter_name.as_str().to_string(),
+                    parameter_name.clone(),
                     oneil_output::ExternalDependency {
-                        model_path: external_model_path.as_ref().to_path_buf(),
-                        reference_name: reference_dep_name.as_str().to_string(),
-                        parameter_name: parameter_dep_name.as_str().to_string(),
+                        model_path: external_model_path.clone(),
+                        reference_name: reference_dep_name.clone(),
+                        parameter_name: parameter_dep_name.clone(),
                     },
                 );
             }

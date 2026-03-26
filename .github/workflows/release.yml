@@ -1,0 +1,97 @@
+# Build and publish release artifacts for Linux, Windows, and macOS.
+# Runs on push of version tags (e.g. v0.15.0).
+# Uploads binaries to the GitHub Release and attaches artifacts to the workflow run.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.triple }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+            archive: tar.gz
+            asset_name: oneil-${{ github.ref_name }}-x86_64-unknown-linux-gnu
+          - runner: windows-latest
+            triple: x86_64-pc-windows-msvc
+            archive: zip
+            asset_name: oneil-${{ github.ref_name }}-x86_64-pc-windows-msvc
+          - runner: macos-latest
+            triple: aarch64-apple-darwin
+            archive: tar.gz
+            asset_name: oneil-${{ github.ref_name }}-aarch64-apple-darwin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-release-${{ matrix.triple }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: cargo build --release -p oneil
+
+      - name: Create archive (Linux/macOS)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          mkdir -p release
+          cp target/release/oneil release/oneil
+          chmod +x release/oneil
+          tar -czvf "${{ matrix.asset_name }}.tar.gz" -C release oneil
+
+      - name: Create archive (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release
+          Copy-Item target/release/oneil.exe release/oneil.exe
+          Compress-Archive -Path "release/oneil.exe" -DestinationPath "${{ matrix.asset_name }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.triple }}
+          path: ${{ matrix.asset_name }}.${{ matrix.archive }}
+
+  release:
+    name: Create release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

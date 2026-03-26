@@ -60,8 +60,7 @@ enum FuzzData {
     Neg {
         val: IntervalWithValue,
     },
-    // TODO: this is causing some false positives, so we're disabling it for now.
-    //       figure out if this is a mathematical problem or an f64 problem
+    // TODO: figure out how to test this and handle edge cases correctly
     // Pow {
     //     base: IntervalWithValue,
     //     exponent: IntervalWithValue,
@@ -188,11 +187,11 @@ fuzz_target!(|data: FuzzData| {
             (interval_result, value_result)
         }
         // FuzzData::Pow { base, exponent } => {
-        //     let interval_result = base.interval.pow(&exponent.interval);
+        //     let interval_result = base.interval.pow(exponent.interval);
         //     let value_result = base.value.powf(exponent.value);
 
-        //     if base.value == 0.0 && exponent.value == 0.0 {
-        //         // special case: 0^0 produces 1.0 with float arithmetic,
+        //     if exponent.value == 0.0 {
+        //         // special case: x^0 produces 1.0 with float arithmetic,
         //         //               but is considered undefined with interval arithmetic
         //         //               so we skip the test to avoid false positives
         //         //
@@ -204,7 +203,11 @@ fuzz_target!(|data: FuzzData| {
         // }
         FuzzData::Sign { val } => {
             let interval_result = val.interval.sign();
-            let value_result = val.value.signum();
+            let value_result = if val.value == 0.0 {
+                0.0
+            } else {
+                val.value.signum()
+            };
             (interval_result, value_result)
         }
         FuzzData::Sin { val } => {

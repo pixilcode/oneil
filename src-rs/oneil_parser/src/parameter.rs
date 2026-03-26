@@ -7,9 +7,9 @@ use nom::{
     multi::{many0, separated_list1},
 };
 use oneil_ast::{
-    IdentifierNode, LabelNode, Limits, LimitsNode, Node, Parameter, ParameterNode, ParameterValue,
-    ParameterValueNode, PerformanceMarker, PerformanceMarkerNode, PiecewisePart, PiecewisePartNode,
-    TraceLevel, TraceLevelNode,
+    IdentifierNode, Limits, LimitsNode, Node, Parameter, ParameterLabelNode, ParameterNode,
+    ParameterValue, ParameterValueNode, PerformanceMarker, PerformanceMarkerNode, PiecewisePart,
+    PiecewisePartNode, TraceLevel, TraceLevelNode,
 };
 use oneil_shared::span::Span;
 
@@ -57,7 +57,7 @@ fn parameter_decl(input: InputSpan<'_>) -> Result<'_, ParameterNode, ParserError
     let (rest, label_token) = label
         .convert_error_to(ParserError::expect_parameter)
         .parse(rest)?;
-    let label_node = LabelNode::from(label_token);
+    let label_node = ParameterLabelNode::from(label_token);
 
     let (rest, limits_node) = opt(limits).parse(rest)?;
 
@@ -478,13 +478,13 @@ mod tests {
             assert_eq!(value, 42.0);
 
             let Some(UnitExpr::Unit {
-                identifier,
+                identifier: name,
                 exponent,
             }) = unit.as_deref().cloned()
             else {
                 panic!("Expected unit");
             };
-            assert_eq!(identifier.as_str(), "kg");
+            assert_eq!(name.as_str(), "kg");
 
             assert_eq!(exponent, None);
         }

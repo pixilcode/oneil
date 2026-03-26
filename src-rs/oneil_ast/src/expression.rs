@@ -2,7 +2,11 @@
 
 use oneil_shared::span::Span;
 
-use crate::{naming::IdentifierNode, node::Node};
+use crate::{
+    naming::{IdentifierNode, ParameterNameNode, ReferenceNameNode},
+    node::Node,
+    unit::UnitExprNode,
+};
 
 /// An expression in the Oneil language
 #[derive(Debug, Clone, PartialEq)]
@@ -42,6 +46,14 @@ pub enum Expr {
         name: IdentifierNode,
         /// The function arguments
         args: Vec<ExprNode>,
+    },
+
+    /// Unit casting expression
+    UnitCast {
+        /// The expression to cast
+        expr: ExprNode,
+        /// The unit to cast to
+        unit: UnitExprNode,
     },
 
     /// Parenthesized expression
@@ -105,6 +117,12 @@ impl Expr {
     #[must_use]
     pub const fn variable(var: VariableNode) -> Self {
         Self::Variable(var)
+    }
+
+    /// Creates a unit cast expression
+    #[must_use]
+    pub const fn unit_cast(expr: ExprNode, unit: UnitExprNode) -> Self {
+        Self::UnitCast { expr, unit }
     }
 
     /// Creates a literal expression
@@ -306,9 +324,9 @@ pub enum Variable {
     /// A parameter in a reference model
     ModelParameter {
         /// The reference model
-        reference_model: IdentifierNode,
+        reference_model: ReferenceNameNode,
         /// The parameter being accessed
-        parameter: IdentifierNode,
+        parameter: ParameterNameNode,
     },
 }
 
@@ -325,8 +343,8 @@ impl Variable {
     /// Creates a model parameter variable reference
     #[must_use]
     pub const fn model_parameter(
-        reference_model: IdentifierNode,
-        parameter: IdentifierNode,
+        reference_model: ReferenceNameNode,
+        parameter: ParameterNameNode,
     ) -> Self {
         Self::ModelParameter {
             reference_model,
@@ -412,6 +430,12 @@ pub trait ExprVisitor: Sized {
         self
     }
 
+    /// Visits a unit casting expression
+    #[must_use]
+    fn visit_unit_cast(self, span: Span, expr: &ExprNode, unit: &UnitExprNode) -> Self {
+        self
+    }
+
     /// Visits a parenthesized expression
     #[must_use]
     fn visit_parenthesized(self, span: Span, expr: &ExprNode) -> Self {
@@ -465,6 +489,10 @@ impl Node<Expr> {
                 args.iter()
                     .fold(visitor, |visitor, arg| arg.pre_order_visit(visitor))
             }
+            Expr::UnitCast { expr, unit } => {
+                let visitor = visitor.visit_unit_cast(span, expr, unit);
+                expr.pre_order_visit(visitor)
+            }
             Expr::Parenthesized { expr } => {
                 let visitor = visitor.visit_parenthesized(span, expr);
                 expr.pre_order_visit(visitor)
@@ -508,6 +536,10 @@ impl Node<Expr> {
                     .fold(visitor, |visitor, arg| arg.post_order_visit(visitor));
 
                 visitor.visit_function_call(span, name, args)
+            }
+            Expr::UnitCast { expr, unit } => {
+                let visitor = expr.post_order_visit(visitor);
+                visitor.visit_unit_cast(span, expr, unit)
             }
             Expr::Parenthesized { expr } => {
                 let visitor = expr.post_order_visit(visitor);

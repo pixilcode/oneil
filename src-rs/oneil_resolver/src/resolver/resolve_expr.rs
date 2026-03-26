@@ -4,12 +4,17 @@ use indexmap::IndexMap;
 
 use oneil_ast as ast;
 use oneil_ir::{self as ir, Dependencies};
-use oneil_shared::span::Span;
+use oneil_shared::{
+    search::search,
+    span::Span,
+    symbols::{BuiltinFunctionName, PyFunctionName},
+};
 
 use crate::{
     ExternalResolutionContext, ResolutionContext,
+    context::MAX_BEST_MATCH_DISTANCE,
     error::{self, VariableResolutionError},
-    resolver::resolve_variable::resolve_variable,
+    resolver::{resolve_unit::resolve_unit, resolve_variable::resolve_variable},
 };
 
 /// Resolves an AST expression into a model expression.
@@ -37,6 +42,9 @@ where
         }
         ast::Expr::FunctionCall { name, args } => {
             resolve_function_call_expression(span, name, args, resolution_context)
+        }
+        ast::Expr::UnitCast { expr, unit } => {
+            resolve_unit_cast_expression(span, expr, unit, resolution_context)
         }
         ast::Expr::Variable(variable) => resolve_variable_expression(variable, resolution_context),
         ast::Expr::Literal(literal) => Ok(resolve_literal_expression(span, literal)),
@@ -166,6 +174,25 @@ where
     resolve_expr(expr, resolution_context)
 }
 
+/// Resolves a unit cast expression.
+fn resolve_unit_cast_expression<E>(
+    span: Span,
+    expr: &ast::ExprNode,
+    unit: &ast::UnitExprNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    let expr = resolve_expr(expr, resolution_context)?;
+    let unit = resolve_unit(unit, resolution_context).map_err(|errs| {
+        errs.into_iter()
+            .map(VariableResolutionError::from)
+            .collect::<Vec<VariableResolutionError>>()
+    })?;
+    Ok(ir::Expr::unit_cast(span, expr, unit))
+}
+
 /// Converts an AST comparison operation to a model comparison operation.
 fn resolve_comparison_op(op: &ast::ComparisonOpNode) -> ir::ComparisonOp {
     match &**op {
@@ -212,18 +239,25 @@ where
     E: ExternalResolutionContext,
 {
     let name_span = name.span();
-    let name = ir::Identifier::new(name.as_str().to_string());
 
-    if resolution_context.has_builtin_function(&name) {
+    if resolution_context.has_builtin_function(name) {
+        let name = BuiltinFunctionName::from(name.as_str());
         return Ok(ir::FunctionName::builtin(name, name_span));
     }
 
-    let python_paths = resolution_context.lookup_imported_function(name.as_str());
+    let name = PyFunctionName::from(name.as_str());
+    let python_paths = resolution_context.lookup_imported_function(&name);
     match python_paths.len() {
-        0 => Err(VariableResolutionError::undefined_function(
-            name.as_str().to_string(),
-            name_span,
-        )),
+        0 => {
+            let best_match =
+                get_best_match_function_name_in_active_model(resolution_context, &name);
+
+            Err(VariableResolutionError::undefined_function(
+                name.as_str().to_string(),
+                name_span,
+                best_match,
+            ))
+        }
         1 => Ok(ir::FunctionName::imported(
             python_paths[0].clone(),
             name,
@@ -235,6 +269,25 @@ where
             python_paths,
         )),
     }
+}
+
+fn get_best_match_function_name_in_active_model<E>(
+    resolution_context: &ResolutionContext<'_, E>,
+    name: &PyFunctionName,
+) -> Option<String>
+where
+    E: ExternalResolutionContext,
+{
+    let imported_functions = resolution_context.get_active_model_imported_functions();
+    let builtin_functions = resolution_context.get_builtin_functions();
+    let functions: Vec<&str> = imported_functions
+        .map(PyFunctionName::as_str)
+        .chain(builtin_functions.map(BuiltinFunctionName::as_str))
+        .collect();
+
+    search(name.as_str(), &functions)
+        .and_then(|result| result.some_if_within_distance(MAX_BEST_MATCH_DISTANCE))
+        .map(String::from)
 }
 
 /// Converts an AST literal to a model literal.
@@ -249,16 +302,16 @@ fn resolve_literal(literal: &ast::LiteralNode) -> ir::Literal {
 /// Extracts internal dependencies from an expression.
 ///
 /// Note that these dependencies include both parameters and builtin variables.
-pub fn get_expr_internal_dependencies(expr: &ast::ExprNode) -> IndexMap<ir::Identifier, Span> {
+pub fn get_expr_internal_dependencies(expr: &ast::ExprNode) -> IndexMap<ast::Identifier, Span> {
     struct ExprInternalDependencyVisitor {
-        dependencies: IndexMap<ir::Identifier, Span>,
+        dependencies: IndexMap<ast::Identifier, Span>,
     }
 
     impl ast::ExprVisitor for ExprInternalDependencyVisitor {
         fn visit_variable(mut self, _span: Span, var: &ast::VariableNode) -> Self {
             match &**var {
                 ast::Variable::Identifier(identifier_node) => {
-                    let identifier = ir::Identifier::new(identifier_node.as_str().to_string());
+                    let identifier = ast::Identifier::from(identifier_node.as_str());
                     let identifier_span = identifier_node.span();
                     self.dependencies.insert(identifier, identifier_span);
                     self
@@ -346,18 +399,19 @@ mod tests {
     use super::*;
     use crate::test::{
         external_context::TestExternalContext, resolution_context::ResolutionContextBuilder,
-        test_ast, test_ir,
+        test_ast, test_ir, test_model_path,
     };
 
     use oneil_ast as ast;
     use oneil_ir as ir;
+    use oneil_shared::symbols::ParameterName;
 
     fn make_resolution_context<'a>(
         external: &'a mut TestExternalContext,
         parameters: Vec<ir::Parameter>,
         python_import_paths: Vec<&'a str>,
     ) -> ResolutionContext<'a, TestExternalContext> {
-        let model_path = ir::ModelPath::new("/test");
+        let model_path = test_model_path("test");
         ResolutionContextBuilder::new()
             .with_active_model(model_path)
             .with_parameters(parameters)
@@ -589,7 +643,7 @@ mod tests {
             panic!("Expected imported function, got {name:?}");
         };
 
-        assert_eq!(python_path.as_ref(), &PathBuf::from("test.py"));
+        assert_eq!(python_path.as_path(), &PathBuf::from("test.py"));
         assert_eq!(name.as_str(), "custom_function");
 
         assert_eq!(args.len(), 1);
@@ -686,6 +740,7 @@ mod tests {
             model_path: None,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected undefined parameter error, got {error:?}");
@@ -775,7 +830,7 @@ mod tests {
             panic!("Expected imported function, got {name:?}");
         };
 
-        assert_eq!(python_path.as_ref(), &PathBuf::from("test.py"));
+        assert_eq!(python_path.as_path(), &PathBuf::from("test.py"));
         assert_eq!(name.as_str(), "foo");
 
         assert_eq!(args.len(), 1);
@@ -925,7 +980,7 @@ mod tests {
                 panic!("Expected imported function, got {result:?}");
             };
 
-            assert_eq!(python_path.as_ref(), &PathBuf::from("test.py"));
+            assert_eq!(python_path.as_path(), &PathBuf::from("test.py"));
             assert_eq!(name.as_str(), func_name);
         }
     }
@@ -978,6 +1033,7 @@ mod tests {
                     model_path: None,
                     parameter_name,
                     reference_span: _,
+                    best_match: _,
                 } = e
                 {
                     Some(parameter_name.clone())
@@ -987,8 +1043,8 @@ mod tests {
             })
             .collect();
 
-        assert!(error_identifiers.contains(&ir::ParameterName::new("undefined1".to_string())));
-        assert!(error_identifiers.contains(&ir::ParameterName::new("undefined2".to_string())));
+        assert!(error_identifiers.contains(&ParameterName::from("undefined1")));
+        assert!(error_identifiers.contains(&ParameterName::from("undefined2")));
     }
 
     #[test]
@@ -1257,6 +1313,7 @@ mod tests {
             model_path: None,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected undefined parameter error, got {error:?}");
@@ -1291,6 +1348,7 @@ mod tests {
             model_path: None,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected undefined parameter error, got {error:?}");
@@ -1329,6 +1387,7 @@ mod tests {
             model_path: None,
             parameter_name,
             reference_span: _,
+            best_match: _,
         } = error
         else {
             panic!("Expected undefined parameter error, got {error:?}");
@@ -1371,6 +1430,7 @@ mod tests {
                     model_path: None,
                     parameter_name,
                     reference_span: _,
+                    best_match: _,
                 } = e
                 {
                     Some(parameter_name.clone())
@@ -1380,10 +1440,8 @@ mod tests {
             })
             .collect();
 
-        assert!(error_identifiers.contains(&ir::ParameterName::new("undefined_left".to_string())));
-        assert!(error_identifiers.contains(&ir::ParameterName::new("undefined_right".to_string())));
-        assert!(
-            error_identifiers.contains(&ir::ParameterName::new("undefined_chained".to_string()))
-        );
+        assert!(error_identifiers.contains(&ParameterName::from("undefined_left")));
+        assert!(error_identifiers.contains(&ParameterName::from("undefined_right")));
+        assert!(error_identifiers.contains(&ParameterName::from("undefined_chained")));
     }
 }

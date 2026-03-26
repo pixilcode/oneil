@@ -7,7 +7,11 @@
 //! If the span is important, it is better to construct the node directly.
 
 use oneil_ast as ast;
-use oneil_shared::span::Span;
+use oneil_shared::{
+    labels::{ParameterLabel, SectionLabel},
+    span::Span,
+    symbols::{ParameterName, ReferenceName},
+};
 
 /// Generates a span for testing purposes
 ///
@@ -36,6 +40,21 @@ pub fn model_node(model: ast::Model) -> ast::ModelNode {
 pub fn identifier_node(identifier: &'static str) -> ast::Node<ast::Identifier> {
     let identifier = ast::Identifier::new(identifier.to_string());
     ast::Node::new(identifier, unimportant_span(), unimportant_span())
+}
+
+pub fn unit_identifier_node(unit_identifier: &'static str) -> ast::Node<ast::UnitIdentifier> {
+    let unit_identifier = ast::UnitIdentifier::new(unit_identifier.to_string());
+    ast::Node::new(unit_identifier, unimportant_span(), unimportant_span())
+}
+
+pub fn reference_name_node(reference_name: &'static str) -> ast::Node<ReferenceName> {
+    let reference_name = ReferenceName::new(reference_name.to_string());
+    ast::Node::new(reference_name, unimportant_span(), unimportant_span())
+}
+
+pub fn parameter_name_node(parameter_name: &'static str) -> ast::Node<ParameterName> {
+    let parameter_name = ParameterName::from(parameter_name);
+    ast::Node::new(parameter_name, unimportant_span(), unimportant_span())
 }
 
 pub fn directory_name_node(directory_name: &'static str) -> ast::Node<ast::Directory> {
@@ -127,8 +146,8 @@ pub fn model_parameter_variable_node(
     reference_model: &'static str,
     parameter: &'static str,
 ) -> ast::Node<ast::Variable> {
-    let reference_model_node = identifier_node(reference_model);
-    let parameter_node = identifier_node(parameter);
+    let reference_model_node = reference_name_node(reference_model);
+    let parameter_node = parameter_name_node(parameter);
     let variable = ast::Variable::ModelParameter {
         reference_model: reference_model_node,
         parameter: parameter_node,
@@ -187,7 +206,7 @@ pub fn discrete_limits_node(values: impl IntoIterator<Item = f64>) -> ast::Node<
 }
 
 pub fn unit_node(identifier: &'static str) -> ast::Node<ast::UnitExpr> {
-    let identifier = identifier_node(identifier);
+    let identifier = unit_identifier_node(identifier);
     let unit = ast::UnitExpr::Unit {
         identifier,
         exponent: None,
@@ -199,7 +218,7 @@ pub fn unit_with_exponent_node(
     identifier: &'static str,
     exponent: f64,
 ) -> ast::Node<ast::UnitExpr> {
-    let identifier = identifier_node(identifier);
+    let identifier = unit_identifier_node(identifier);
     let exponent = ast::UnitExponent::new(exponent);
     let exponent_node = ast::Node::new(exponent, unimportant_span(), unimportant_span());
     let unit = ast::UnitExpr::Unit {
@@ -276,7 +295,7 @@ impl ModelBuilder {
     }
 
     pub fn with_section(mut self, section: &'static str, decls: Vec<ast::DeclNode>) -> Self {
-        let section_label = ast::Label::new(section.to_string());
+        let section_label = SectionLabel::new(section.to_string());
         let section_label_node =
             ast::Node::new(section_label, unimportant_span(), unimportant_span());
         let section_header = ast::SectionHeader::new(section_label_node);
@@ -462,7 +481,7 @@ impl ImportPythonNodeBuilder {
 }
 
 pub struct ParameterNodeBuilder {
-    label: Option<ast::LabelNode>,
+    label: Option<ast::ParameterLabelNode>,
     ident: Option<ast::IdentifierNode>,
     value: Option<ast::ParameterValueNode>,
     limits: Option<ast::LimitsNode>,
@@ -489,7 +508,7 @@ impl ParameterNodeBuilder {
         let ident_node = ast::Node::new(ident, unimportant_span(), unimportant_span());
         self.ident = Some(ident_node);
 
-        let label = ast::Label::new(ident_and_label.to_string());
+        let label = ParameterLabel::from(ident_and_label);
         let label_node = ast::Node::new(label, unimportant_span(), unimportant_span());
         self.label = Some(label_node);
 

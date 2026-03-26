@@ -1,11 +1,13 @@
 //! Errors for the Oneil evaluator.
 
-use std::{error::Error, fmt, path::PathBuf};
+use std::{error::Error, fmt};
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use oneil_shared::{
     error::{AsOneilError, Context as ErrorContext, ErrorLocation},
+    paths::ModelPath,
     span::Span,
+    symbols::{BuiltinFunctionName, ParameterName, PyFunctionName, TestIndex},
 };
 
 use oneil_output::{DisplayUnit, Interval, NumberType, Value, ValueType};
@@ -14,37 +16,74 @@ use oneil_output::{DisplayUnit, Interval, NumberType, Value, ValueType};
 #[derive(Debug, Clone)]
 pub struct EvalErrors {
     /// Errors that occurred during evaluation of the parameters.
-    pub parameters: IndexMap<String, Vec<EvalError>>,
+    pub parameters: IndexMap<ParameterName, Vec<EvalError>>,
     /// Errors that occurred during evaluation of the tests.
-    pub tests: Vec<EvalError>,
+    pub tests: IndexMap<TestIndex, Vec<EvalError>>,
+    /// References that had errors.
+    pub references: IndexSet<ModelPath>,
 }
 
 /// Represents the expected type for type checking operations.
 ///
 /// This enum is used to specify what type is expected in various type checking
 /// contexts, such as function arguments or expression evaluation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExpectedType {
     /// A boolean value.
     Boolean,
     /// A string value.
     String,
     /// A unitless number (scalar or interval without units).
-    Number,
+    Number {
+        /// The type of the expected number (if any)
+        number_type: Option<NumberType>,
+    },
     /// A number with a unit (measured number).
-    MeasuredNumber,
+    MeasuredNumber {
+        /// The type of the expected number (if any)
+        number_type: Option<NumberType>,
+        /// The unit of the expected measured number (if any)
+        unit: Option<DisplayUnit>,
+    },
     /// Either a unitless number or a number with a unit.
-    NumberOrMeasuredNumber,
+    NumberOrMeasuredNumber {
+        /// The type of the expected number (if any)
+        number_type: Option<NumberType>,
+    },
 }
 
 impl fmt::Display for ExpectedType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let number_type_to_string = |type_: &Option<NumberType>| match type_ {
+            Some(NumberType::Scalar) => "scalar",
+            Some(NumberType::Interval) => "interval",
+            None => "number",
+        };
+
+        let unit_to_string = |unit: &Option<DisplayUnit>| {
+            unit.as_ref()
+                .map_or_else(|| "a unit".to_string(), |unit| format!("unit `{unit}`"))
+        };
+
         match self {
-            Self::Number => write!(f, "unitless number"),
             Self::Boolean => write!(f, "boolean"),
             Self::String => write!(f, "string"),
-            Self::MeasuredNumber => write!(f, "number with a unit"),
-            Self::NumberOrMeasuredNumber => write!(f, "number"),
+            Self::Number { number_type: type_ } => {
+                let type_str = number_type_to_string(type_);
+                write!(f, "unitless {type_str}")
+            }
+            Self::MeasuredNumber {
+                number_type: type_,
+                unit,
+            } => {
+                let type_str = number_type_to_string(type_);
+                let unit_str = unit_to_string(unit);
+                write!(f, "{type_str} with {unit_str}")
+            }
+            Self::NumberOrMeasuredNumber { number_type: type_ } => {
+                let type_str = number_type_to_string(type_);
+                write!(f, "{type_str}")
+            }
         }
     }
 }
@@ -93,7 +132,7 @@ pub enum EvalError {
     /// different type.
     TypeMismatch {
         /// The expected value type.
-        expected_type: ValueType,
+        expected_type: ExpectedType,
         /// The source span of the expression that caused the expected type.
         expected_source_span: Span,
         /// The actual value type that was found.
@@ -195,16 +234,16 @@ pub enum EvalError {
     /// is error propagation, not error reporting.
     ParameterHasError {
         /// The path of the model that contains the parameter.
-        model_path: Option<PathBuf>,
+        model_path: Option<ModelPath>,
         /// The name of the parameter that has errors.
-        parameter_name: String,
+        parameter_name: ParameterName,
         /// The source span of the parameter name.
         variable_span: Span,
     },
     /// An error indicating that a function was called with an invalid number of arguments.
     InvalidArgumentCount {
         /// The name of the function that was called incorrectly.
-        function_name: String,
+        function_name: BuiltinFunctionName,
         /// The source span of the function name.
         function_name_span: Span,
         /// The expected argument count specification.
@@ -248,7 +287,7 @@ pub enum EvalError {
     /// An error indicating that multiple piecewise branches match for a parameter.
     MultiplePiecewiseBranchesMatch {
         /// The name of the parameter being evaluated.
-        param_ident: String,
+        param_ident: ParameterName,
         /// The source span of the parameter identifier.
         param_ident_span: Span,
         /// The source spans of all matching branch conditions.
@@ -257,7 +296,7 @@ pub enum EvalError {
     /// An error indicating that no piecewise branch matches for a parameter.
     NoPiecewiseBranchMatch {
         /// The name of the parameter being evaluated.
-        param_ident: String,
+        param_ident: ParameterName,
         /// The source span of the parameter identifier.
         param_ident_span: Span,
     },
@@ -430,7 +469,7 @@ pub enum EvalError {
     /// An error indicating that a Python function evaluation failed.
     PythonEvalError {
         /// The name of the Python function that was called.
-        function_name: String,
+        function_name: PyFunctionName,
         /// The source span of the function call.
         function_call_span: Span,
         /// The error message from Python or from conversion.
@@ -441,7 +480,7 @@ pub enum EvalError {
     /// An invalid return value from a Python function.
     InvalidPythonReturnValue {
         /// The name of the Python function that returned the invalid value.
-        function_name: String,
+        function_name: PyFunctionName,
         /// The source span of the function call.
         function_call_span: Span,
         /// The value that was invalid.
@@ -490,10 +529,7 @@ impl fmt::Display for EvalError {
                 expected_source_span: _,
                 found_type,
                 found_span: _,
-            } => write!(
-                f,
-                "expected type `{expected_type}` but found `{found_type}`"
-            ),
+            } => write!(f, "expected {expected_type} but found {found_type}"),
             Self::UnitMismatch {
                 expected_unit,
                 expected_source_span: _,
@@ -528,10 +564,7 @@ impl fmt::Display for EvalError {
                 expected_type,
                 found_type,
                 found_span: _,
-            } => write!(
-                f,
-                "expected type `{expected_type}` but found `{found_type}`"
-            ),
+            } => write!(f, "expected {expected_type} but found {found_type}"),
             Self::InvalidUnit {
                 expected_unit,
                 found_unit,
@@ -581,8 +614,9 @@ impl fmt::Display for EvalError {
             } => {
                 let model_path = model_path.as_ref().map_or_else(
                     || "current model".to_string(),
-                    |path| format!("model `{}`", path.display()),
+                    |path| format!("model `{}`", path.as_path().display()),
                 );
+                let parameter_name = parameter_name.as_str();
 
                 write!(f, "parameter `{parameter_name}` in {model_path} has errors")
             }
@@ -592,9 +626,10 @@ impl fmt::Display for EvalError {
                 expected_argument_count,
                 actual_argument_count,
             } => {
+                let function_name = function_name.as_str();
                 write!(
                     f,
-                    "{function_name} expects {expected_argument_count}, but found {actual_argument_count}"
+                    "`{function_name}` expects {expected_argument_count}, but found {actual_argument_count}"
                 )
             }
             Self::ParameterMissingUnitAnnotation {
@@ -621,18 +656,24 @@ impl fmt::Display for EvalError {
                 param_ident,
                 param_ident_span: _,
                 matching_branche_spans,
-            } => write!(
-                f,
-                "parameter `{param_ident}` has {} matching piecewise branches",
-                matching_branche_spans.len()
-            ),
+            } => {
+                let param_ident = param_ident.as_str();
+                write!(
+                    f,
+                    "parameter `{param_ident}` has {} matching piecewise branches",
+                    matching_branche_spans.len()
+                )
+            }
             Self::NoPiecewiseBranchMatch {
                 param_ident,
                 param_ident_span: _,
-            } => write!(
-                f,
-                "parameter `{param_ident}` does not have a matching piecewise branch"
-            ),
+            } => {
+                let param_ident = param_ident.as_str();
+                write!(
+                    f,
+                    "parameter `{param_ident}` does not have a matching piecewise branch"
+                )
+            }
             Self::BooleanCannotHaveUnit {
                 expr_span: _,
                 unit_span: _,
@@ -769,15 +810,21 @@ impl fmt::Display for EvalError {
                 function_call_span: _,
                 message: _,
                 traceback: _,
-            } => write!(f, "python function `{function_name}` raised an error"),
+            } => {
+                let function_name = function_name.as_str();
+                write!(f, "python function `{function_name}` raised an error")
+            }
             Self::InvalidPythonReturnValue {
                 function_name,
                 function_call_span: _,
                 value_repr: _,
-            } => write!(
-                f,
-                "python function `{function_name}` returned an invalid value"
-            ),
+            } => {
+                let function_name = function_name.as_str();
+                write!(
+                    f,
+                    "python function `{function_name}` returned an invalid value"
+                )
+            }
             Self::Unsupported {
                 relevant_span: _,
                 feature_name,
@@ -1075,13 +1122,13 @@ impl AsOneilError for EvalError {
                 let mut context = vec![
                     ErrorContext::Note(format!("parameter value has unit `{param_value_unit}`")),
                     ErrorContext::Help(format!(
-                        "add a unit annotation `:{param_value_unit}` to the parameter"
+                        "add a unit annotation `: {param_value_unit}` to the parameter"
                     )),
                 ];
 
                 if *is_dimensionless {
                     context.push(ErrorContext::Help(
-                        "or add `:1` if you intend for the parameter value to be dimensionless (such as a ratio)"
+                        "or add `: 1` if you intend for the parameter value to be dimensionless (such as a ratio)"
                             .to_string(),
                     ));
                 }
@@ -1286,7 +1333,7 @@ impl AsOneilError for EvalError {
                 found_span: _,
             } => vec![(
                 ErrorContext::Note(format!(
-                    "expected because this expression has type `{expected_type}`",
+                    "expected because this expression is {expected_type}",
                 )),
                 Some(ErrorLocation::from_source_and_span(
                     source,
@@ -1577,6 +1624,7 @@ impl AsOneilError for EvalError {
 pub mod convert {
     use oneil_output::{
         BinaryEvalError, ExpectedType as OutputExpectedType, UnaryEvalError, UnaryOperation,
+        ValueType,
     };
     use oneil_shared::span::Span;
 
@@ -1597,7 +1645,7 @@ pub mod convert {
                 found_span: rhs_span,
             },
             BinaryEvalError::TypeMismatch { lhs_type, rhs_type } => EvalError::TypeMismatch {
-                expected_type: *lhs_type,
+                expected_type: value_type_to_expected_type(*lhs_type),
                 expected_source_span: lhs_span,
                 found_type: *rhs_type,
                 found_span: rhs_span,
@@ -1697,7 +1745,7 @@ pub mod convert {
         match error {
             UnaryEvalError::InvalidType { op, value_type } => {
                 let expected_type = match op {
-                    UnaryOperation::Neg => ExpectedType::Number,
+                    UnaryOperation::Neg => ExpectedType::Number { number_type: None },
                     UnaryOperation::Not => ExpectedType::Boolean,
                 };
                 EvalError::InvalidType {
@@ -1713,9 +1761,28 @@ pub mod convert {
         match e {
             OutputExpectedType::Boolean => ExpectedType::Boolean,
             OutputExpectedType::String => ExpectedType::String,
-            OutputExpectedType::Number => ExpectedType::Number,
-            OutputExpectedType::MeasuredNumber => ExpectedType::MeasuredNumber,
-            OutputExpectedType::NumberOrMeasuredNumber => ExpectedType::NumberOrMeasuredNumber,
+            OutputExpectedType::Number => ExpectedType::Number { number_type: None },
+            OutputExpectedType::MeasuredNumber => ExpectedType::MeasuredNumber {
+                number_type: None,
+                unit: None,
+            },
+            OutputExpectedType::NumberOrMeasuredNumber => {
+                ExpectedType::NumberOrMeasuredNumber { number_type: None }
+            }
+        }
+    }
+
+    fn value_type_to_expected_type(value_type: ValueType) -> ExpectedType {
+        match value_type {
+            ValueType::Boolean => ExpectedType::Boolean,
+            ValueType::String => ExpectedType::String,
+            ValueType::Number { number_type } => ExpectedType::Number {
+                number_type: Some(number_type),
+            },
+            ValueType::MeasuredNumber { unit, number_type } => ExpectedType::MeasuredNumber {
+                number_type: Some(number_type),
+                unit: Some(unit.display_unit),
+            },
         }
     }
 }

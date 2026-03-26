@@ -33,7 +33,7 @@
 
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "oneil";
-          version = "0.15.0";
+          version = "0.16.0";
           src = ./.;
           cargoLock = {
             lockFile = ./Cargo.lock;

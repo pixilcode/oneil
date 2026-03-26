@@ -1,9 +1,8 @@
 //! Analysis of parameters that have no dependencies.
 
-use std::path::Path;
-
 use indexmap::IndexMap;
 use oneil_output::DependencySet;
+use oneil_shared::paths::ModelPath;
 
 use crate::context::ExternalAnalysisContext;
 use crate::output::{Independents, error::IndependentsErrors};
@@ -18,24 +17,22 @@ use crate::output::{Independents, error::IndependentsErrors};
 /// [`IndependentsErrors`] for model paths that had evaluation errors.
 #[must_use]
 pub fn get_independents<E: ExternalAnalysisContext>(
-    model_path: &Path,
+    model_path: &ModelPath,
     external_context: &E,
 ) -> (Independents, IndependentsErrors) {
-    let path_buf = model_path.to_path_buf();
-
     let Some(load_result) = external_context.get_evaluated_model(model_path) else {
         let mut errors = IndependentsErrors::new();
-        errors.insert(path_buf);
+        errors.insert(model_path.clone());
         return (Independents::empty(), errors);
     };
 
     let Some(model) = load_result.value() else {
         let mut errors = IndependentsErrors::new();
-        errors.insert(path_buf);
+        errors.insert(model_path.clone());
         return (Independents::empty(), errors);
     };
 
-    let independents: IndexMap<String, _> = model
+    let independents: IndexMap<_, _> = model
         .parameters
         .iter()
         .filter(|(_, p)| is_empty_dependencies(&p.dependencies))
@@ -43,16 +40,15 @@ pub fn get_independents<E: ExternalAnalysisContext>(
         .collect();
 
     let mut result = Independents::empty();
-    result.insert(path_buf.clone(), independents);
+    result.insert(model_path.clone(), independents);
 
     let mut errors = IndependentsErrors::new();
     if load_result.error().is_some() {
-        errors.insert(path_buf);
+        errors.insert(model_path.clone());
     }
 
     for ref_path in model.references.values() {
-        let (nested_independents, nested_errors) =
-            get_independents(ref_path.as_path(), external_context);
+        let (nested_independents, nested_errors) = get_independents(ref_path, external_context);
 
         result.extend(nested_independents);
         errors.extend(nested_errors);

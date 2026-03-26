@@ -15,5 +15,7 @@ pub use oneil_shared::{error::OneilError, span::Span};
 pub mod tree {
     //! Tree output types.
 
-    pub use oneil_analysis::output::{DependencyTreeValue, ReferenceTreeValue, Tree};
+    pub use oneil_analysis::output::{
+        DependencyName, DependencyTreeValue, ReferenceTreeValue, Tree,
+    };
 }

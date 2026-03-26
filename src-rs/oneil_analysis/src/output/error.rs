@@ -1,8 +1,7 @@
 //! Error types for runtime output operations.
 
-use std::path::PathBuf;
-
 use indexmap::{IndexMap, IndexSet};
+use oneil_shared::{paths::ModelPath, symbols::ParameterName};
 
 /// Singleton error indicating that model evaluation had errors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,7 +10,7 @@ pub struct ModelEvalHasErrors;
 /// Accumulated errors encountered while building a dependency or reference tree.
 #[derive(Debug)]
 pub struct TreeErrors {
-    errors: IndexMap<PathBuf, TreeModelError>,
+    errors: IndexMap<ModelPath, TreeModelError>,
 }
 
 impl TreeErrors {
@@ -24,12 +23,12 @@ impl TreeErrors {
     }
 
     /// Records a model-level error for the given path.
-    pub fn insert_model_error(&mut self, model_path: PathBuf) {
+    pub fn insert_model_error(&mut self, model_path: ModelPath) {
         self.errors.insert(model_path, TreeModelError::ModelError);
     }
 
     /// Records a parameter-level error for the given model path and parameter name.
-    pub fn insert_parameter_error(&mut self, model_path: PathBuf, parameter_name: String) {
+    pub fn insert_parameter_error(&mut self, model_path: ModelPath, parameter_name: ParameterName) {
         if let Some(model_errors) = self.errors.get_mut(&model_path) {
             model_errors.insert_parameter_error(parameter_name);
         } else {
@@ -51,7 +50,7 @@ impl TreeErrors {
     }
 
     /// Returns an iterator over the model paths that have errors.
-    pub fn model_paths(&self) -> impl Iterator<Item = &PathBuf> {
+    pub fn model_paths(&self) -> impl Iterator<Item = &ModelPath> {
         self.errors.keys()
     }
 }
@@ -64,13 +63,13 @@ pub enum TreeModelError {
     /// The model loaded but some parameters had errors.
     ParamErrors {
         /// Names of parameters that had errors.
-        parameters: IndexSet<String>,
+        parameters: IndexSet<ParameterName>,
     },
 }
 
 impl TreeModelError {
     /// Adds a parameter error to this model error.
-    pub fn insert_parameter_error(&mut self, parameter_name: String) {
+    pub fn insert_parameter_error(&mut self, parameter_name: ParameterName) {
         match self {
             Self::ModelError => (),
             Self::ParamErrors { parameters } => {
@@ -100,7 +99,7 @@ impl TreeModelError {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IndependentsErrors {
     /// Model paths that could not be evaluated or had evaluation errors.
-    paths: IndexSet<PathBuf>,
+    paths: IndexSet<ModelPath>,
 }
 
 impl IndependentsErrors {
@@ -113,7 +112,7 @@ impl IndependentsErrors {
     }
 
     /// Adds a model path that had an error.
-    pub fn insert(&mut self, path: PathBuf) {
+    pub fn insert(&mut self, path: ModelPath) {
         self.paths.insert(path);
     }
 
@@ -125,7 +124,7 @@ impl IndependentsErrors {
 
     /// Returns an iterator over the model paths that had errors.
     #[must_use]
-    pub fn paths(&self) -> indexmap::set::Iter<'_, PathBuf> {
+    pub fn paths(&self) -> indexmap::set::Iter<'_, ModelPath> {
         self.paths.iter()
     }
 

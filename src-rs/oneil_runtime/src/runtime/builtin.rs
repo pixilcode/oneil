@@ -1,33 +1,57 @@
 //! Builtin documentation and lookup for the runtime.
 
 use oneil_output::Value;
+use oneil_shared::symbols::{BuiltinFunctionName, BuiltinValueName, UnitBaseName, UnitPrefix};
 
 use super::Runtime;
 
 impl Runtime {
     /// Returns documentation for all builtin units.
-    pub fn builtin_units_docs(&self) -> impl Iterator<Item = (&'static str, Vec<&'static str>)> {
+    pub fn builtin_units_docs(&self) -> impl Iterator<Item = (&'static str, Vec<&UnitBaseName>)> {
         self.builtins.builtin_units_docs()
     }
 
     /// Returns documentation for all builtin functions.
     pub fn builtin_functions_docs(
         &self,
-    ) -> impl Iterator<Item = (&'static str, (&'static [&'static str], &'static str))> + '_ {
+    ) -> impl Iterator<
+        Item = (
+            &BuiltinFunctionName,
+            (&'static [&'static str], &'static str),
+        ),
+    > {
         self.builtins.builtin_functions_docs()
     }
 
     /// Returns documentation for all builtin values.
     pub fn builtin_values_docs(
         &self,
-    ) -> impl Iterator<Item = (&'static str, (&'static str, Value))> + '_ {
+    ) -> impl Iterator<Item = (&BuiltinValueName, (&'static str, Value))> {
         self.builtins.builtin_values_docs()
     }
 
     /// Returns documentation for all builtin prefixes.
     pub fn builtin_prefixes_docs(
         &self,
-    ) -> impl Iterator<Item = (&'static str, (&'static str, f64))> + '_ {
+    ) -> impl Iterator<Item = (&UnitPrefix, (&'static str, f64))> {
         self.builtins.builtin_prefixes_docs()
+    }
+
+    /// Returns formal parameter names and documentation text for a builtin function, if it exists.
+    #[must_use]
+    pub fn lookup_builtin_function_docs(
+        &self,
+        name: &BuiltinFunctionName,
+    ) -> Option<(&'static [&'static str], &'static str)> {
+        self.builtins.lookup_builtin_function_docs(name)
+    }
+
+    /// Returns the description and value for a builtin constant, if it exists.
+    #[must_use]
+    pub fn lookup_builtin_value_docs(
+        &self,
+        name: &BuiltinValueName,
+    ) -> Option<(&'static str, &Value)> {
+        self.builtins.lookup_builtin_value_docs(name)
     }
 }

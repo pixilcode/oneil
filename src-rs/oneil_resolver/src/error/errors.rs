@@ -2,23 +2,23 @@
 
 use indexmap::IndexMap;
 
-use oneil_ir as ir;
+use oneil_shared::paths::PythonPath;
+use oneil_shared::symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex};
 
 use super::circular_dependency::CircularDependencyError;
-use super::import::PythonImportResolutionError;
+use super::model_import::ModelImportResolutionError;
 use super::parameter::ParameterResolutionError;
-use super::submodel::ModelImportResolutionError;
+use super::python_import::PythonImportResolutionError;
 use super::variable::VariableResolutionError;
 
 /// A collection of all resolution errors that occurred during model loading.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolutionErrorCollection {
     circular_dependency: Vec<CircularDependencyError>,
-    python_import: IndexMap<ir::PythonPath, PythonImportResolutionError>,
-    model_import:
-        IndexMap<ir::ReferenceName, (Option<ir::SubmodelName>, ModelImportResolutionError)>,
-    parameter: IndexMap<ir::ParameterName, Vec<ParameterResolutionError>>,
-    test: IndexMap<ir::TestIndex, Vec<VariableResolutionError>>,
+    python_import: IndexMap<PythonPath, PythonImportResolutionError>,
+    model_import: IndexMap<ReferenceName, (Option<SubmodelName>, ModelImportResolutionError)>,
+    parameter: IndexMap<ParameterName, Vec<ParameterResolutionError>>,
+    test: IndexMap<TestIndex, Vec<VariableResolutionError>>,
 }
 
 impl ResolutionErrorCollection {
@@ -52,7 +52,7 @@ impl ResolutionErrorCollection {
     /// Adds a Python import resolution error.
     pub fn add_import_error(
         &mut self,
-        python_path: ir::PythonPath,
+        python_path: PythonPath,
         error: PythonImportResolutionError,
     ) {
         self.python_import.insert(python_path, error);
@@ -61,8 +61,8 @@ impl ResolutionErrorCollection {
     /// Adds a reference resolution error.
     pub fn add_model_import_resolution_error(
         &mut self,
-        reference_name: ir::ReferenceName,
-        submodel_name: Option<ir::SubmodelName>,
+        reference_name: ReferenceName,
+        submodel_name: Option<SubmodelName>,
         error: ModelImportResolutionError,
     ) {
         self.model_import
@@ -72,7 +72,7 @@ impl ResolutionErrorCollection {
     /// Adds a parameter resolution error.
     pub fn add_parameter_error(
         &mut self,
-        parameter_name: ir::ParameterName,
+        parameter_name: ParameterName,
         error: ParameterResolutionError,
     ) {
         self.parameter
@@ -82,7 +82,7 @@ impl ResolutionErrorCollection {
     }
 
     /// Adds a test resolution error.
-    pub fn add_test_error(&mut self, test_index: ir::TestIndex, error: VariableResolutionError) {
+    pub fn add_test_error(&mut self, test_index: TestIndex, error: VariableResolutionError) {
         self.test.entry(test_index).or_default().push(error);
     }
 
@@ -96,7 +96,7 @@ impl ResolutionErrorCollection {
     #[must_use]
     pub const fn get_python_import_resolution_errors(
         &self,
-    ) -> &IndexMap<ir::PythonPath, PythonImportResolutionError> {
+    ) -> &IndexMap<PythonPath, PythonImportResolutionError> {
         &self.python_import
     }
 
@@ -104,7 +104,7 @@ impl ResolutionErrorCollection {
     #[must_use]
     pub const fn get_model_import_resolution_errors(
         &self,
-    ) -> &IndexMap<ir::ReferenceName, (Option<ir::SubmodelName>, ModelImportResolutionError)> {
+    ) -> &IndexMap<ReferenceName, (Option<SubmodelName>, ModelImportResolutionError)> {
         &self.model_import
     }
 
@@ -115,7 +115,7 @@ impl ResolutionErrorCollection {
     #[must_use]
     pub const fn get_parameter_resolution_errors(
         &self,
-    ) -> &IndexMap<ir::ParameterName, Vec<ParameterResolutionError>> {
+    ) -> &IndexMap<ParameterName, Vec<ParameterResolutionError>> {
         &self.parameter
     }
 
@@ -123,7 +123,7 @@ impl ResolutionErrorCollection {
     #[must_use]
     pub const fn get_test_resolution_errors(
         &self,
-    ) -> &IndexMap<ir::TestIndex, Vec<VariableResolutionError>> {
+    ) -> &IndexMap<TestIndex, Vec<VariableResolutionError>> {
         &self.test
     }
 
@@ -137,10 +137,10 @@ impl ResolutionErrorCollection {
         self,
     ) -> (
         Vec<CircularDependencyError>,
-        IndexMap<ir::PythonPath, PythonImportResolutionError>,
-        IndexMap<ir::ReferenceName, (Option<ir::SubmodelName>, ModelImportResolutionError)>,
-        IndexMap<ir::ParameterName, Vec<ParameterResolutionError>>,
-        IndexMap<ir::TestIndex, Vec<VariableResolutionError>>,
+        IndexMap<PythonPath, PythonImportResolutionError>,
+        IndexMap<ReferenceName, (Option<SubmodelName>, ModelImportResolutionError)>,
+        IndexMap<ParameterName, Vec<ParameterResolutionError>>,
+        IndexMap<TestIndex, Vec<VariableResolutionError>>,
     ) {
         (
             self.circular_dependency,

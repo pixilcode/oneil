@@ -10,7 +10,12 @@ keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 
+[features]
+default = ["python"]
+python = ["oneil_runtime/python"]
+
 [dependencies]
+indexmap = { workspace = true }
 oneil_runtime = { path = "../oneil_runtime", default-features = false }
 oneil_shared = { path = "../oneil_shared" }
 tokio = { version = "1", features = ["full"] }

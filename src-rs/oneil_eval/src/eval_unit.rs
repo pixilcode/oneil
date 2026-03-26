@@ -63,15 +63,13 @@ fn eval_unit_component<E: ExternalEvaluationContext>(
     let exponent = unit.exponent();
 
     let unit_display_expr = DisplayUnit::Unit {
-        name: full_name.to_string(),
+        name: full_name.clone().into_string(),
         exponent,
     };
 
     let (prefix, base_name, is_db) = match unit.info() {
-        ir::UnitInfo::Standard { prefix, base_name } => {
-            (prefix.as_deref(), Some(base_name.as_str()), false)
-        }
-        ir::UnitInfo::Db { prefix, base_name } => (prefix.as_deref(), base_name.as_deref(), true),
+        ir::UnitInfo::Standard { prefix, base_name } => (prefix.as_ref(), Some(base_name), false),
+        ir::UnitInfo::Db { prefix, base_name } => (prefix.as_ref(), base_name.as_ref(), true),
     };
 
     let base_unit = base_name.map_or_else(Unit::one, |name| {
@@ -120,6 +118,7 @@ mod test {
 
     use oneil_output::Dimension;
     use oneil_shared::span::SourceLocation;
+    use oneil_shared::symbols::{UnitBaseName, UnitName, UnitPrefix};
 
     use crate::{
         assert_is_close, assert_units_dimensionally_eq, context::EvalContext,
@@ -200,25 +199,25 @@ mod test {
         ir::CompositeUnit::new(unit_vec, unimportant_display_unit(), random_span())
     }
 
-    fn build_full_name(base_name: Option<&str>, prefix: Option<&str>, is_db: bool) -> String {
-        format!(
+    fn build_full_name(base_name: Option<&str>, prefix: Option<&str>, is_db: bool) -> UnitName {
+        UnitName::new(format!(
             "{}{}{}",
             if is_db { "dB" } else { "" },
             prefix.unwrap_or(""),
             base_name.unwrap_or("")
-        )
+        ))
     }
 
     fn build_unit_info(base_name: Option<&str>, prefix: Option<&str>, is_db: bool) -> ir::UnitInfo {
         if is_db {
             ir::UnitInfo::Db {
-                prefix: prefix.map(String::from),
-                base_name: base_name.map(String::from),
+                prefix: prefix.map(UnitPrefix::from),
+                base_name: base_name.map(UnitBaseName::from),
             }
         } else {
             ir::UnitInfo::Standard {
-                prefix: prefix.map(String::from),
-                base_name: base_name.unwrap_or("").to_string(),
+                prefix: prefix.map(UnitPrefix::from),
+                base_name: UnitBaseName::from(base_name.expect("base name should be provided")),
             }
         }
     }

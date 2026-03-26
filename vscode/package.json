@@ -23,6 +23,22 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "oneil.restartLanguageServer",
+        "title": "Oneil: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "Oneil",
+      "properties": {
+        "oneil.serverPath": {
+          "type": "string",
+          "default": null,
+          "description": "Path to the Oneil language server executable. Use this when the server is not on PATH. Leave empty to use ONEIL_PATH env var or \"oneil\"."
+        }
+      }
+    },
     "languages": [
       {
         "id": "oneil",

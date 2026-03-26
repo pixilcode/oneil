@@ -5,12 +5,14 @@
 //! [`ModelIrReference`] for navigating resolved IR models, and
 //! [`ResolutionErrorReference`] for inspecting resolution failures.
 
-use std::path::Path;
-
 use crate::output;
 use indexmap::IndexMap;
 use oneil_ir as ir;
-use oneil_shared::span::Span;
+use oneil_shared::{
+    paths::{ModelPath, PythonPath},
+    span::Span,
+    symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex},
+};
 
 use crate::cache::{EvalCache, IrCache};
 
@@ -33,8 +35,8 @@ impl<'runtime> ModelReference<'runtime> {
 
     /// Returns the file path of this model.
     #[must_use]
-    pub fn path(&self) -> &'runtime Path {
-        self.model.path.as_path()
+    pub const fn path(&self) -> &'runtime ModelPath {
+        &self.model.path
     }
 
     /// Returns a map of submodel names to their model references or evaluation errors.
@@ -46,12 +48,8 @@ impl<'runtime> ModelReference<'runtime> {
     /// the case as long as creating the `EvalResult`
     /// resolves successfully.
     #[must_use]
-    pub fn submodels(&self) -> IndexMap<&'runtime str, &'runtime str> {
-        self.model
-            .submodels
-            .iter()
-            .map(|(name, reference_name)| (name.as_str(), reference_name.as_str()))
-            .collect()
+    pub fn submodels(&self) -> IndexMap<&'runtime SubmodelName, &'runtime ReferenceName> {
+        self.model.submodels.iter().collect()
     }
 
     /// Returns a map of reference names to their model references or evaluation errors.
@@ -63,14 +61,14 @@ impl<'runtime> ModelReference<'runtime> {
     /// the case as long as creating the `EvalResult`
     /// resolves successfully.
     #[must_use]
-    pub fn references(&self) -> IndexMap<&'runtime str, Self> {
+    pub fn references(&self) -> IndexMap<&'runtime ReferenceName, Self> {
         self.model
             .references
             .iter()
-            .filter_map(|(name, path)| {
+            .filter_map(|(reference_name, model_path)| {
                 let entry = self
                     .eval_cache
-                    .get_entry(path)
+                    .get_entry(model_path)
                     .expect("reference should be in cache");
 
                 let model = entry.value()?;
@@ -80,7 +78,7 @@ impl<'runtime> ModelReference<'runtime> {
                     eval_cache: self.eval_cache,
                 };
 
-                Some((name.as_str(), result))
+                Some((reference_name, result))
             })
             .collect()
     }
@@ -97,8 +95,24 @@ impl<'runtime> ModelReference<'runtime> {
 
     /// Returns the list of evaluated test results for this model.
     #[must_use]
-    pub fn tests(&self) -> Vec<&'runtime output::Test> {
-        self.model.tests.iter().collect()
+    pub const fn tests(&self) -> &'runtime IndexMap<TestIndex, output::Test> {
+        &self.model.tests
+    }
+
+    /// Returns the list of model paths that were successfully evaluated.
+    #[must_use]
+    pub fn all_model_paths(&self) -> Vec<ModelPath> {
+        let mut paths = Vec::new();
+        self.all_model_paths_internal(&mut paths);
+        paths
+    }
+
+    fn all_model_paths_internal(&self, paths: &mut Vec<ModelPath>) {
+        paths.push(self.model.path.clone());
+
+        for reference_model in self.references().values() {
+            reference_model.all_model_paths_internal(paths);
+        }
     }
 }
 
@@ -121,20 +135,36 @@ impl<'runtime> ModelIrReference<'runtime> {
 
     /// Returns the path of this model.
     #[must_use]
-    pub const fn path(&self) -> &'runtime ir::ModelPath {
+    pub const fn path(&self) -> &'runtime ModelPath {
         self.model.get_path()
     }
 
-    /// Returns a map of submodel names to their IR model references or resolution errors.
+    /// Returns the optional model-level documentation note.
+    #[must_use]
+    pub const fn note(&self) -> Option<&'runtime ir::Note> {
+        self.model.note()
+    }
+
+    /// Returns a map of submodel names to their `SubmodelImport`s.
+    ///
+    /// If you need the model reference itself, use `submodel_models` instead.
+    #[must_use]
+    pub fn submodel_imports(
+        &self,
+    ) -> IndexMap<&'runtime SubmodelName, &'runtime ir::SubmodelImport> {
+        self.model.get_submodels().iter().collect()
+    }
+
+    /// Returns a map of submodel names to their IR model references.
     ///
     /// # Panics
     ///
     /// Panics if any submodel's reference has not been visited and
     /// added to the IR cache.
     #[must_use]
-    pub fn submodels(
+    pub fn submodel_models(
         &self,
-    ) -> IndexMap<&'runtime ir::SubmodelName, SubmodelImportReference<'runtime>> {
+    ) -> IndexMap<&'runtime SubmodelName, SubmodelImportReference<'runtime>> {
         self.model
             .get_submodels()
             .iter()
@@ -151,16 +181,26 @@ impl<'runtime> ModelIrReference<'runtime> {
             .collect()
     }
 
-    /// Returns a map of reference names to their IR model references or resolution errors.
+    /// Returns a map of reference names to their `ReferenceImport`s.
+    ///
+    /// If you need the model reference itself, use `reference_models` instead.
+    #[must_use]
+    pub fn reference_imports(
+        &self,
+    ) -> IndexMap<&'runtime ReferenceName, &'runtime ir::ReferenceImport> {
+        self.model.get_references().iter().collect()
+    }
+
+    /// Returns a map of reference names to their IR model references
     ///
     /// # Panics
     ///
     /// Panics if any reference has not been visited and
     /// added to the IR cache.
     #[must_use]
-    pub fn references(
+    pub fn reference_models(
         &self,
-    ) -> IndexMap<&'runtime ir::ReferenceName, ReferenceImportReference<'runtime>> {
+    ) -> IndexMap<&'runtime ReferenceName, ReferenceImportReference<'runtime>> {
         self.model
             .get_references()
             .iter()
@@ -175,25 +215,25 @@ impl<'runtime> ModelIrReference<'runtime> {
 
     /// Returns a map of parameter names to their parameter data.
     #[must_use]
-    pub fn parameters(&self) -> IndexMap<&'runtime ir::ParameterName, &'runtime ir::Parameter> {
+    pub fn parameters(&self) -> IndexMap<&'runtime ParameterName, &'runtime ir::Parameter> {
         self.model.get_parameters().iter().collect()
     }
 
     /// Returns a parameter by its name.
     #[must_use]
-    pub fn get_parameter(&self, name: &ir::ParameterName) -> Option<&'runtime ir::Parameter> {
+    pub fn get_parameter(&self, name: &ParameterName) -> Option<&'runtime ir::Parameter> {
         self.model.get_parameters().get(name)
     }
 
     /// Returns the list of tests for this model.
     #[must_use]
-    pub fn tests(&self) -> Vec<&'runtime ir::Test> {
-        self.model.get_tests().values().collect()
+    pub const fn tests(&self) -> &'runtime IndexMap<TestIndex, ir::Test> {
+        self.model.get_tests()
     }
 
     /// Returns the Python imports for this model.
     #[must_use]
-    pub const fn python_imports(&self) -> &'runtime IndexMap<ir::PythonPath, ir::PythonImport> {
+    pub const fn python_imports(&self) -> &'runtime IndexMap<PythonPath, ir::PythonImport> {
         self.model.get_python_imports()
     }
 }
@@ -203,7 +243,7 @@ impl<'runtime> ModelIrReference<'runtime> {
 pub struct SubmodelImportReference<'runtime> {
     submodel_import: &'runtime ir::SubmodelImport,
     ir_cache: &'runtime IrCache,
-    references: &'runtime IndexMap<ir::ReferenceName, ir::ReferenceImport>,
+    references: &'runtime IndexMap<ReferenceName, ir::ReferenceImport>,
 }
 
 impl<'runtime> SubmodelImportReference<'runtime> {
@@ -212,7 +252,7 @@ impl<'runtime> SubmodelImportReference<'runtime> {
     pub const fn new(
         submodel_import: &'runtime ir::SubmodelImport,
         ir_cache: &'runtime IrCache,
-        references: &'runtime IndexMap<ir::ReferenceName, ir::ReferenceImport>,
+        references: &'runtime IndexMap<ReferenceName, ir::ReferenceImport>,
     ) -> Self {
         Self {
             submodel_import,
@@ -223,7 +263,7 @@ impl<'runtime> SubmodelImportReference<'runtime> {
 
     /// Returns the name of the submodel.
     #[must_use]
-    pub const fn name(&self) -> &'runtime ir::SubmodelName {
+    pub const fn name(&self) -> &'runtime SubmodelName {
         self.submodel_import.name()
     }
 
@@ -235,7 +275,7 @@ impl<'runtime> SubmodelImportReference<'runtime> {
 
     /// Returns the reference name of the submodel.
     #[must_use]
-    pub const fn reference_name(&self) -> &'runtime ir::ReferenceName {
+    pub const fn reference_name(&self) -> &'runtime ReferenceName {
         self.submodel_import.reference_name()
     }
 
@@ -278,7 +318,7 @@ impl<'runtime> ReferenceImportReference<'runtime> {
 
     /// Returns the name of the reference.
     #[must_use]
-    pub const fn name(&self) -> &'runtime ir::ReferenceName {
+    pub const fn name(&self) -> &'runtime ReferenceName {
         self.reference_import.name()
     }
 
@@ -290,7 +330,7 @@ impl<'runtime> ReferenceImportReference<'runtime> {
 
     /// Returns the path of the reference.
     #[must_use]
-    pub const fn path(&self) -> &'runtime ir::ModelPath {
+    pub const fn path(&self) -> &'runtime ModelPath {
         self.reference_import.path()
     }
 
@@ -304,7 +344,7 @@ impl<'runtime> ReferenceImportReference<'runtime> {
     pub fn model(&self) -> Option<ModelIrReference<'runtime>> {
         let entry = self
             .ir_cache
-            .get_entry(self.reference_import.path().as_ref())
+            .get_entry(self.reference_import.path())
             .expect("reference should be in cache");
 
         let ir = entry.value()?;

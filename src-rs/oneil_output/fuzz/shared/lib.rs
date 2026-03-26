@@ -59,6 +59,21 @@ impl<'a> arbitrary::Arbitrary<'a> for IntervalWithValue {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct NonNanInterval(pub Interval);
+
+impl<'a> arbitrary::Arbitrary<'a> for NonNanInterval {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+        let interval = u.arbitrary::<Interval>()?;
+
+        if interval.is_empty() {
+            return Err(arbitrary::Error::IncorrectFormat);
+        }
+
+        Ok(NonNanInterval(interval))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct NonNanF64(f64);
 
 impl<'a> arbitrary::Arbitrary<'a> for NonNanF64 {
@@ -70,5 +85,39 @@ impl<'a> arbitrary::Arbitrary<'a> for NonNanF64 {
         }
 
         Ok(NonNanF64(value))
+    }
+}
+
+const SMALL_F64_THRESHOLD: f64 = -300.0;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NotSmallInterval(pub Interval);
+
+impl<'a> arbitrary::Arbitrary<'a> for NotSmallInterval {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+        let interval = u.arbitrary::<Interval>()?;
+
+        if interval.min().abs().log10() < SMALL_F64_THRESHOLD
+            || interval.max().abs().log10() < SMALL_F64_THRESHOLD
+        {
+            return Err(arbitrary::Error::IncorrectFormat);
+        }
+
+        Ok(NotSmallInterval(interval))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NotSmallF64(pub f64);
+
+impl<'a> arbitrary::Arbitrary<'a> for NotSmallF64 {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+        let value = u.arbitrary::<f64>()?;
+
+        if value.abs().log10() < SMALL_F64_THRESHOLD {
+            return Err(arbitrary::Error::IncorrectFormat);
+        }
+
+        Ok(NotSmallF64(value))
     }
 }

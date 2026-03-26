@@ -6,6 +6,10 @@ use oneil_runtime::output::{
     ir,
     reference::{ModelIrReference, ReferenceImportReference, SubmodelImportReference},
 };
+use oneil_shared::{
+    paths::PythonPath,
+    symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex},
+};
 
 use crate::stylesheet::debug as dbg_style;
 
@@ -110,7 +114,7 @@ fn print_model(
         "    ".repeat(indent),
         dbg_style::TREE.style(prefix),
         dbg_style::LABEL.style("Model:"),
-        dbg_style::IDENTIFIER.style(model_ref.path().as_ref().display())
+        dbg_style::IDENTIFIER.style(model_ref.path().as_path().display())
     );
 
     let sections = &config.sections;
@@ -125,7 +129,7 @@ fn print_model(
     }
 
     if sections.show_submodels() {
-        let submodels = model_ref.submodels();
+        let submodels = model_ref.submodel_models();
         if !submodels.is_empty() {
             section_list.push(("Submodels", submodels.len(), SectionTag::Submodels));
         }
@@ -139,7 +143,7 @@ fn print_model(
     }
 
     if sections.show_references() {
-        let references = model_ref.references();
+        let references = model_ref.reference_models();
         if !references.is_empty() {
             section_list.push(("References", references.len(), SectionTag::References));
         }
@@ -167,17 +171,17 @@ fn print_model(
             SectionTag::PythonImports => {
                 print_python_imports(model_ref.python_imports(), indent + 2);
             }
-            SectionTag::Submodels => print_submodels(&model_ref.submodels(), indent + 2),
+            SectionTag::Submodels => print_submodels(&model_ref.submodel_models(), indent + 2),
             SectionTag::Parameters => print_parameters(&model_ref.parameters(), indent + 2, config),
-            SectionTag::References => print_references(&model_ref.references(), indent + 2),
-            SectionTag::Tests => print_tests(&model_ref.tests(), indent + 2, config),
+            SectionTag::References => print_references(&model_ref.reference_models(), indent + 2),
+            SectionTag::Tests => print_tests(model_ref.tests(), indent + 2, config),
         }
     }
 
     if config.recursive {
         // Get all the references that have valid IR
         let refs_to_print: Vec<_> = model_ref
-            .references()
+            .reference_models()
             .values()
             .filter_map(ReferenceImportReference::model)
             .collect();
@@ -200,7 +204,7 @@ enum SectionTag {
 }
 
 /// Prints Python imports, showing the path and function names for each import.
-fn print_python_imports(imports: &IndexMap<ir::PythonPath, ir::PythonImport>, indent: usize) {
+fn print_python_imports(imports: &IndexMap<PythonPath, ir::PythonImport>, indent: usize) {
     for (i, (python_path, import)) in imports.iter().enumerate() {
         let is_last_import = i == imports.len() - 1;
 
@@ -218,7 +222,7 @@ fn print_python_imports(imports: &IndexMap<ir::PythonPath, ir::PythonImport>, in
             "    ".repeat(indent),
             dbg_style::TREE.style(prefix),
             dbg_style::LABEL.style("Python import:"),
-            dbg_style::IDENTIFIER.style(python_path.as_ref().display()),
+            dbg_style::IDENTIFIER.style(python_path.as_path().display()),
             dbg_style::COUNT.style(format!(
                 "({} function{})",
                 count,
@@ -242,7 +246,7 @@ fn print_python_imports(imports: &IndexMap<ir::PythonPath, ir::PythonImport>, in
                 "    ".repeat(func_indent),
                 dbg_style::TREE.style(func_prefix),
                 dbg_style::DETAIL.style("function:"),
-                dbg_style::IDENTIFIER.style(name)
+                dbg_style::IDENTIFIER.style(name.as_str())
             );
         }
     }
@@ -250,7 +254,7 @@ fn print_python_imports(imports: &IndexMap<ir::PythonPath, ir::PythonImport>, in
 
 /// Prints submodels, showing the reference path each submodel refers to.
 fn print_submodels(
-    submodels: &IndexMap<&ir::SubmodelName, SubmodelImportReference<'_>>,
+    submodels: &IndexMap<&SubmodelName, SubmodelImportReference<'_>>,
     indent: usize,
 ) {
     for (i, (identifier, submodel)) in submodels.iter().enumerate() {
@@ -269,7 +273,7 @@ fn print_submodels(
 
 /// Prints submodels
 fn print_references(
-    references: &IndexMap<&ir::ReferenceName, ReferenceImportReference<'_>>,
+    references: &IndexMap<&ReferenceName, ReferenceImportReference<'_>>,
     indent: usize,
 ) {
     for (i, (identifier, reference)) in references.iter().enumerate() {
@@ -283,14 +287,14 @@ fn print_references(
             dbg_style::TREE.style(prefix),
             dbg_style::LABEL.style("Reference:"),
             dbg_style::IDENTIFIER.style(identifier.as_str()),
-            dbg_style::IDENTIFIER.style(path.as_ref().display())
+            dbg_style::IDENTIFIER.style(path.as_path().display())
         );
     }
 }
 
 /// Prints parameters
 fn print_parameters(
-    parameters: &IndexMap<&ir::ParameterName, &ir::Parameter>,
+    parameters: &IndexMap<&ParameterName, &ir::Parameter>,
     indent: usize,
     config: &IrPrintConfig,
 ) {
@@ -303,7 +307,7 @@ fn print_parameters(
 
 /// Prints a single parameter
 fn print_parameter(
-    parameter_name: &ir::ParameterName,
+    parameter_name: &ParameterName,
     parameter: &ir::Parameter,
     indent: usize,
     prefix: &str,
@@ -600,7 +604,7 @@ fn print_expression(expr: &ir::Expr, indent: usize) {
                         "{}    ├── FunctionCall (imported): \"{}\" from \"{}\"",
                         "    ".repeat(indent),
                         name.as_str(),
-                        python_path.as_ref().display()
+                        python_path.as_path().display()
                     );
                 }
             }
@@ -640,6 +644,11 @@ fn print_expression(expr: &ir::Expr, indent: usize) {
                 print_expression(expr, indent + 2);
             }
         }
+        ir::Expr::UnitCast { expr, unit, .. } => {
+            println!("{}    ├── UnitCast", "    ".repeat(indent));
+            print_expression(expr, indent + 1);
+            print_unit(unit, indent + 1);
+        }
     }
 }
 
@@ -669,7 +678,7 @@ fn print_variable(var: &ir::Variable, indent: usize) {
                 "{}    ├── External Variable: \"{}\" from \"{}\"",
                 "    ".repeat(indent),
                 parameter_name.as_str(),
-                model.as_ref().display()
+                model.as_path().display()
             );
         }
     }
@@ -696,16 +705,17 @@ fn print_unit(unit: &ir::CompositeUnit, indent: usize) {
 }
 
 /// Prints tests
-fn print_tests(tests: &Vec<&ir::Test>, indent: usize, config: &IrPrintConfig) {
-    for (i, test) in tests.iter().enumerate() {
-        let is_last = i == tests.len() - 1;
+fn print_tests(tests: &IndexMap<TestIndex, ir::Test>, indent: usize, config: &IrPrintConfig) {
+    for (test_index, test) in tests {
+        let test_index = test_index.into_usize();
+        let is_last = test_index == tests.len() - 1;
         let prefix = if is_last { "└──" } else { "├──" };
         println!(
             "{}    {} {} {}:",
             "    ".repeat(indent),
             dbg_style::TREE.style(prefix),
             dbg_style::LABEL.style("Test"),
-            dbg_style::COUNT.style(i + 1)
+            dbg_style::COUNT.style(test_index + 1)
         );
         print_test(test, indent + 1, config);
     }

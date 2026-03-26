@@ -1,9 +1,9 @@
 use std::fmt;
 
-use oneil_ir as ir;
 use oneil_shared::{
     error::{AsOneilError, Context, ErrorLocation},
     span::Span,
+    symbols::ParameterName,
 };
 
 use super::unit::UnitResolutionError;
@@ -15,7 +15,7 @@ pub enum ParameterResolutionError {
     /// A circular dependency was detected during parameter resolution.
     CircularDependency {
         /// The list of parameter identifiers that form the circular dependency.
-        circular_dependency: Vec<ir::ParameterName>,
+        circular_dependency: Vec<ParameterName>,
         /// The span of the parameter that caused the circular dependency.
         reference_span: Span,
     },
@@ -26,7 +26,7 @@ pub enum ParameterResolutionError {
     /// A duplicate parameter was detected.
     DuplicateParameter {
         /// The identifier of the parameter.
-        parameter_name: ir::ParameterName,
+        parameter_name: ParameterName,
         /// The span of the original parameter.
         original_span: Span,
         /// The span of the duplicate parameter.
@@ -38,7 +38,7 @@ impl ParameterResolutionError {
     /// Creates a new error indicating a circular dependency in parameter resolution.
     #[must_use]
     pub const fn circular_dependency(
-        circular_dependency: Vec<ir::ParameterName>,
+        circular_dependency: Vec<ParameterName>,
         reference_span: Span,
     ) -> Self {
         Self::CircularDependency {
@@ -62,7 +62,7 @@ impl ParameterResolutionError {
     /// Creates a new error indicating a duplicate parameter was detected.
     #[must_use]
     pub const fn duplicate_parameter(
-        parameter_name: ir::ParameterName,
+        parameter_name: ParameterName,
         original_span: Span,
         duplicate_span: Span,
     ) -> Self {
@@ -83,7 +83,7 @@ impl fmt::Display for ParameterResolutionError {
             } => {
                 let dependency_chain = circular_dependency
                     .iter()
-                    .map(ir::ParameterName::as_str)
+                    .map(ParameterName::as_str)
                     .collect::<Vec<_>>()
                     .join(" -> ");
                 write!(

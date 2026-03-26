@@ -1,7 +1,9 @@
 //! Declaration constructs for the AST
 
 // TODO: rename `Import` to `ImportPython` and `UseModel` to `ImportModel`
-use std::ops::Deref;
+use std::{ops::Deref, path::PathBuf};
+
+use oneil_shared::paths::ModelPath;
 
 use crate::{
     naming::{DirectoryNode, IdentifierNode},
@@ -133,14 +135,17 @@ impl UseModel {
 
     /// Returns the relative path of the model
     #[must_use]
-    pub fn get_model_relative_path(&self) -> String {
+    pub fn get_model_relative_path(&self) -> ModelPath {
         let mut path = self
             .directory_path
             .iter()
             .map(|d| d.as_str())
             .collect::<Vec<_>>();
         path.push(self.model.top_component().as_str());
-        path.join("/")
+
+        let path = PathBuf::from(path.join("/"));
+
+        ModelPath::from_path_no_ext(&path)
     }
 }
 

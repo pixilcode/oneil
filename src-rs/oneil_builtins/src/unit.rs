@@ -3,10 +3,11 @@
 use indexmap::IndexMap;
 
 use oneil_output::{Dimension, DimensionMap, DisplayUnit, Unit};
+use oneil_shared::symbols::UnitBaseName;
 
 #[derive(Debug, Clone)]
 pub struct BuiltinUnit {
-    pub alias: &'static str,
+    pub alias: UnitBaseName,
     pub unit: Unit,
     pub readable_name: &'static str,
     pub supports_si_prefixes: bool,
@@ -16,7 +17,7 @@ pub struct BuiltinUnit {
 #[expect(clippy::too_many_lines, reason = "this is a list of builtin units")]
 #[expect(clippy::unreadable_literal, reason = "this is a list of builtin units")]
 /// Returns an iterator over all standard builtin units (by alias).
-pub fn builtin_units_complete() -> impl Iterator<Item = (&'static str, BuiltinUnit)> {
+pub fn builtin_units_complete() -> impl Iterator<Item = (UnitBaseName, BuiltinUnit)> {
     /// Information about a builtin unit.
     ///
     /// This is only used in this function to avoid code duplication.
@@ -268,6 +269,19 @@ pub fn builtin_units_complete() -> impl Iterator<Item = (&'static str, BuiltinUn
                 (Dimension::Mass, 1.0),
                 (Dimension::Distance, -1.0),
                 (Dimension::Time, -2.0),
+            ])),
+            is_db: false,
+            uses_prefixes: true,
+        },
+        UnitInfo {
+            name: "henry",
+            aliases: ["H", "henry", "henries"].as_ref(),
+            magnitude: 1.0,
+            dimensions: DimensionMap::new(IndexMap::from([
+                (Dimension::Mass, 1.0),
+                (Dimension::Distance, 2.0),
+                (Dimension::Time, -2.0),
+                (Dimension::Current, -2.0),
             ])),
             is_db: false,
             uses_prefixes: true,
@@ -649,9 +663,9 @@ pub fn builtin_units_complete() -> impl Iterator<Item = (&'static str, BuiltinUn
                     },
                 };
                 (
-                    *alias,
+                    UnitBaseName::from(*alias),
                     BuiltinUnit {
-                        alias,
+                        alias: UnitBaseName::from(*alias),
                         unit,
                         readable_name: name,
                         supports_si_prefixes: uses_prefixes,

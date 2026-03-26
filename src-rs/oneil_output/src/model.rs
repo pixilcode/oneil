@@ -3,11 +3,14 @@
 //! These types represent the results of evaluating Oneil models, including
 //! parameters, tests, and submodels.
 
-use std::path::PathBuf;
-
 use indexmap::IndexMap;
 
+use oneil_shared::labels::ParameterLabel;
+use oneil_shared::paths::ModelPath;
 use oneil_shared::span::Span;
+use oneil_shared::symbols::{
+    BuiltinValueName, ParameterName, ReferenceName, SubmodelName, TestIndex,
+};
 
 use crate::Value;
 use crate::dependency::DependencySet;
@@ -21,24 +24,24 @@ use crate::dependency::DependencySet;
 #[derive(Debug, Clone)]
 pub struct Model {
     /// The file path of the model that was evaluated.
-    pub path: PathBuf,
+    pub path: ModelPath,
     /// A map of submodel names to their reference names.
-    pub submodels: IndexMap<String, String>,
+    pub submodels: IndexMap<SubmodelName, ReferenceName>,
     /// A map of reference names to their evaluated results.
     ///
     /// References are evaluated recursively, so each entry contains a fully
     /// evaluated `Model` structure.
-    pub references: IndexMap<String, PathBuf>,
+    pub references: IndexMap<ReferenceName, ModelPath>,
     /// A map of parameter identifiers to their evaluated results.
     ///
     /// Parameters are stored by their identifier (name) and contain their
     /// evaluated values, units, and metadata.
-    pub parameters: IndexMap<String, Parameter>,
+    pub parameters: IndexMap<ParameterName, Parameter>,
     /// A list of evaluated test results.
     ///
     /// Tests are evaluated expressions that verify model behavior. Each test
     /// contains the evaluated value and the span of the original expression.
-    pub tests: Vec<Test>,
+    pub tests: IndexMap<TestIndex, Test>,
 }
 
 /// The result of evaluating a test expression.
@@ -83,9 +86,9 @@ pub enum TestResult {
 #[derive(Debug, Clone)]
 pub struct Parameter {
     /// The identifier (name) of the parameter.
-    pub ident: String,
+    pub ident: ParameterName,
     /// The human-readable label for the parameter.
-    pub label: String,
+    pub label: ParameterLabel,
     /// The evaluated value of the parameter.
     pub value: Value,
     /// The print level for this parameter.
@@ -114,11 +117,11 @@ impl Parameter {
 #[derive(Debug, Clone)]
 pub struct DebugInfo {
     /// The values of the builtin dependencies at the time the parameter was evaluated.
-    pub builtin_dependency_values: IndexMap<String, Value>,
+    pub builtin_dependency_values: IndexMap<BuiltinValueName, Value>,
     /// The values of the parameter dependencies at the time the parameter was evaluated.
-    pub parameter_dependency_values: IndexMap<String, Value>,
+    pub parameter_dependency_values: IndexMap<ParameterName, Value>,
     /// The values of the external dependencies at the time the parameter was evaluated.
-    pub external_dependency_values: IndexMap<(String, String), Value>,
+    pub external_dependency_values: IndexMap<(ReferenceName, ParameterName), Value>,
 }
 
 /// The trace level for debugging and diagnostic output.

@@ -1,16 +1,17 @@
-use std::{iter, path::Path};
+use std::iter;
 
 use oneil_ir as ir;
-use oneil_shared::span::Span;
+use oneil_shared::{paths::ModelPath, span::Span};
 
-use oneil_output::{Number, Value};
+use oneil_output::{Number, Unit, UnitConversionError, Value};
 
 use crate::{
     context::{EvalContext, ExternalEvaluationContext},
     error::{
-        EvalError,
+        EvalError, ExpectedType,
         convert::{binary_eval_error_to_eval_error, unary_eval_error_to_eval_error},
     },
+    eval_unit::eval_unit,
 };
 
 /// Evaluates an expression in the context of the given model.
@@ -23,11 +24,11 @@ use crate::{
 //       an IR expression
 pub fn eval_expr_in_model<E: ExternalEvaluationContext>(
     expr: &ir::Expr,
-    model_path: &Path,
+    model_path: &ModelPath,
     context: &mut E,
 ) -> Result<Value, Vec<EvalError>> {
     let mut eval_context = EvalContext::with_preloaded_models(context);
-    eval_context.push_active_model(model_path.to_path_buf());
+    eval_context.push_active_model(model_path.clone());
 
     eval_expr(expr, &eval_context).map(|(value, _span)| value)
 }
@@ -91,6 +92,17 @@ pub fn eval_expr<'a, E: ExternalEvaluationContext>(
             let args_results = eval_function_call_args(args, context)?;
             eval_function_call(name, *function_call_span, args_results, context)
                 .map(|result| (result, function_call_span))
+        }
+        ir::Expr::UnitCast { span, expr, unit } => {
+            let (expr_result, expr_result_span) = eval_expr(expr, context)?;
+            let (unit_result, unit_result_span) = eval_unit(unit, context);
+            eval_unit_cast(
+                expr_result,
+                *expr_result_span,
+                unit_result,
+                unit_result_span,
+            )
+            .map(|result| (result, span))
         }
         ir::Expr::Variable { variable, span } => {
             eval_variable(variable, context).map(|result| (result, span))
@@ -181,7 +193,7 @@ fn eval_comparison_chain(
 
     struct ComparisonFailure {
         errors: Vec<EvalError>,
-        last_successful_lhs: (Value, Span),
+        last_successful_lhs: Box<(Value, Span)>,
     }
 
     let initial_result = Ok(ComparisonSuccess {
@@ -205,14 +217,15 @@ fn eval_comparison_chain(
                     })
                     .map_err(|error| ComparisonFailure {
                         errors: vec![*error],
-                        last_successful_lhs: (lhs, lhs_span),
+                        last_successful_lhs: Box::new((lhs, lhs_span)),
                     })
             }
 
             Err(ComparisonFailure {
                 errors,
-                last_successful_lhs: (last_successful_lhs, last_successful_lhs_span),
+                last_successful_lhs,
             }) => {
+                let (last_successful_lhs, last_successful_lhs_span) = *last_successful_lhs;
                 let result = eval_comparison_op(
                     &last_successful_lhs,
                     last_successful_lhs_span,
@@ -231,7 +244,7 @@ fn eval_comparison_chain(
 
                 Err(ComparisonFailure {
                     errors,
-                    last_successful_lhs: (last_successful_lhs, last_successful_lhs_span),
+                    last_successful_lhs: Box::new((last_successful_lhs, last_successful_lhs_span)),
                 })
             }
         },
@@ -377,6 +390,36 @@ fn eval_function_call<E: ExternalEvaluationContext>(
             .evaluate_imported_function(python_path, name, function_call_span, args)
             .map_err(|error| vec![*error]),
     }
+}
+
+fn eval_unit_cast(
+    expr_result: Value,
+    expr_result_span: Span,
+    unit_result: Unit,
+    unit_result_span: Span,
+) -> Result<Value, Vec<EvalError>> {
+    let result = expr_result.with_unit(unit_result);
+
+    result.map_err(|error| match error {
+        UnitConversionError::UnitMismatch {
+            value_unit,
+            target_unit,
+        } => vec![EvalError::UnitMismatch {
+            expected_unit: value_unit,
+            expected_source_span: expr_result_span,
+            found_unit: target_unit,
+            found_span: unit_result_span,
+        }],
+        UnitConversionError::InvalidType {
+            value_type,
+            target_unit: _,
+        } => vec![EvalError::TypeMismatch {
+            expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
+            expected_source_span: unit_result_span,
+            found_type: *value_type,
+            found_span: expr_result_span,
+        }],
+    })
 }
 
 fn eval_variable<E: ExternalEvaluationContext>(

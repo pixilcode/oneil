@@ -1,6 +1,6 @@
 //! Model constructs for the AST
 
-use crate::{declaration::DeclNode, naming::LabelNode, node::Node, note::NoteNode};
+use crate::{declaration::DeclNode, naming::SectionLabelNode, node::Node, note::NoteNode};
 
 /// A model definition in an Oneil program
 #[derive(Debug, Clone, PartialEq)]
@@ -111,7 +111,7 @@ impl Section {
 /// A section header that contains a label
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SectionHeader {
-    label: LabelNode,
+    label: SectionLabelNode,
 }
 
 /// A node containing a section header
@@ -120,13 +120,13 @@ pub type SectionHeaderNode = Node<SectionHeader>;
 impl SectionHeader {
     /// Creates a new section header with the given label
     #[must_use]
-    pub const fn new(label: LabelNode) -> Self {
+    pub const fn new(label: SectionLabelNode) -> Self {
         Self { label }
     }
 
     /// Returns the label of this section header
     #[must_use]
-    pub const fn label(&self) -> &LabelNode {
+    pub const fn label(&self) -> &SectionLabelNode {
         &self.label
     }
 }

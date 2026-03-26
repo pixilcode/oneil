@@ -2,8 +2,6 @@
 //!
 //! Delegates to the [`oneil_analysis`] crate with the runtime as the context.
 
-use std::path::{Path, PathBuf};
-
 use indexmap::IndexMap;
 use oneil_analysis::{
     self as analysis,
@@ -11,7 +9,11 @@ use oneil_analysis::{
     output::error::{IndependentsErrors, ModelEvalHasErrors, TreeErrors},
 };
 use oneil_ir as ir;
-use oneil_shared::load_result::LoadResult;
+use oneil_shared::{
+    load_result::LoadResult,
+    paths::ModelPath,
+    symbols::{BuiltinValueName, ParameterName},
+};
 
 use super::Runtime;
 use crate::output::{error::RuntimeErrors, tree};
@@ -27,15 +29,18 @@ impl Runtime {
     #[must_use]
     pub fn get_dependency_tree(
         &mut self,
-        model_path: &Path,
-        parameter_name: &str,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
     ) -> (Option<tree::Tree<tree::DependencyTreeValue>>, RuntimeErrors) {
         let (tree, tree_errors) = self.get_dependency_tree_internal(model_path, parameter_name);
+
+        // includes indirect errors because the tree is built from evaluated models
+        let include_indirect_errors = true;
 
         let errors = tree_errors
             .model_paths()
             .fold(RuntimeErrors::new(), |mut acc, path| {
-                acc.extend(self.get_model_errors(path));
+                acc.extend(self.get_model_errors(path, include_indirect_errors));
                 acc
             });
 
@@ -45,8 +50,8 @@ impl Runtime {
     #[must_use]
     fn get_dependency_tree_internal(
         &mut self,
-        model_path: &Path,
-        parameter_name: &str,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
     ) -> (Option<tree::Tree<tree::DependencyTreeValue>>, TreeErrors) {
         let _ = self.eval_model(model_path);
         analysis::get_dependency_tree(model_path, parameter_name, self)
@@ -62,15 +67,18 @@ impl Runtime {
     #[must_use]
     pub fn get_reference_tree(
         &mut self,
-        model_path: &Path,
-        parameter_name: &str,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
     ) -> (Option<tree::Tree<tree::ReferenceTreeValue>>, RuntimeErrors) {
         let (tree, tree_errors) = self.get_reference_tree_internal(model_path, parameter_name);
+
+        // includes indirect errors because the tree is built from evaluated models
+        let include_indirect_errors = true;
 
         let errors = tree_errors
             .model_paths()
             .fold(RuntimeErrors::new(), |mut acc, path| {
-                acc.extend(self.get_model_errors(path));
+                acc.extend(self.get_model_errors(path, include_indirect_errors));
                 acc
             });
 
@@ -80,8 +88,8 @@ impl Runtime {
     #[must_use]
     fn get_reference_tree_internal(
         &mut self,
-        model_path: &Path,
-        parameter_name: &str,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
     ) -> (Option<tree::Tree<tree::ReferenceTreeValue>>, TreeErrors) {
         let _ = self.eval_model(model_path);
         analysis::get_reference_tree(self, model_path, parameter_name)
@@ -93,13 +101,16 @@ impl Runtime {
     /// (it may still depend on builtin values). Evaluates the model first, then
     /// returns an [`Independents`] (model path → parameter name → value) and any errors.
     #[must_use]
-    pub fn get_independents(&mut self, model_path: &Path) -> (Independents, RuntimeErrors) {
+    pub fn get_independents(&mut self, model_path: &ModelPath) -> (Independents, RuntimeErrors) {
         let (independents, independents_errors) = self.get_independents_internal(model_path);
+
+        // includes indirect errors because the tree is built from evaluated models
+        let include_indirect_errors = true;
 
         let errors = independents_errors
             .paths()
             .fold(RuntimeErrors::new(), |mut acc, path| {
-                acc.extend(self.get_model_errors(path));
+                acc.extend(self.get_model_errors(path, include_indirect_errors));
                 acc
             });
 
@@ -109,7 +120,7 @@ impl Runtime {
     #[must_use]
     fn get_independents_internal(
         &mut self,
-        model_path: &Path,
+        model_path: &ModelPath,
     ) -> (Independents, IndependentsErrors) {
         let _ = self.eval_model(model_path);
         analysis::get_independents(model_path, self)
@@ -117,7 +128,7 @@ impl Runtime {
 }
 
 impl analysis::ExternalAnalysisContext for Runtime {
-    fn get_all_model_ir(&self) -> IndexMap<&PathBuf, &ir::Model> {
+    fn get_all_model_ir(&self) -> IndexMap<&ModelPath, &ir::Model> {
         self.ir_cache
             .iter()
             .filter_map(|(path, result)| result.value().map(|ir| (path, ir)))
@@ -126,7 +137,7 @@ impl analysis::ExternalAnalysisContext for Runtime {
 
     fn get_evaluated_model(
         &self,
-        model_path: &Path,
+        model_path: &ModelPath,
     ) -> Option<LoadResult<&oneil_output::Model, ModelEvalHasErrors>> {
         let entry = self.eval_cache.get_entry(model_path)?;
         let result = entry.as_ref().map_err(|_error| ModelEvalHasErrors);
@@ -135,15 +146,15 @@ impl analysis::ExternalAnalysisContext for Runtime {
 
     fn lookup_builtin_variable(
         &self,
-        identifier: &oneil_ir::Identifier,
+        identifier: &BuiltinValueName,
     ) -> Option<&oneil_output::Value> {
-        self.builtins.get_value(identifier.as_str())
+        self.builtins.get_value(identifier)
     }
 
     fn lookup_parameter_value(
         &self,
-        model_path: &Path,
-        parameter_name: &str,
+        model_path: &ModelPath,
+        parameter_name: &ParameterName,
     ) -> Option<Result<oneil_output::Parameter, oneil_analysis::output::error::GetValueError>> {
         let entry = self.eval_cache.get_entry(model_path)?;
         let parameter = entry.value().map_or_else(

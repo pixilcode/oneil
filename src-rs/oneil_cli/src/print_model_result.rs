@@ -1,15 +1,14 @@
-use std::path::Path;
-
 use anstream::{eprintln, print, println};
 use indexmap::{IndexMap, IndexSet};
 use oneil_runtime::output::{
     DebugInfo, Parameter, PrintLevel, TestResult, Value, reference::ModelReference,
 };
-use oneil_shared::span::Span;
+use oneil_shared::{paths::ModelPath, span::Span};
 
 use crate::{
     command::{PrintMode, Variable, VariableList},
-    print_utils, stylesheet,
+    print_utils::{self, PrintUtilsConfig},
+    stylesheet,
 };
 
 #[expect(
@@ -25,6 +24,7 @@ pub struct ModelPrintConfig {
     pub no_header: bool,
     pub no_test_report: bool,
     pub no_parameters: bool,
+    pub print_utils_config: PrintUtilsConfig,
 }
 
 pub fn print_eval_result(
@@ -42,41 +42,36 @@ pub fn print_eval_result(
     }
 
     if !model_config.no_test_report {
-        print_failing_tests(&test_info);
+        print_failing_tests(&test_info, model_config.print_utils_config);
     }
 
     if !model_config.no_parameters {
         if let Some(variables) = &model_config.variables {
-            print_parameters_by_list(model_result, model_config.print_debug_info, variables);
-            print_expr_results(expr_results);
+            print_parameters_by_list(model_result, model_config, variables);
+            print_expr_results(expr_results, model_config.print_utils_config);
         } else if !expr_results.is_empty() {
-            print_expr_results(expr_results);
+            print_expr_results(expr_results, model_config.print_utils_config);
         } else {
-            print_parameters_by_filter(model_result, model_config.print_debug_info, model_config);
+            print_parameters_by_filter(model_result, model_config);
         }
     }
 }
 
-fn print_expr_results(expr_results: &IndexMap<&str, Value>) {
+fn print_expr_results(expr_results: &IndexMap<&str, Value>, print_utils_config: PrintUtilsConfig) {
     for (expr, value) in expr_results {
         let styled_expr = stylesheet::EXPR.style(expr);
         print!("{styled_expr} = ");
-        print_utils::print_value(value);
+        print_utils::print_value(value, print_utils_config);
         println!();
     }
 }
 
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "this is a configuration struct for printing test results"
-)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestPrintConfig {
     pub no_header: bool,
     pub no_test_report: bool,
     pub recursive: bool,
-    pub display_partial_results: bool,
-    pub show_internal_errors: bool,
+    pub print_utils_config: PrintUtilsConfig,
 }
 
 pub fn print_test_results(eval_result: ModelReference<'_>, test_config: &TestPrintConfig) {
@@ -92,7 +87,7 @@ pub fn print_test_results(eval_result: ModelReference<'_>, test_config: &TestPri
     let mut visited = IndexSet::new();
 
     if !test_config.no_test_report {
-        print_all_tests(eval_result, test_config.recursive, &mut visited);
+        print_all_tests(eval_result, test_config, &mut visited);
     }
 }
 
@@ -100,7 +95,7 @@ pub fn print_test_results(eval_result: ModelReference<'_>, test_config: &TestPri
 struct TestInfo<'runtime> {
     pub test_count: usize,
     pub passed_count: usize,
-    pub failed_tests: IndexMap<&'runtime Path, Vec<(Span, &'runtime DebugInfo)>>,
+    pub failed_tests: IndexMap<&'runtime ModelPath, Vec<(Span, &'runtime DebugInfo)>>,
 }
 
 fn get_model_tests<'runtime>(
@@ -111,7 +106,7 @@ fn get_model_tests<'runtime>(
     let tests = model_ref.tests();
     let test_count = tests.len();
     let failed_tests = tests
-        .iter()
+        .values()
         .filter_map(|test| match &test.result {
             TestResult::Failed { debug_info } => Some((test.expr_span, &**debug_info)),
             TestResult::Passed => None,
@@ -139,7 +134,7 @@ fn get_model_tests<'runtime>(
     }
 }
 
-fn print_failing_tests(test_info: &TestInfo<'_>) {
+fn print_failing_tests(test_info: &TestInfo<'_>, print_utils_config: PrintUtilsConfig) {
     if test_info.failed_tests.is_empty() {
         return;
     }
@@ -150,7 +145,7 @@ fn print_failing_tests(test_info: &TestInfo<'_>) {
     println!("{tests_label}");
 
     for (index, (model_path, failing_tests)) in test_info.failed_tests.iter().enumerate() {
-        print_model_failing_tests(model_path, failing_tests);
+        print_model_failing_tests(model_path, failing_tests, print_utils_config);
 
         if index < test_info.failed_tests.len() - 1 {
             println!();
@@ -160,8 +155,12 @@ fn print_failing_tests(test_info: &TestInfo<'_>) {
     println!("{divider_line}");
 }
 
-fn print_model_failing_tests(model_path: &Path, failing_tests: &[(Span, &DebugInfo)]) {
-    let file_contents = std::fs::read_to_string(model_path);
+fn print_model_failing_tests(
+    model_path: &ModelPath,
+    failing_tests: &[(Span, &DebugInfo)],
+    print_utils_config: PrintUtilsConfig,
+) {
+    let file_contents = std::fs::read_to_string(model_path.as_path());
 
     let file_contents = match file_contents {
         Ok(file_contents) => file_contents,
@@ -170,7 +169,7 @@ fn print_model_failing_tests(model_path: &Path, failing_tests: &[(Span, &DebugIn
 
             println!(
                 "{error_label}: couldn't read `{}` - {}",
-                model_path.display(),
+                model_path.as_path().display(),
                 e
             );
 
@@ -200,11 +199,11 @@ fn print_model_failing_tests(model_path: &Path, failing_tests: &[(Span, &DebugIn
             );
         }
 
-        print_debug_info(debug_info);
+        print_debug_info(debug_info, print_utils_config);
     }
 }
 
-fn print_model_header(model_path: &Path, test_info: &TestInfo<'_>) {
+fn print_model_header(model_path: &ModelPath, test_info: &TestInfo<'_>) {
     let divider_line = divider_line();
     let model_label = stylesheet::MODEL_LABEL.style("Model");
     let tests_label = stylesheet::TESTS_LABEL.style("Tests");
@@ -218,19 +217,19 @@ fn print_model_header(model_path: &Path, test_info: &TestInfo<'_>) {
         stylesheet::TESTS_FAIL_COLOR.style("FAIL")
     };
 
-    println!("{model_label}: {}", model_path.display());
+    println!("{model_label}: {}", model_path.as_path().display());
     println!("{tests_label}: {passed_count}/{test_count} ({test_result_string})");
     println!("{divider_line}");
 }
 
-fn print_model_path_header(model_path: &Path) {
-    let header = stylesheet::MODEL_PATH_HEADER.style(model_path.display());
+fn print_model_path_header(model_path: &ModelPath) {
+    let header = stylesheet::MODEL_PATH_HEADER.style(model_path.as_path().display());
     println!("{header}");
 }
 
 fn print_parameters_by_list(
     model_ref: ModelReference<'_>,
-    print_debug_info: bool,
+    model_config: &ModelPrintConfig,
     variables: &VariableList,
 ) {
     let ModelParametersToPrint {
@@ -254,7 +253,7 @@ fn print_parameters_by_list(
     for (parameter_name, parameter) in parameters_to_print {
         let styled_parameter_name = stylesheet::PARAMETERS_NAME_LABEL.style(parameter_name);
         print!("{styled_parameter_name}: ");
-        print_parameter(parameter, print_debug_info);
+        print_parameter(parameter, model_config);
     }
 }
 
@@ -320,23 +319,26 @@ fn get_parameter_from_model<'runtime>(
         //       the submodel name might be different from the reference name
         let references = model_ref.references();
         let submodels = model_ref.submodels();
-        let model = references.get(submodel.as_str()).or_else(|| {
-            submodels.get(submodel.as_str()).map(|r| {
-                references
-                    .get(r)
-                    .expect("submodel reference should be found")
-            })
-        })?;
+        let model = references
+            .iter()
+            .find(|(name, _)| name.as_str() == submodel.as_str())
+            .map(|(_, m)| *m)
+            .or_else(|| {
+                let (_, ref_name) = submodels
+                    .iter()
+                    .find(|(name, _)| name.as_str() == submodel.as_str())?;
 
-        recurse(*model, parameter, param_vec)
+                references
+                    .iter()
+                    .find(|(name, _)| *name == ref_name)
+                    .map(|(_, m)| *m)
+            })?;
+
+        recurse(model, parameter, param_vec)
     }
 }
 
-fn print_parameters_by_filter(
-    model_ref: ModelReference<'_>,
-    print_debug_info: bool,
-    model_config: &ModelPrintConfig,
-) {
+fn print_parameters_by_filter(model_ref: ModelReference<'_>, model_config: &ModelPrintConfig) {
     let parameters_to_print =
         get_model_parameters_by_filter(model_ref, model_config.print_mode, model_config.recursive);
 
@@ -362,7 +364,7 @@ fn print_parameters_by_filter(
         }
 
         for parameter in parameters {
-            print_parameter(parameter, print_debug_info);
+            print_parameter(parameter, model_config);
         }
 
         if index < parameters_to_print.len() - 1 {
@@ -375,7 +377,7 @@ fn get_model_parameters_by_filter(
     model_ref: ModelReference<'_>,
     print_level: PrintMode,
     recursive: bool,
-) -> IndexMap<&Path, Vec<&Parameter>> {
+) -> IndexMap<&ModelPath, Vec<&Parameter>> {
     return recurse(model_ref, print_level, recursive, IndexMap::new());
 
     #[expect(
@@ -386,8 +388,8 @@ fn get_model_parameters_by_filter(
         model_ref: ModelReference<'runtime>,
         print_level: PrintMode,
         recursive: bool,
-        mut parameters: IndexMap<&'runtime Path, Vec<&'runtime Parameter>>,
-    ) -> IndexMap<&'runtime Path, Vec<&'runtime Parameter>> {
+        mut parameters: IndexMap<&'runtime ModelPath, Vec<&'runtime Parameter>>,
+    ) -> IndexMap<&'runtime ModelPath, Vec<&'runtime Parameter>> {
         let model_parameters = model_ref.parameters();
         let parameters_to_print: Vec<_> = match print_level {
             PrintMode::All => model_parameters
@@ -423,49 +425,67 @@ fn get_model_parameters_by_filter(
     }
 }
 
-fn print_parameter(parameter: &Parameter, should_print_debug_info: bool) {
-    let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(&parameter.ident);
+fn print_parameter(parameter: &Parameter, model_config: &ModelPrintConfig) {
+    let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(parameter.ident.as_str());
     print!("{styled_ident} = ");
 
-    print_utils::print_value(&parameter.value);
+    print_utils::print_value(&parameter.value, model_config.print_utils_config);
 
-    let styled_label = stylesheet::PARAMETER_LABEL.style(format!("# {}", parameter.label));
+    let styled_label = stylesheet::PARAMETER_LABEL.style(format!("# {}", parameter.label.as_str()));
     println!("  {styled_label}");
 
-    if should_print_debug_info && let Some(debug_info) = &parameter.debug_info {
-        print_debug_info(debug_info);
+    if model_config.print_debug_info
+        && let Some(debug_info) = &parameter.debug_info
+    {
+        print_debug_info(debug_info, model_config.print_utils_config);
     }
 }
 
-fn print_debug_info(debug_info: &DebugInfo) {
+fn print_debug_info(debug_info: &DebugInfo, print_utils_config: PrintUtilsConfig) {
     let indent = 2;
     for (dependency_name, dependency_value) in &debug_info.builtin_dependency_values {
-        print_variable_value(dependency_name, dependency_value, indent);
+        print_variable_value(
+            dependency_name.as_str(),
+            dependency_value,
+            indent,
+            print_utils_config,
+        );
     }
     for (dependency_name, dependency_value) in &debug_info.parameter_dependency_values {
-        print_variable_value(dependency_name, dependency_value, indent);
+        print_variable_value(
+            dependency_name.as_str(),
+            dependency_value,
+            indent,
+            print_utils_config,
+        );
     }
     for ((reference_name, parameter_name), dependency_value) in
         &debug_info.external_dependency_values
     {
-        let variable_name = format!("{parameter_name}.{reference_name}");
-        print_variable_value(&variable_name, dependency_value, indent);
+        let variable_name = format!("{}.{}", parameter_name.as_str(), reference_name.as_str());
+        print_variable_value(&variable_name, dependency_value, indent, print_utils_config);
     }
 }
 
-fn print_variable_value(name: &str, value: &Value, indent: usize) {
+fn print_variable_value(
+    name: &str,
+    value: &Value,
+    indent: usize,
+    print_utils_config: PrintUtilsConfig,
+) {
     let indent = " ".repeat(indent);
     let styled_dependency_name = stylesheet::PARAMETER_IDENTIFIER.style(name);
     print!("{indent}- {styled_dependency_name} = ");
-    print_utils::print_value(value);
+    print_utils::print_value(value, print_utils_config);
     println!();
 }
 
 fn print_all_tests<'runtime>(
     model_ref: ModelReference<'runtime>,
-    recursive: bool,
-    visited: &mut IndexSet<&'runtime Path>,
+    test_config: &TestPrintConfig,
+    visited: &mut IndexSet<&'runtime ModelPath>,
 ) {
+    let recursive = test_config.recursive;
     let model_path = model_ref.path();
     let tests = model_ref.tests();
 
@@ -479,7 +499,7 @@ fn print_all_tests<'runtime>(
         print_model_path_header(model_path);
     }
 
-    let file_contents = std::fs::read_to_string(model_path);
+    let file_contents = std::fs::read_to_string(model_path.as_path());
 
     let file_contents = match file_contents {
         Ok(file_contents) => file_contents,
@@ -488,7 +508,7 @@ fn print_all_tests<'runtime>(
 
             println!(
                 "{error_label}: couldn't read `{}` - {}",
-                model_path.display(),
+                model_path.as_path().display(),
                 e
             );
 
@@ -496,7 +516,7 @@ fn print_all_tests<'runtime>(
         }
     };
 
-    for test in &tests {
+    for test in tests.values() {
         let test_start_offset = test.expr_span.start().offset;
         let test_end_offset = test.expr_span.end().offset;
         let test_expr_str = file_contents.get(test_start_offset..test_end_offset);
@@ -523,7 +543,7 @@ fn print_all_tests<'runtime>(
             TestResult::Failed { debug_info } => {
                 let test_result_str = stylesheet::TESTS_FAIL_COLOR.style("FAIL");
                 println!("  Result: {test_result_str}");
-                print_debug_info(debug_info);
+                print_debug_info(debug_info, test_config.print_utils_config);
             }
         }
     }
@@ -534,7 +554,7 @@ fn print_all_tests<'runtime>(
         }
 
         for reference in model_ref.references().values() {
-            print_all_tests(*reference, recursive, visited);
+            print_all_tests(*reference, test_config, visited);
         }
     }
 }

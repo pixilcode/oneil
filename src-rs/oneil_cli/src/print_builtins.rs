@@ -2,24 +2,28 @@
 
 use anstream::{print, println};
 use oneil_runtime::{Runtime, output::Value};
+use oneil_shared::symbols::{BuiltinFunctionName, BuiltinValueName, UnitBaseName, UnitPrefix};
 
-use crate::{print_utils, stylesheet};
+use crate::{
+    print_utils::{self, PrintUtilsConfig},
+    stylesheet,
+};
 
-pub fn search_builtins_units(runtime: &Runtime, unit_name: &str) {
+pub fn search_builtins_units(runtime: &Runtime, unit_name: &UnitBaseName) {
     let search_result = runtime
         .builtin_units_docs()
-        .find(|(name, aliases)| *name == unit_name || aliases.contains(&unit_name));
+        .find(|(name, aliases)| *name == unit_name.as_str() || aliases.contains(&unit_name));
 
     if let Some((name, aliases)) = search_result {
         print_builtin_unit(name, &aliases);
     } else {
-        let msg = format!("No builtin unit found for \"{unit_name}\"");
+        let msg = format!("No builtin unit found for \"{}\"", unit_name.as_str());
         let msg = stylesheet::BUILTIN_NOT_FOUND.style(msg);
         println!("{msg}");
     }
 }
 
-pub fn search_builtins_functions(runtime: &Runtime, function_name: &str) {
+pub fn search_builtins_functions(runtime: &Runtime, function_name: &BuiltinFunctionName) {
     let search_result = runtime
         .builtin_functions_docs()
         .find(|(name, _)| *name == function_name);
@@ -27,27 +31,34 @@ pub fn search_builtins_functions(runtime: &Runtime, function_name: &str) {
     if let Some((name, (args, description))) = search_result {
         print_builtin_function(name, args, description);
     } else {
-        let msg = format!("No builtin function found for \"{function_name}\"");
+        let msg = format!(
+            "No builtin function found for \"{}\"",
+            function_name.as_str()
+        );
         let msg = stylesheet::BUILTIN_NOT_FOUND.style(msg);
         println!("{msg}");
     }
 }
 
-pub fn search_builtins_values(runtime: &Runtime, value_name: &str) {
+pub fn search_builtins_values(
+    runtime: &Runtime,
+    value_name: &BuiltinValueName,
+    print_utils_config: PrintUtilsConfig,
+) {
     let search_result = runtime
         .builtin_values_docs()
         .find(|(name, _)| *name == value_name);
 
     if let Some((name, (description, value))) = search_result {
-        print_builtin_value(name, description, &value);
+        print_builtin_value(name, description, &value, print_utils_config);
     } else {
-        let msg = format!("No builtin value found for \"{value_name}\"");
+        let msg = format!("No builtin value found for \"{}\"", value_name.as_str());
         let msg = stylesheet::BUILTIN_NOT_FOUND.style(msg);
         println!("{msg}");
     }
 }
 
-pub fn search_builtins_prefixes(runtime: &Runtime, prefix_name: &str) {
+pub fn search_builtins_prefixes(runtime: &Runtime, prefix_name: &UnitPrefix) {
     let search_result = runtime
         .builtin_prefixes_docs()
         .find(|(name, _)| *name == prefix_name);
@@ -55,14 +66,14 @@ pub fn search_builtins_prefixes(runtime: &Runtime, prefix_name: &str) {
     if let Some((name, (description, value))) = search_result {
         print_builtin_prefix(name, description, value);
     } else {
-        let msg = format!("No builtin prefix found for \"{prefix_name}\"");
+        let msg = format!("No builtin prefix found for \"{}\"", prefix_name.as_str());
         let msg = stylesheet::BUILTIN_NOT_FOUND.style(msg);
         println!("{msg}");
     }
 }
 
-pub fn print_builtins_all(runtime: &Runtime) {
-    print_builtins_values(runtime);
+pub fn print_builtins_all(runtime: &Runtime, print_utils_config: PrintUtilsConfig) {
+    print_builtins_values(runtime, print_utils_config);
     println!();
     print_builtins_prefixes(runtime);
     println!();
@@ -81,9 +92,15 @@ pub fn print_builtins_units(runtime: &Runtime) {
     }
 }
 
-fn print_builtin_unit(name: &str, aliases: &[&str]) {
+fn print_builtin_unit(name: &str, aliases: &[&UnitBaseName]) {
     let styled_name = stylesheet::BUILTIN_NAME.style(name);
-    let aliases_str = aliases.join(", ");
+
+    let aliases_str = aliases
+        .iter()
+        .map(|a| a.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+
     let styled_aliases = stylesheet::BUILTIN_ALIASES.style(aliases_str);
     println!("  {styled_name}: {styled_aliases}");
 }
@@ -98,8 +115,8 @@ pub fn print_builtins_functions(runtime: &Runtime) {
     }
 }
 
-fn print_builtin_function(name: &str, args: &[&str], description: &str) {
-    let styled_name = stylesheet::BUILTIN_NAME.style(name);
+fn print_builtin_function(name: &BuiltinFunctionName, args: &[&str], description: &str) {
+    let styled_name = stylesheet::BUILTIN_NAME.style(name.as_str());
     let args_str = args.join(", ");
     let styled_args = stylesheet::BUILTIN_FUNCTION_ARGS.style(args_str);
     let description = description.replace('\n', "\n    ");
@@ -111,20 +128,25 @@ fn print_builtin_function(name: &str, args: &[&str], description: &str) {
     println!();
 }
 
-pub fn print_builtins_values(runtime: &Runtime) {
+pub fn print_builtins_values(runtime: &Runtime, print_utils_config: PrintUtilsConfig) {
     let header = stylesheet::BUILTIN_SECTION_HEADER.style("Builtin Values:");
     println!("{header}");
     println!();
 
     for (name, (description, value)) in runtime.builtin_values_docs() {
-        print_builtin_value(name, description, &value);
+        print_builtin_value(name, description, &value, print_utils_config);
     }
 }
 
-fn print_builtin_value(name: &str, description: &str, value: &Value) {
-    let styled_name = stylesheet::BUILTIN_NAME.style(name);
+fn print_builtin_value(
+    name: &BuiltinValueName,
+    description: &str,
+    value: &Value,
+    print_utils_config: PrintUtilsConfig,
+) {
+    let styled_name = stylesheet::BUILTIN_NAME.style(name.as_str());
     print!("  {styled_name} = ");
-    print_utils::print_value(value);
+    print_utils::print_value(value, print_utils_config);
     println!();
     let styled_description = stylesheet::BUILTIN_DESCRIPTION.style(description);
     println!("    {styled_description}");
@@ -141,8 +163,8 @@ pub fn print_builtins_prefixes(runtime: &Runtime) {
     }
 }
 
-fn print_builtin_prefix(name: &str, description: &str, value: f64) {
-    let styled_name = stylesheet::BUILTIN_NAME.style(name);
+fn print_builtin_prefix(name: &UnitPrefix, description: &str, value: f64) {
+    let styled_name = stylesheet::BUILTIN_NAME.style(name.as_str());
     let description = format!("({description})");
     let padded_description = format!("{description: <8}");
     let styled_description = stylesheet::BUILTIN_DESCRIPTION.style(padded_description);

@@ -1,11 +1,14 @@
 //! Expression system for mathematical and logical operations in Oneil.
 
-use oneil_shared::span::Span;
-
-use crate::{
-    ParameterName, PythonPath, ReferenceName,
-    reference::{Identifier, ModelPath},
+use oneil_shared::{
+    paths::{ModelPath, PythonPath},
+    span::Span,
+    symbols::{
+        BuiltinFunctionName, BuiltinValueName, ParameterName, PyFunctionName, ReferenceName,
+    },
 };
+
+use crate::CompositeUnit;
 
 /// Abstract syntax tree for mathematical and logical expressions.
 #[derive(Debug, Clone, PartialEq)]
@@ -68,6 +71,15 @@ pub enum Expr {
         /// The literal value.
         value: Literal,
     },
+    /// Unit cast expression: (expr : unit)
+    UnitCast {
+        /// Span of the entire unit cast expression.
+        span: Span,
+        /// The expression to cast.
+        expr: Box<Self>,
+        /// The unit to cast to.
+        unit: CompositeUnit,
+    },
 }
 
 impl Expr {
@@ -128,7 +140,7 @@ impl Expr {
 
     /// Creates a built-in variable reference.
     #[must_use]
-    pub const fn builtin_variable(span: Span, ident_span: Span, ident: Identifier) -> Self {
+    pub const fn builtin_variable(span: Span, ident_span: Span, ident: BuiltinValueName) -> Self {
         Self::Variable {
             span,
             variable: Variable::builtin(ident, ident_span),
@@ -176,6 +188,16 @@ impl Expr {
         Self::Literal { span, value }
     }
 
+    /// Creates a unit cast expression.
+    #[must_use]
+    pub fn unit_cast(span: Span, expr: Self, unit: CompositeUnit) -> Self {
+        Self::UnitCast {
+            span,
+            expr: Box::new(expr),
+            unit,
+        }
+    }
+
     /// Visits the expression with a visitor in pre-order
     /// (parent nodes are visited before their children).
     #[must_use]
@@ -221,6 +243,10 @@ impl Expr {
             }
             Self::Variable { span, variable } => visitor.visit_variable(*span, variable),
             Self::Literal { span, value } => visitor.visit_literal(*span, value),
+            Self::UnitCast { span, expr, unit } => {
+                let visitor = visitor.visit_unit_cast(*span, expr, unit);
+                expr.pre_order_visit(visitor)
+            }
         }
     }
 
@@ -271,6 +297,10 @@ impl Expr {
             }
             Self::Variable { span, variable } => visitor.visit_variable(*span, variable),
             Self::Literal { span, value } => visitor.visit_literal(*span, value),
+            Self::UnitCast { span, expr, unit } => {
+                let visitor = expr.post_order_visit(visitor);
+                visitor.visit_unit_cast(*span, expr, unit)
+            }
         }
     }
 }
@@ -372,13 +402,13 @@ pub enum UnaryOp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionName {
     /// Built-in mathematical function.
-    Builtin(Identifier, Span),
+    Builtin(BuiltinFunctionName, Span),
     /// Function imported from a Python module.
     Imported {
         /// The path to the Python module.
         python_path: PythonPath,
         /// The name of the function.
-        name: Identifier,
+        name: PyFunctionName,
         /// The span of the function name.
         name_span: Span,
     },
@@ -387,13 +417,13 @@ pub enum FunctionName {
 impl FunctionName {
     /// Creates a reference to a built-in function.
     #[must_use]
-    pub const fn builtin(name: Identifier, name_span: Span) -> Self {
+    pub const fn builtin(name: BuiltinFunctionName, name_span: Span) -> Self {
         Self::Builtin(name, name_span)
     }
 
     /// Creates a reference to an imported Python function.
     #[must_use]
-    pub const fn imported(python_path: PythonPath, name: Identifier, name_span: Span) -> Self {
+    pub const fn imported(python_path: PythonPath, name: PyFunctionName, name_span: Span) -> Self {
         Self::Imported {
             python_path,
             name,
@@ -408,7 +438,7 @@ pub enum Variable {
     /// Built-in variable
     Builtin {
         /// The identifier of the builtin.
-        ident: Identifier,
+        ident: BuiltinValueName,
         /// Span of the builtin identifier.
         ident_span: Span,
     },
@@ -437,7 +467,7 @@ pub enum Variable {
 impl Variable {
     /// Creates a built-in variable reference.
     #[must_use]
-    pub const fn builtin(ident: Identifier, ident_span: Span) -> Self {
+    pub const fn builtin(ident: BuiltinValueName, ident_span: Span) -> Self {
         Self::Builtin { ident, ident_span }
     }
 
@@ -552,6 +582,12 @@ pub trait ExprVisitor: Sized {
     /// Visits a literal value expression.
     #[must_use]
     fn visit_literal(self, span: Span, value: &Literal) -> Self {
+        self
+    }
+
+    /// Visits a unit cast expression.
+    #[must_use]
+    fn visit_unit_cast(self, span: Span, expr: &Expr, unit: &CompositeUnit) -> Self {
         self
     }
 }

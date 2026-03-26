@@ -1,16 +1,18 @@
 //! Print independent parameters from evaluated models.
 
-use std::path::Path;
-
 use anstream::{print, println};
 use indexmap::IndexMap;
 use oneil_runtime::output::{Independents, Value};
+use oneil_shared::{paths::ModelPath, symbols::ParameterName};
 
-use crate::{print_utils, stylesheet};
+use crate::{
+    print_utils::{self, PrintUtilsConfig},
+    stylesheet,
+};
 
 pub struct IndependentPrintConfig {
-    pub print_values: bool,
     pub recursive: bool,
+    pub print_utils_config: PrintUtilsConfig,
 }
 
 /// Prints all independent parameters from the model result.
@@ -24,10 +26,14 @@ pub struct IndependentPrintConfig {
 ///
 /// * `model_result` - The evaluation result containing all models
 /// * `independent_print_config` - Configuration for printing
-pub fn print(top_model_path: &Path, independents: &Independents, config: &IndependentPrintConfig) {
+pub fn print(
+    top_model_path: &ModelPath,
+    independents: &Independents,
+    config: &IndependentPrintConfig,
+) {
     if config.recursive {
         for (model_path, independent_params) in independents.iter() {
-            let model_path_display = model_path.display();
+            let model_path_display = model_path.as_path().display();
             let styled_model_name = stylesheet::MODEL_PATH_HEADER.style(model_path_display);
             println!("{styled_model_name}:");
 
@@ -44,24 +50,20 @@ pub fn print(top_model_path: &Path, independents: &Independents, config: &Indepe
 
 /// Recursively prints independent parameters for a model and its submodels.
 fn print_model_independents(
-    independent_params: &IndexMap<String, Value>,
+    independent_params: &IndexMap<ParameterName, Value>,
     config: &IndependentPrintConfig,
 ) {
     for (name, value) in independent_params {
-        print_parameter(name, value, config.print_values);
+        print_parameter(name, value, config);
     }
 }
 
 /// Prints a single parameter.
-fn print_parameter(name: &str, value: &Value, print_values: bool) {
-    let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(name);
+fn print_parameter(name: &ParameterName, value: &Value, config: &IndependentPrintConfig) {
+    let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(name.as_str());
 
-    if print_values {
-        print!("{styled_ident} = ");
-        print_utils::print_value(value);
-    } else {
-        print!("{styled_ident}");
-    }
+    print!("{styled_ident} = ");
+    print_utils::print_value(value, config.print_utils_config);
 
     println!();
 }

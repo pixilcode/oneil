@@ -1,12 +1,13 @@
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::collections::HashSet;
 
 use indexmap::{IndexMap, IndexSet};
 use oneil_ir as ir;
-use oneil_shared::partial::MaybePartialResult;
-use oneil_shared::span::Span;
+use oneil_shared::{
+    partial::MaybePartialResult,
+    paths::ModelPath,
+    symbols::{BuiltinValueName, ReferenceName},
+};
+use oneil_shared::{span::Span, symbols::ParameterName};
 
 use oneil_output::{
     self as output, BuiltinDependency, DependencySet, ExternalDependency, Model,
@@ -23,27 +24,25 @@ use crate::{
 /// Evaluates the model at the given path and all its dependencies, returning a map of
 /// path to evaluated model result for each model that was evaluated.
 pub fn eval_model<E: ExternalEvaluationContext>(
-    model_path: impl AsRef<Path>,
+    model_path: &ModelPath,
     external_context: &mut E,
-) -> IndexMap<PathBuf, MaybePartialResult<Model, EvalErrors>> {
-    let model_path = ir::ModelPath::new(model_path);
+) -> IndexMap<ModelPath, MaybePartialResult<Model, EvalErrors>> {
     let mut context = EvalContext::new(external_context);
 
-    eval_model_from_context(&model_path, &mut context);
+    eval_model_from_context(model_path, &mut context);
 
     context.into_result()
 }
 
 /// Evaluates a model and returns the context with the results of the model.
 fn eval_model_from_context<E: ExternalEvaluationContext>(
-    model_path: &ir::ModelPath,
+    model_path: &ModelPath,
     context: &mut EvalContext<'_, E>,
 ) {
     // Set the current model
-    let model_path = model_path.as_ref().to_path_buf();
     context.push_active_model(model_path.clone());
 
-    let model = context.get_ir(&model_path);
+    let model = context.get_ir(model_path);
 
     let Some(model) = model.value() else {
         return;
@@ -55,15 +54,22 @@ fn eval_model_from_context<E: ExternalEvaluationContext>(
         eval_model_from_context(reference_import.path(), context);
     }
 
+    // Check for errors in references
+    for reference_import in references.values() {
+        if context.reference_has_errors(reference_import.path()) {
+            context.add_reference_error_to_active_model(reference_import.path());
+        }
+    }
+
     // Bring references into scope
     for (reference_name, reference_import) in references {
-        context.add_reference(reference_name.as_str(), reference_import.path());
+        context.add_reference(reference_name, reference_import.path());
     }
 
     // Add submodels to the current model
     let submodels = model.get_submodels();
     for (submodel_name, submodel_import) in submodels {
-        context.add_submodel(submodel_name.as_str(), submodel_import.reference_name());
+        context.add_submodel(submodel_name, submodel_import.reference_name());
     }
 
     // Evaluate parameters
@@ -80,17 +86,17 @@ fn eval_model_from_context<E: ExternalEvaluationContext>(
         let parameter_result = value
             .map(|value| parameter_result_from(value.value, value.expr_span, parameter, context));
 
-        context.add_parameter_result(parameter_name.as_str().to_string(), parameter_result);
+        context.add_parameter_result(parameter_name, parameter_result);
     }
 
     // Evaluate tests
     let tests = model.get_tests();
-    for test in tests.values() {
+    for (test_index, test) in tests {
         let test_result = eval_test(test, context);
-        context.add_test_result(test_result);
+        context.add_test_result(*test_index, test_result);
     }
 
-    context.pop_active_model(&model_path);
+    context.pop_active_model(model_path);
 }
 
 fn parameter_result_from<E: ExternalEvaluationContext>(
@@ -143,8 +149,8 @@ fn parameter_result_from<E: ExternalEvaluationContext>(
         .dependencies()
         .builtin()
         .keys()
-        .map(|builtin_ident| BuiltinDependency {
-            ident: builtin_ident.as_str().to_string(),
+        .map(|builtin_name| BuiltinDependency {
+            name: builtin_name.clone(),
         })
         .collect::<IndexSet<_>>();
 
@@ -153,7 +159,7 @@ fn parameter_result_from<E: ExternalEvaluationContext>(
         .parameter()
         .keys()
         .map(|parameter_name| ParameterDependency {
-            parameter_name: parameter_name.as_str().to_string(),
+            parameter_name: parameter_name.clone(),
         })
         .collect::<IndexSet<_>>();
 
@@ -163,9 +169,9 @@ fn parameter_result_from<E: ExternalEvaluationContext>(
         .iter()
         .map(
             |((reference_name, parameter_name), (model_path, _))| ExternalDependency {
-                model_path: model_path.as_ref().to_path_buf(),
-                reference_name: reference_name.as_str().to_string(),
-                parameter_name: parameter_name.as_str().to_string(),
+                model_path: model_path.clone(),
+                reference_name: reference_name.clone(),
+                parameter_name: parameter_name.clone(),
             },
         )
         .collect::<IndexSet<_>>();
@@ -177,8 +183,8 @@ fn parameter_result_from<E: ExternalEvaluationContext>(
     };
 
     output::Parameter {
-        ident: parameter.name().as_str().to_string(),
-        label: parameter.label().as_str().to_string(),
+        ident: parameter.name().clone(),
+        label: parameter.label().clone(),
         value,
         print_level,
         debug_info,
@@ -187,9 +193,7 @@ fn parameter_result_from<E: ExternalEvaluationContext>(
     }
 }
 
-fn get_evaluation_order(
-    parameters: &IndexMap<ir::ParameterName, ir::Parameter>,
-) -> Vec<ir::ParameterName> {
+fn get_evaluation_order(parameters: &IndexMap<ParameterName, ir::Parameter>) -> Vec<ParameterName> {
     let mut evaluation_order = Vec::new();
     let mut visited = HashSet::new();
 
@@ -211,12 +215,12 @@ fn get_evaluation_order(
 }
 
 fn process_parameter_dependencies(
-    parameter_name: &ir::ParameterName,
+    parameter_name: &ParameterName,
     parameter_dependencies: &ir::Dependencies,
-    mut visited: HashSet<ir::ParameterName>,
-    mut evaluation_order: Vec<ir::ParameterName>,
-    parameters: &IndexMap<ir::ParameterName, ir::Parameter>,
-) -> (Vec<ir::ParameterName>, HashSet<ir::ParameterName>) {
+    mut visited: HashSet<ParameterName>,
+    mut evaluation_order: Vec<ParameterName>,
+    parameters: &IndexMap<ParameterName, ir::Parameter>,
+) -> (Vec<ParameterName>, HashSet<ParameterName>) {
     for dependency in parameter_dependencies.parameter().keys() {
         if visited.contains(dependency) {
             continue;
@@ -283,14 +287,14 @@ fn eval_test<E: ExternalEvaluationContext>(
 
 /// Gets the values of the builtin dependencies for debug reporting purposes.
 fn get_builtin_dependency_values<E: ExternalEvaluationContext>(
-    dependencies: &IndexMap<ir::Identifier, Span>,
+    dependencies: &IndexMap<BuiltinValueName, Span>,
     context: &EvalContext<'_, E>,
-) -> IndexMap<String, Value> {
+) -> IndexMap<BuiltinValueName, Value> {
     dependencies
         .keys()
         .map(|dependency| {
             let value = context.lookup_builtin_variable(dependency);
-            (dependency.as_str().to_string(), value)
+            (dependency.clone(), value)
         })
         .collect::<IndexMap<_, _>>()
 }
@@ -303,9 +307,9 @@ fn get_builtin_dependency_values<E: ExternalEvaluationContext>(
 ///
 /// This function will panic if any of the dependencies are not found.
 fn get_parameter_dependency_values<E: ExternalEvaluationContext>(
-    dependencies: &IndexMap<ir::ParameterName, Span>,
+    dependencies: &IndexMap<ParameterName, Span>,
     context: &EvalContext<'_, E>,
-) -> IndexMap<String, Value> {
+) -> IndexMap<ParameterName, Value> {
     dependencies
         .iter()
         .map(|(dependency, dependency_span)| {
@@ -313,7 +317,7 @@ fn get_parameter_dependency_values<E: ExternalEvaluationContext>(
                 .lookup_parameter_value(dependency, *dependency_span)
                 .expect("dependency should be found because the expression evaluated successfully");
 
-            (dependency.as_str().to_string(), value)
+            (dependency.clone(), value)
         })
         .collect::<IndexMap<_, _>>()
 }
@@ -326,9 +330,9 @@ fn get_parameter_dependency_values<E: ExternalEvaluationContext>(
 ///
 /// This function will panic if any of the dependencies are not found.
 fn get_external_dependency_values<E: ExternalEvaluationContext>(
-    dependencies: &IndexMap<(ir::ReferenceName, ir::ParameterName), (ir::ModelPath, Span)>,
+    dependencies: &IndexMap<(ReferenceName, ParameterName), (ModelPath, Span)>,
     context: &EvalContext<'_, E>,
-) -> IndexMap<(String, String), Value> {
+) -> IndexMap<(ReferenceName, ParameterName), Value> {
     dependencies
         .iter()
         .map(
@@ -339,13 +343,11 @@ fn get_external_dependency_values<E: ExternalEvaluationContext>(
                     *dependency_span,
                 );
 
-                let reference_name = reference_name.as_str().to_string();
-                let parameter_name = parameter_name.as_str().to_string();
                 let value = value.expect(
                     "dependency should be found because the expression evaluated successfully",
                 );
 
-                ((reference_name, parameter_name), value)
+                ((reference_name.clone(), parameter_name.clone()), value)
             },
         )
         .collect::<IndexMap<_, _>>()

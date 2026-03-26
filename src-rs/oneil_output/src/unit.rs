@@ -45,10 +45,13 @@ impl Unit {
         self.dimension_map.is_dimensionless()
     }
 
-    /// Determines if the unit is a `1` unit.
+    /// Determines if the unit is effectively unitless.
+    ///
+    /// A unit is effectively unitless when its magnitude is 1, it is not a dB unit,
+    /// and it is dimensionless.
     #[must_use]
-    pub fn is_one(&self) -> bool {
-        self.dimension_map.is_dimensionless() && is_close(self.magnitude, 1.0) && !self.is_db
+    pub fn is_effectively_unitless(&self) -> bool {
+        is_close(self.magnitude, 1.0) && !self.is_db && self.dimension_map.is_dimensionless()
     }
 
     /// Sets the `is_db` flag for the unit.
@@ -368,10 +371,13 @@ impl fmt::Display for DisplayUnit {
                     write!(f, "^{exponent}")?;
                 }
             }
+            Self::Multiply(left, right) if **left == Self::One => write!(f, "{right}")?,
+            Self::Multiply(left, right) if **right == Self::One => write!(f, "{left}")?,
             Self::Multiply(left, right) => write!(f, "{left}*{right}")?,
             Self::Divide(left, right) => match **right {
                 Self::Multiply(_, _) | Self::Divide(_, _) => write!(f, "{left}/({right})")?,
-                Self::One | Self::Unit { .. } | Self::Power { .. } => {
+                Self::One => write!(f, "{left}")?,
+                Self::Unit { .. } | Self::Power { .. } => {
                     write!(f, "{left}/{right}")?;
                 }
             },

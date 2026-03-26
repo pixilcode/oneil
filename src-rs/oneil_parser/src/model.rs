@@ -12,7 +12,7 @@ use nom::{
     combinator::{eof, opt, value},
 };
 use oneil_ast::{
-    DeclNode, LabelNode, Model, ModelNode, Node, Section, SectionHeader, SectionHeaderNode,
+    DeclNode, Model, ModelNode, Node, Section, SectionHeader, SectionHeaderNode, SectionLabelNode,
     SectionNode,
 };
 use oneil_shared::span::Span;
@@ -315,7 +315,7 @@ fn parse_section_header(input: InputSpan<'_>) -> Result<'_, SectionHeaderNode, P
             section_token.lexeme_span,
         ))
         .parse(rest)?;
-    let label_node = LabelNode::from(label_token);
+    let label_node = SectionLabelNode::from(label_token);
 
     let (rest, end_of_line_token) = end_of_line
         .or_fail_with(ParserError::section_missing_end_of_line(
