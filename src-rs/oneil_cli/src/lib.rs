@@ -629,8 +629,6 @@ fn handle_test_command(args: TestArgs) {
     }
 }
 
-const DEFAULT_TREE_DEPTH: usize = 4;
-
 fn handle_tree_command(args: TreeArgs) {
     enum TreeResults {
         ReferenceTrees(Vec<(ParameterName, Option<Tree<ReferenceTreeValue>>)>),
@@ -654,7 +652,7 @@ fn handle_tree_command(args: TreeArgs) {
 
     let tree_print_config = TreePrintConfig {
         recursive,
-        depth: depth.unwrap_or(DEFAULT_TREE_DEPTH),
+        depth,
         print_utils_config,
     };
 

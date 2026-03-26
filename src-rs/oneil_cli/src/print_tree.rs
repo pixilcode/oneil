@@ -14,7 +14,7 @@ use crate::{
 
 pub struct TreePrintConfig {
     pub recursive: bool,
-    pub depth: usize,
+    pub depth: Option<usize>,
     pub print_utils_config: PrintUtilsConfig,
 }
 
@@ -68,7 +68,9 @@ fn print_tree_node<T: PrintableTreeValue>(
     let children = tree.children();
 
     // Check if we've reached the maximum depth
-    let has_reached_max_depth = current_depth >= config.depth;
+    let has_reached_max_depth = config
+        .depth
+        .is_some_and(|max_depth| current_depth >= max_depth);
 
     // Build the prefix for this node
     let (first_prefix, rest_prefix) = if current_depth == 0 {
