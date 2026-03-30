@@ -20,7 +20,7 @@ Scientific: e_val = 1.5e3
 Infinity: inf_val = inf
 ```
 
-### Operations on numbers
+### Operations
 
 Precedence matches the language grammar (exponentiation before multiplication/division, then addition/subtraction; comparisons and logical operators are lower).
 
