@@ -5,7 +5,7 @@ use oneil_output::Value;
 use oneil_shared::{
     paths::ModelPath,
     span::Span,
-    symbols::{BuiltinValueName, ParameterName, ReferenceName},
+    symbols::{BuiltinValueName, ParameterName, ReferenceName, TestIndex},
 };
 
 /// A tree of values with children.
@@ -59,15 +59,29 @@ pub struct DependencyTreeValue {
     pub display_info: Option<(ModelPath, Span)>,
 }
 
-/// A value in a reference tree
+/// A value in a reference tree: a parameter node or a test node.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ReferenceTreeValue {
-    /// The path to the model containing the parameter
-    pub model_path: ModelPath,
-    /// The name of the parameter
-    pub parameter_name: ParameterName,
-    /// The evaluated value of the parameter
-    pub parameter_value: Value,
-    /// Display information for the parameter, containing the model path and source span.
-    pub display_info: (ModelPath, Span),
+pub enum ReferenceTreeValue {
+    /// A referenced parameter.
+    Parameter {
+        /// The path to the model containing the parameter.
+        model_path: ModelPath,
+        /// The name of the parameter.
+        parameter_name: ParameterName,
+        /// The evaluated value of the parameter.
+        parameter_value: Value,
+        /// Display information for the parameter, containing the model path and source span.
+        display_info: (ModelPath, Span),
+    },
+    /// A referenced test.
+    Test {
+        /// The path to the model containing the test.
+        model_path: ModelPath,
+        /// Index of the test within the model.
+        test_index: TestIndex,
+        /// Whether the test passed.
+        test_passed: bool,
+        /// Display information for the test, containing the model path and source span.
+        display_info: (ModelPath, Span),
+    },
 }

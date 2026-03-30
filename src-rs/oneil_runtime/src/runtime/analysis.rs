@@ -12,7 +12,7 @@ use oneil_ir as ir;
 use oneil_shared::{
     load_result::LoadResult,
     paths::ModelPath,
-    symbols::{BuiltinValueName, ParameterName},
+    symbols::{BuiltinValueName, ParameterName, TestIndex},
 };
 
 use super::Runtime;
@@ -169,5 +169,25 @@ impl analysis::ExternalAnalysisContext for Runtime {
         );
 
         Some(parameter)
+    }
+
+    fn lookup_test_value(
+        &self,
+        model_path: &ModelPath,
+        test_index: TestIndex,
+    ) -> Option<Result<oneil_output::Test, oneil_analysis::output::error::GetTestValueError>> {
+        let entry = self.eval_cache.get_entry(model_path)?;
+        let test = entry.value().map_or_else(
+            || Err(oneil_analysis::output::error::GetTestValueError::Model),
+            |model| {
+                model
+                    .tests
+                    .get(&test_index)
+                    .cloned()
+                    .ok_or(oneil_analysis::output::error::GetTestValueError::Test)
+            },
+        );
+
+        Some(test)
     }
 }
