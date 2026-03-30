@@ -2,13 +2,18 @@
 
 use indexmap::IndexMap;
 use oneil_frontend::InstancedModel;
-use oneil_output::{DependencySet, Model, Parameter, Value};
-use oneil_shared::load_result::LoadResult;
-use oneil_shared::paths::ModelPath;
-use oneil_shared::symbols::{BuiltinValueName, ParameterName};
+use oneil_output::{DependencySet, Model, Parameter, Test, Value};
+use oneil_shared::{
+    load_result::LoadResult,
+    paths::ModelPath,
+    symbols::{BuiltinValueName, ParameterName, TestIndex},
+};
 
-use crate::dep_graph::{DependencyGraph, ReferenceSet};
 use crate::output::error::{GetValueError, ModelEvalHasErrors};
+use crate::{
+    dep_graph::{DependencyGraph, ReferenceSet},
+    output::error::GetTestValueError,
+};
 
 /// External context provided to tree operations.
 pub trait ExternalAnalysisContext {
@@ -37,6 +42,16 @@ pub trait ExternalAnalysisContext {
         model_path: &ModelPath,
         parameter_name: &ParameterName,
     ) -> Option<Result<Parameter, GetValueError>>;
+
+    /// Looks up an evaluated test by model path and test index.
+    ///
+    /// Returns `None` if the model is not in the context, `Some(Err(...))` on lookup errors,
+    /// or `Some(Ok(test))` when the test is found.
+    fn lookup_test_value(
+        &self,
+        model_path: &ModelPath,
+        test_index: TestIndex,
+    ) -> Option<Result<Test, GetTestValueError>>;
 }
 
 /// Context for tree operations that holds a mutable reference to an [`ExternalAnalysisContext`].
@@ -90,6 +105,16 @@ impl<'external, E: ExternalAnalysisContext> TreeContext<'external, E> {
             .references(model_path, parameter_name)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Looks up an evaluated test by model path and test index, delegating to the external context.
+    #[must_use]
+    pub fn lookup_test_value(
+        &self,
+        model_path: &ModelPath,
+        test_index: TestIndex,
+    ) -> Option<Result<Test, GetTestValueError>> {
+        self.external.lookup_test_value(model_path, test_index)
     }
 
     /// Looks up an evaluated parameter by model path and parameter name, delegating to the external context.

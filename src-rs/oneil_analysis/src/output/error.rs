@@ -1,7 +1,10 @@
 //! Error types for runtime output operations.
 
 use indexmap::{IndexMap, IndexSet};
-use oneil_shared::{paths::ModelPath, symbols::ParameterName};
+use oneil_shared::{
+    paths::ModelPath,
+    symbols::{ParameterName, TestIndex},
+};
 
 /// Singleton error indicating that model evaluation had errors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,23 +32,27 @@ impl TreeErrors {
 
     /// Records a parameter-level error for the given model path and parameter name.
     pub fn insert_parameter_error(&mut self, model_path: ModelPath, parameter_name: ParameterName) {
-        if let Some(model_errors) = self.errors.get_mut(&model_path) {
-            model_errors.insert_parameter_error(parameter_name);
-        } else {
-            let parameters = IndexSet::from_iter([parameter_name]);
-            self.errors
-                .insert(model_path, TreeModelError::ParamErrors { parameters });
-        }
+        self.errors
+            .entry(model_path)
+            .or_insert(TreeModelError::ModelError)
+            .insert_parameter_error(parameter_name);
+    }
+
+    /// Records a test-level error for the given model path and test index.
+    pub fn insert_test_error(&mut self, model_path: ModelPath, test_index: TestIndex) {
+        self.errors
+            .entry(model_path)
+            .or_insert(TreeModelError::ModelError)
+            .insert_test_error(test_index);
     }
 
     /// Merges another `TreeErrors` into this one, combining errors per model path.
     pub fn extend(&mut self, other: Self) {
         for (path, error) in other.errors {
-            if let Some(model_errors) = self.errors.get_mut(&path) {
-                model_errors.extend(error);
-            } else {
-                self.errors.insert(path, error);
-            }
+            self.errors
+                .entry(path)
+                .or_insert(TreeModelError::ModelError)
+                .extend(error);
         }
     }
 
@@ -60,10 +67,12 @@ impl TreeErrors {
 pub enum TreeModelError {
     /// The model could not be loaded or evaluated.
     ModelError,
-    /// The model loaded but some parameters had errors.
-    ParamErrors {
+    /// The model loaded but some parameters and/or tests had errors.
+    LocalErrors {
         /// Names of parameters that had errors.
         parameters: IndexSet<ParameterName>,
+        /// Indices of tests that had errors.
+        tests: IndexSet<TestIndex>,
     },
 }
 
@@ -72,8 +81,18 @@ impl TreeModelError {
     pub fn insert_parameter_error(&mut self, parameter_name: ParameterName) {
         match self {
             Self::ModelError => (),
-            Self::ParamErrors { parameters } => {
+            Self::LocalErrors { parameters, .. } => {
                 parameters.insert(parameter_name);
+            }
+        }
+    }
+
+    /// Adds a test error to this model error.
+    pub fn insert_test_error(&mut self, test_index: TestIndex) {
+        match self {
+            Self::ModelError => (),
+            Self::LocalErrors { tests, .. } => {
+                tests.insert(test_index);
             }
         }
     }
@@ -84,12 +103,14 @@ impl TreeModelError {
             (Self::ModelError, _) => (),
             (self_, other @ Self::ModelError) => *self_ = other,
             (
-                Self::ParamErrors { parameters },
-                Self::ParamErrors {
+                Self::LocalErrors { parameters, tests },
+                Self::LocalErrors {
                     parameters: other_parameters,
+                    tests: other_tests,
                 },
             ) => {
                 parameters.extend(other_parameters);
+                tests.extend(other_tests);
             }
         }
     }
@@ -141,4 +162,13 @@ pub enum GetValueError {
     Model,
     /// The parameter was not found in the model.
     Parameter,
+}
+
+/// Error when looking up a test value for a tree node.
+#[derive(Debug)]
+pub enum GetTestValueError {
+    /// The model was not found or could not be evaluated.
+    Model,
+    /// The test was not found in the evaluated model.
+    Test,
 }

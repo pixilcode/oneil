@@ -3,14 +3,14 @@
 use oneil_output::DependencySet;
 use oneil_shared::{
     paths::ModelPath,
-    symbols::{ParameterName, ReferenceName},
+    symbols::{ParameterName, ReferenceName, TestIndex},
 };
 
 use crate::{
     context::{ExternalAnalysisContext, TreeContext},
     output::{
         self,
-        error::{GetValueError, TreeErrors},
+        error::{GetTestValueError, GetValueError, TreeErrors},
     },
 };
 
@@ -25,6 +25,8 @@ struct TreeValueLocation {
 struct GetChildrenResult<T> {
     builtin_children: Vec<output::Tree<T>>,
     parameter_children: Vec<TreeValueLocation>,
+    test_children: Vec<output::Tree<T>>,
+    test_errors: TreeErrors,
 }
 
 /// Gets the dependency tree for a specific parameter.
@@ -143,6 +145,8 @@ fn get_dependency_tree_children(
     GetChildrenResult {
         builtin_children,
         parameter_children,
+        test_children: Vec::new(),
+        test_errors: TreeErrors::empty(),
     }
 }
 
@@ -189,7 +193,7 @@ fn get_reference_value<E: ExternalAnalysisContext>(
         let parameter_value = parameter.value;
         let display_info = (model_path.clone(), parameter.expr_span);
 
-        output::ReferenceTreeValue {
+        output::ReferenceTreeValue::Parameter {
             model_path,
             parameter_name,
             parameter_value,
@@ -205,32 +209,103 @@ fn get_reference_tree_children(
     parameter_name: &ParameterName,
     tree_context: &TreeContext<'_, impl ExternalAnalysisContext>,
 ) -> GetChildrenResult<output::ReferenceTreeValue> {
+    enum GetTestError {
+        Model(ModelPath),
+        Test(ModelPath, TestIndex),
+    }
+
     let deps = tree_context.references(model_path, parameter_name);
 
-    let parameter_args = deps
-        .parameter_references
-        .iter()
+    let parameter_children = deps.parameter.into_iter().map(|dep| TreeValueLocation {
+        model_path: model_path.clone(),
+        reference_name: None,
+        parameter_name: dep.parameter_name,
+    });
+
+    let external_children = deps
+        .external_parameter
+        .into_iter()
         .map(|dep| TreeValueLocation {
-            model_path: model_path.clone(),
+            model_path: dep.model_path,
             reference_name: None,
-            parameter_name: dep.parameter_name.clone(),
+            parameter_name: dep.parameter_name,
         });
 
-    let external_args = deps
-        .external_references
-        .iter()
-        .map(|dep| TreeValueLocation {
-            model_path: dep.model_path.clone(),
-            reference_name: None,
-            parameter_name: dep.parameter_name.clone(),
-        });
+    let all_param_children = parameter_children.chain(external_children).collect();
 
-    let recurse_args = parameter_args.chain(external_args).collect();
+    let test_children = deps.test.iter().filter_map(|dep| {
+        let test = tree_context.lookup_test_value(model_path, dep.test_index)?;
+
+        let result = test
+            .map(|test| {
+                let test_passed = test.passed();
+                let display_info = (model_path.clone(), test.expr_span);
+
+                output::ReferenceTreeValue::Test {
+                    model_path: model_path.clone(),
+                    test_index: dep.test_index,
+                    test_passed,
+                    display_info,
+                }
+            })
+            .map_err(|error| match error {
+                GetTestValueError::Model => GetTestError::Model(model_path.clone()),
+                GetTestValueError::Test => GetTestError::Test(model_path.clone(), dep.test_index),
+            });
+
+        Some(result)
+    });
+
+    let test_external_children = deps.external_test.iter().filter_map(|dep| {
+        let test = tree_context.lookup_test_value(&dep.model_path, dep.test_index)?;
+
+        let result = test
+            .map(|test| {
+                let test_passed = test.passed();
+                let display_info = (dep.model_path.clone(), test.expr_span);
+
+                output::ReferenceTreeValue::Test {
+                    model_path: dep.model_path.clone(),
+                    test_index: dep.test_index,
+                    test_passed,
+                    display_info,
+                }
+            })
+            .map_err(|error| match error {
+                GetTestValueError::Model => GetTestError::Model(dep.model_path.clone()),
+                GetTestValueError::Test => {
+                    GetTestError::Test(dep.model_path.clone(), dep.test_index)
+                }
+            });
+
+        Some(result)
+    });
+
+    let (all_test_children, test_errors) = test_children.chain(test_external_children).fold(
+        (Vec::new(), TreeErrors::empty()),
+        |(mut children, mut errors), result| {
+            match result {
+                Ok(child) => {
+                    children.push(output::Tree::new(child, Vec::new()));
+                }
+                Err(GetTestError::Model(model_path)) => {
+                    errors.insert_model_error(model_path);
+                }
+                Err(GetTestError::Test(model_path, test_index)) => {
+                    errors.insert_test_error(model_path, test_index);
+                }
+            }
+
+            (children, errors)
+        },
+    );
 
     GetChildrenResult {
         // no builtins reference other parameters
         builtin_children: Vec::new(),
-        parameter_children: recurse_args,
+        parameter_children: all_param_children,
+        test_children: all_test_children,
+        test_errors,
     }
 }
 
@@ -297,10 +372,12 @@ where
         let GetChildrenResult {
             builtin_children,
             parameter_children,
+            test_children,
+            test_errors,
         } = get_children(location, tree_context);
 
         // recurse on the parameter children
-        let (parameter_children, tree_errors) = parameter_children
+        let (parameter_children, mut tree_errors) = parameter_children
             .into_iter()
             .map(|location| recurse(&location, tree_context, get_value, get_children))
             .fold(
@@ -315,7 +392,10 @@ where
         let children = builtin_children
             .into_iter()
             .chain(parameter_children)
+            .chain(test_children)
             .collect();
+
+        tree_errors.extend(test_errors);
 
         (Some(output::Tree::new(value, children)), tree_errors)
     }
@@ -390,6 +470,34 @@ fn get_dependency_graph<E: ExternalAnalysisContext>(
                     parameter_name.clone(),
                     oneil_output::ExternalDependency {
                         model_path: external_model_path,
+                        reference_name: reference_dep_name.clone(),
+                        parameter_name: parameter_dep_name.clone(),
+                    },
+                );
+            }
+        }
+
+        for (test_index, test) in model.get_tests() {
+            let dependencies = test.dependencies();
+
+            for parameter_dep in dependencies.parameter().keys() {
+                dependency_graph.add_test_depends_on_parameter(
+                    model_path.clone(),
+                    *test_index,
+                    oneil_output::ParameterDependency {
+                        parameter_name: parameter_dep.clone(),
+                    },
+                );
+            }
+
+            for ((reference_dep_name, parameter_dep_name), (external_model_path, _)) in
+                dependencies.external()
+            {
+                dependency_graph.add_test_depends_on_external(
+                    model_path.clone(),
+                    *test_index,
+                    oneil_output::ExternalDependency {
+                        model_path: external_model_path.clone(),
                         reference_name: reference_dep_name.clone(),
                         parameter_name: parameter_dep_name.clone(),
                     },

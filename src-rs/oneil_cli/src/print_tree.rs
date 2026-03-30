@@ -103,10 +103,10 @@ fn print_tree_node<T: PrintableTreeValue>(
     let styled_value_name = stylesheet::TREE_VALUE_NAME.style(&value_name);
     print!("{indent}{first_prefix}");
     print!("{styled_value_name} = ");
-    print_utils::print_value(value.get_value(), config.print_utils_config);
+    print_tree_value(&value.get_value(), config.print_utils_config);
     println!();
 
-    // Print the parameter equation
+    // Print the parameter/test equation
     //
     // The goal is for this to be printed as
     //
@@ -192,6 +192,20 @@ fn build_indent(parent_prefixes: &[bool]) -> String {
         .collect()
 }
 
+fn print_tree_value(value: &TreeValue<'_>, config: PrintUtilsConfig) {
+    match value {
+        TreeValue::Parameter { value } => print_utils::print_value(value, config),
+        TreeValue::Test { passed } => {
+            let styled_passed = if *passed {
+                stylesheet::TESTS_PASS_COLOR.style("PASS")
+            } else {
+                stylesheet::TESTS_FAIL_COLOR.style("FAIL")
+            };
+            print!("{styled_passed}");
+        }
+    }
+}
+
 /// Gets the equation string from the source file using the display info.
 ///
 /// # Errors
@@ -245,8 +259,8 @@ trait PrintableTreeValue {
     /// This is necessary because the styled value name may include
     /// ANSI escape codes, which would affect the length of the string.
     fn get_value_name_len(&self) -> usize;
-    /// Gets the value.
-    fn get_value(&self) -> &Value;
+    /// Gets the value of the parameter or .
+    fn get_value(&self) -> TreeValue<'_>;
     /// Gets the display information for the value, if available.
     ///
     /// This is used to get the equation string from the source file.
@@ -258,33 +272,80 @@ trait PrintableTreeValue {
     fn is_outside_top_model(&self, top_model_path: &ModelPath) -> bool;
 }
 
+enum TreeValue<'tree> {
+    Parameter { value: &'tree Value },
+    Test { passed: bool },
+}
+
 impl PrintableTreeValue for ReferenceTreeValue {
     fn get_styled_value_name(&self) -> String {
-        let model_path = self.model_path.as_path().display().to_string();
-        let styled_model_path = stylesheet::MODEL_LABEL.style(model_path);
-
-        let param = self.parameter_name.as_str();
-        let styled_param = stylesheet::PARAMETER_IDENTIFIER.style(param);
-
-        format!("{styled_model_path} {styled_param}")
+        match self {
+            Self::Parameter {
+                model_path,
+                parameter_name,
+                ..
+            } => {
+                let model_path = model_path.as_path().display().to_string();
+                let styled_model_path = stylesheet::MODEL_LABEL.style(model_path);
+                let param = parameter_name.as_str();
+                let styled_param = stylesheet::PARAMETER_IDENTIFIER.style(param);
+                format!("{styled_model_path} {styled_param}")
+            }
+            Self::Test { model_path, .. } => {
+                let model_path = model_path.as_path().display().to_string();
+                let styled_model_path = stylesheet::MODEL_LABEL.style(model_path);
+                let label = "test";
+                let styled_test = stylesheet::PARAMETER_IDENTIFIER.style(label);
+                format!("{styled_model_path} {styled_test}")
+            }
+        }
     }
 
     fn get_value_name_len(&self) -> usize {
-        let model_path_len = self.model_path.as_path().as_os_str().len();
-        let param_name_len = self.parameter_name.as_str().len();
-        model_path_len + 1 + param_name_len // +1 for the space
+        match self {
+            Self::Parameter {
+                model_path,
+                parameter_name,
+                ..
+            } => {
+                let model_path_len = model_path.as_path().as_os_str().len();
+                let param_name_len = parameter_name.as_str().len();
+                model_path_len + 1 + param_name_len
+            }
+            Self::Test { model_path, .. } => {
+                let model_path_len = model_path.as_path().as_os_str().len();
+                let test_label_len = "test".len();
+                model_path_len + 1 + test_label_len
+            }
+        }
     }
 
-    fn get_value(&self) -> &Value {
-        &self.parameter_value
+    fn get_value(&self) -> TreeValue<'_> {
+        match self {
+            Self::Parameter {
+                parameter_value, ..
+            } => TreeValue::Parameter {
+                value: parameter_value,
+            },
+            Self::Test { test_passed, .. } => TreeValue::Test {
+                passed: *test_passed,
+            },
+        }
     }
 
     fn get_display_info(&self) -> Option<&(ModelPath, Span)> {
-        Some(&self.display_info)
+        match self {
+            Self::Parameter { display_info, .. } | Self::Test { display_info, .. } => {
+                Some(display_info)
+            }
+        }
     }
 
     fn is_outside_top_model(&self, top_model_path: &ModelPath) -> bool {
-        self.model_path != *top_model_path
+        let model_path = match self {
+            Self::Parameter { model_path, .. } | Self::Test { model_path, .. } => model_path,
+        };
+        *model_path != *top_model_path
     }
 }
 
@@ -311,8 +372,10 @@ impl PrintableTreeValue for DependencyTreeValue {
         }
     }
 
-    fn get_value(&self) -> &Value {
-        &self.parameter_value
+    fn get_value(&self) -> TreeValue<'_> {
+        TreeValue::Parameter {
+            value: &self.parameter_value,
+        }
     }
 
     fn get_display_info(&self) -> Option<&(ModelPath, Span)> {
