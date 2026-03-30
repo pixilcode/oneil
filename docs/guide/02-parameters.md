@@ -210,8 +210,6 @@ p = 3  # Perf param
   p = 3  # Perf param
   ```
 
-- **`--debug` / `-D`** - When set, for parameters marked with `**`, Oneil prints debug information about the variables used to evaluate that parameter. Run `oneil eval --help` for current behavior.
-
 ## Other useful eval options
 
 - **`--expr` / `-x`** - Evaluate one or more expressions in the model’s context. Example:
@@ -224,7 +222,7 @@ p = 3  # Perf param
 
 - **`--watch`** - Watch the model file for changes and re-run evaluation when it changes.
 
-- **`--partial`** - If evaluation has errors, still print partial results after the error messages.
+- **`--debug`** - If evaluation has errors, still print partial results after the error messages.
 
 - **`--no-header`** - Omit the model path and test summary header.
 
