@@ -290,7 +290,7 @@ The places where this should be used are rare and should be treated cautiously
 since `strip` effectively disables unit checking.
 
 ```oneil
-X: x = 10 :m
+X: x = 10 : m
 
 test: strip(x) == 10
 ```
@@ -299,8 +299,8 @@ In addition, it is important to realize that `strip` strips the unit that is
 _currently associated with a value_.
 
 ```oneil
-X in meters: x_m = 1000 :m
-X in kilometers: x_km = 1 :km
+X in meters: x_m = 1000 : m
+X in kilometers: x_km = 1 : km
 
 # 1000 meters == 1 km
 test: x_m == x_km
@@ -318,6 +318,168 @@ test: strip((x_m : m)) == strip((x_km : m))
 ```
 
 
-## Unitless and dimensionless values
+## Dimensionless units
 
-TODO
+There are some units that don't have any dimensions, such as `%` or `ppm` (parts
+per million). The plain `dB` unit also does not have any dimensions.  These
+units are referred to as _dimensionless units_, and values with dimensionless
+units are referred to as _dimensionless values_.
+
+### Unitless equivalence
+
+Dimensionless values are treated as if they have no unit for all purposes except for
+display. The following model demonstrates this with `%` and `dB` units.
+
+```oneil
+# `100%` is treated as equal to `1`
+test: (100:%) == 1
+
+# adding does *not* convert `1` to `1%`
+test: (100:%) + 1 == (200:%)
+test: (100:%) + 1 != (101:%)
+
+# `0 dB` is treated as equal to `1`
+test: (0:dB) == 1
+
+# adding does *not* convert `1` to `1dB`
+test: (0:dB) + 1 == (3.01:dB)
+test: (0:dB) + 1 != (1:dB)
+```
+
+### Angular Units
+
+The lack of distinction between dimensionless values and unitless values is
+especially important when it comes to units involving _radians_. The
+International System of Units treats radians as dimensionless, and Oneil has
+opted to follow this convention. Therefore, all angular units (such as
+`radians`, `degrees`, and `revolutions`) are specified in radians. Therefore,
+when adding a unitless number to an angular value, the unitless number is
+treated as if it is specified in `radians`.
+
+```oneil
+test: (1:rad) == 1
+
+test: (1:rad) + 1 == (2:rad)
+
+test: (360:deg) == 2*pi
+
+test: (360:deg) + 2*pi == (720:deg)
+```
+
+#### Using `rad/s` and `Hz`
+
+In terms of SI units, there is a problem with `rad/s` and `Hz`. It is that
+[`rad/s != Hz` even though `rad/s == 1/s` and `Hz == 1/s`](https://iopscience.iop.org/article/10.1088/1681-7575/ac0240).
+In order to get around this problem, Oneil specifies that `1 Hz == 2*pi rad/s`.
+This solution helps us to avoid this inconsistency, but it can also lead to
+some problems of its own.
+
+```oneil
+Frequency: f = 1 : Hz
+Cycles in 2 seconds: cycles = f * (2:s) : 1
+# we would expect `2`, since 1 Hz = 1 cycle/s
+# however, we get `12.57` instead
+```
+
+The `cycle` unit is defined as `2*pi radians`, so if you simply want to view the
+unit in cycles, add the `cycle` unit.
+
+```oneil
+Cycles in 2 seconds: cycles = f * (2:s) : cycles
+# prints out `2 cycles`
+```
+
+However, using the `cycle` unit on an intermediate value will cause `cycle` units
+to propagate throughout the model. In order to avoid this, divide the value in
+`Hertz` by `2*pi` to go from radians to cycles.
+
+```oneil
+Frequency: f = 5 : GHz
+Speed of light: c = 299792458 : m/s
+
+Wavelength: lambda_cycles = c/f : cm/cycle
+# convert from Hz in rad/s to Hz in cycle/s
+Wavelength: lambda_convert = c/(f/2*pi) : cm
+# or, simplified
+Wavelength: lambda_convert2 = 2*pi*c/f : cm
+```
+
+In the future, we may add a rotation dimension, but for now, this is what is
+required to get around the inconsistency.
+
+
+### Display
+
+As mentioned previously, dimensionless units are mainly kept around so that
+values can be displayed correctly to the user. For example, if you define a
+parameter in `%`, you often would like the value to be displayed in `%`.
+
+```oneil
+$ Average battery charge: charge = 60 : %
+# prints out as `60%`
+```
+
+However, there are some situations, such as ratios, where you would like the
+value to be printed out as a unitless value. Oneil can often detect this and
+will print it as such.
+
+```oneil
+Length 1: l1 = 10 : m
+Length 2: l2 = 20 : m
+
+$ Length ratio: lr = l1 / l2
+# prints out as `0.5`
+```
+
+There are some cases, though, where Oneil is unable to detect that a value is
+intended to be unitless.
+
+```oneil
+Length 1: l1 = 0.010 : km
+Length 2: l2 = 20 : m
+
+$ Length ratio: lr = l1 / l2
+# prints out as `5e-4 km/m`
+```
+
+In this case, you can add a unit annotation of `1` to tell Oneil that the value
+should be unitless.
+
+```oneil
+Length 1: l1 = 0.010 : km
+Length 2: l2 = 20 : m
+
+$ Length ratio: lr = l1 / l2 : 1
+# prints out as `0.5`
+```
+
+You can do a similar thing with percentage units.
+
+```oneil
+Probability of A: P_A = 20 : %
+Probability of B: P_B = 60 : %
+
+$ Probability of A and B: P_AB = P_A * P_B
+# prints out as `1200 %*%`
+
+$ Probability of A and B with unit: P_ABu = P_A * P_B : %
+# prints out as `12%`
+```
+
+Note that **doing this does not change the value itself**. It only changes
+**how the value is printed**. If you do not care how the value is printed (for
+example, if it is an intermediate variable), then you do not need to add a unit
+to the parameter.
+
+```oneil
+Length 1: l1 = 0.010 : km
+Length 2: l2 = 20 : m
+
+$ Length ratio 1: lr_1 = l1 / l2
+# prints out as `5e-4 km/m`
+
+$ Length ratio 2: lr_2 = l1 / l2 : 1
+# prints out as `0.5`
+
+test: lr_1 == lr_2
+```
