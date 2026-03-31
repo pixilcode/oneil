@@ -45,12 +45,10 @@ git clone git@github.com/careweather/oneil.git
 cd oneil
 ```
 
-<!-- TODO: not ready yet
 3. Build and run the project:
 ```sh
 cargo run -- path/to/your/model.on
 ```
--->
 
 See [Installation](docs/installation.md) for installing the `oneil` binary from a release or from source.
 
@@ -107,10 +105,10 @@ The Rust version of Oneil has syntax updates from the Python version.
           { 3 if x == baz
 
    # After
-   X["foo", "bar", "baz"]: x = "foo"
-   Y: y = { 1 if x == "foo"
-          { 2 if x == "bar"
-          { 3 if x == "baz"
+   X['foo', 'bar', 'baz']: x = 'foo'
+   Y: y = { 1 if x == 'foo'
+          { 2 if x == 'bar'
+          { 3 if x == 'baz'
    ```
 
    This change does not have an automatic fix (yet, at least), and must be done
@@ -159,7 +157,7 @@ ln -s $CAREWEATHER/oneil/vim ~/.vim
 
 #### VS Code Support
 
-Oneil has an [extension](https://marketplace.visualstudio.com/items?itemName=careweather.oneil) available in VS Code. This extension is not yet available in VS Code forks such as Cursor, but will be in the future.
+Oneil has an [extension](https://marketplace.visualstudio.com/items?itemName=careweather.oneil) available in VS Code. This extension is also available in VS Code forks such as Cursor.
 
 ## Syntax
 
@@ -206,7 +204,7 @@ Use limits to ensure fundamental physical properties are true (distances can't b
 You can specify discrete limits using brackets. These can be words or numbers:
 
 ``` { .on }
-Space domain [EarthOrbit, interplanetary, interstellar]: ...
+Space domain ['EarthOrbit', 'interplanetary', 'interstellar']: ...
 Dimensions [1, 2, 3]: ...
 ```
 
@@ -237,15 +235,15 @@ Oneil names and IDs overcome the classic naming conflict in mathematical computi
 
 The parameter assignment can either be a value (independent) or an equation (dependent).
 
-Value assignments can specify a single value or a minimum and maximum value separated by a pipe. These values use numbers, math constants, or in the case of discrete values, they can also use a set of [word characters](https://stackoverflow.com/questions/2998519/net-regex-what-is-the-word-character-w).
+Value assignments can specify a single value or a minimum and maximum value separated by a pipe. These values use numbers, math constants, or discrete values, which are strings wrapped in single quotes (`'`).
 
 ``` { .on }
 Window count: n_w = 20
 Communications amplifier efficiency (0, 1): eta_c = 0.5|0.7
-Space domain [earth_orbital, interplanetary, interstellar]: D_s = interstellar
+Space domain ['earth_orbital', 'interplanetary', 'interstellar']: D_s = 'interstellar'
 ```
 
-Equation assignments define a parameter as a function of other parameters using parameter IDs (e.g. `"m*x + b"` where `m`, `x`, and `b` are parameter IDs).
+Equation assignments define a parameter as a function of other parameters using parameter IDs (e.g. `m*x + b` where `m`, `x`, and `b` are parameter IDs).
 
 ``` { .on }
 Cylinder radius: r = D/2 : ...
@@ -257,8 +255,6 @@ Alternate equations for the minimum and maximum case can be given, separated by 
 ``` { .on }
 Power consumption: P_c = eta_c*P_q | eta_c*P_a
 ```
-
-For more details on valid equations, see [here](#extrema-math).
 
 #### Units
 
@@ -279,7 +275,7 @@ Temperature: T = temperature(D) :K
 
 You can review supported units using the [CLI units command](#unit-help). If a unit isn't supported, you can specify it in terms of base units: `kg`, `m`, `s`, `K`, `A`, `b`, `$`.
 
-Oneil currently supports `dB` as a nonlinear display unit. When any unit is specified with prefix `dB`, Oneil internally converts the parameter to the corresponding linear value, performs all calculations in linear terms, and reconverts the value to dB for display. This means that equations that contain parameters with dB units should use linear math. For example, when calculating the signal to noise ratio by hand, you might subtract the noise (dB) from the signal (dB), but in oneil, you divide the signal by the noise:
+Oneil supports `dB` as a nonlinear display unit. When any unit is specified with prefix `dB`, Oneil internally converts the parameter to the corresponding linear value, performs all calculations in linear terms, and reconverts the value to dB for display. This means that equations that contain parameters with dB units should use linear math. For example, when calculating the signal to noise ratio by hand, you might subtract the noise (dB) from the signal (dB), but in oneil, you divide the signal by the noise:
 
 ``` { .on }
 Noise power: P_n = -100 :dBmW
@@ -446,9 +442,9 @@ Oneil has the following builtin functions.
 | Function         | Description | Supported |
 |------------------|-------------|-----------|
 | `min(a)`         | If `a` is an interval, return the minimum value of the interval. Otherwise, return the value of `a`| ✓ |
-| `min(a, b, ...)` | Find the minimum value of the given values. If a value is an interval, the minimum value of the interval is used | ✓ |
+| `min(a, ...)` | Find the minimum value of the given values. If a value is an interval, the minimum value of the interval is used | ✓ |
 | `max(a)`         | If `a` is an interval, return the maximum value of the interval. Otherwise, return the value of `a`| ✓ |
-| `max(a, b, ...)` | Find the maximum value of the given values. If a value is an interval, the maximum value of the interval is used | ✓ |
+| `max(a, ...)` | Find the maximum value of the given values. If a value is an interval, the maximum value of the interval is used | ✓ |
 | `mid(a, b)`      | Find the midpoint between the | × |
 | `range(a)`       | Return the width of an interval (max−min) | ✓ |
 | `sqrt(a)`        | Calculate the square root | ✓ |
@@ -463,14 +459,13 @@ Oneil has the following builtin functions.
 | `log10(a)`       | Base 10 logarithm (alias for `log(a)`) | × |
 | `floor(a)`       | Round down to nearest integer | × |
 | `ceiling(a)`     | Round up to nearest integer | × |
-| `extent(a)`      | TODO: not sure what this does | × |
 | `abs(a)`         | Absolute value | × |
 | `sign(a)`        | Sign of value (−1, 0, 1) | × |
 | `strip(a)`       | Remove units from calculation | × |
 | `mnmx(...)`      | Gets the minimum and maximum of the list of values | × |
 
 
-#### Piecewise Equations
+### Piecewise Equations
 
 Piecewise equations can be used for parameter assignments.
 
@@ -484,13 +479,11 @@ Orbital gravity: g_o = {G*m_E/h^2 if D_s == 'earth_orbital' :km/s
 
 Conditions are evaluated in order, and the first equation corresponding to a true condition is calculated to obtain the value for the parameter.
 
-#### Breakout Functions
-
-**NOTE: this is currently unsupported**
+### Python Functions
 
 For functions not supported by the above equation formats, you can define a python function and link it.
 
-The breakout functions are stored in a separate python file, which must be imported in the Oneil file.
+The Python functions are stored in a separate python file, which must be imported in the Oneil file.
 
 ``` { .on }
 import <name of functions file>
@@ -612,176 +605,163 @@ Standard Earth gravity: g_E = 9.81 m/s^2
     ~~~
 ```
 
-## Using the Command line interface
+## Using the CLI
 
-*(WIP)*
+The authoritative reference for flags, defaults, and examples is the built-in help: run `oneil --help`. For a subcommand, run `oneil <command> --help` (for example `oneil eval --help`).
 
-<details>
-<summary><em>WIP</em></summary>
-See the [quickstart](#quickstart) for how to start the command line interface (CLI) and load a model. Once a model has been loaded in the CLI, the model can be explored and evaluated using an expression or the CLI functions described in the following sections.
+### Invocation
 
-### Queries and Expressions
+You can use the CLI in two ways:
 
-The CLI can be used for to query any parameter in the model, evaluate an expression consisting of numbers and parameters, and convert a parameter other units. For example:
+1. **`oneil [OPTIONS] <FILE>`** — Evaluate an Oneil model. If you do not pass a subcommand, the CLI parses arguments the same as **`oneil eval`**, so `oneil model.on` and `oneil eval model.on` are equivalent.
 
-``` { Oneil CLI }
-(cylinder) >>> r
-250 km
-(cylinder) >>>  (r/10)*omega^2
-2.795 g
-(cylinder) >>> (r/30)*omega^2 < R_E
-True
-(cylinder) >>> r:m
-250000 m
+2. **`oneil <COMMAND> ...`** — Run a named command (`eval`, `test`, `tree`, and so on).
+
+### Commands
+
+These are the commands listed by `oneil --help`:
+
+| Command | Alias | Purpose |
+|---------|-------|---------|
+| `eval` | `e` | Evaluate a model and print results. |
+| `test` | `t` | Run tests in a model. |
+| `tree` | — | Print the dependency or reference tree for one or more parameters. |
+| `builtins` | — | Print language builtins; see `oneil builtins --help` for subcommands (`all`, `unit`, `func`, `value`, `prefix`). |
+| `independent` | — | Print independent parameters in a model. |
+| `lsp` | — | Run the language server. |
+| `help` | — | Print help for the program or subcommands. |
+
+### Options for evaluation (`eval` and default `<FILE>`)
+
+The evaluation path accepts the options shown in `oneil --help` / `oneil eval --help`. In short:
+
+- **`-p` / `--params`** — Comma-separated parameters to print. Use dots for submodels (for example `a.sub2.sub1` is parameter `a` inside nested submodels). When set, the default print mode for “which parameters to show” is replaced by this explicit list.
+
+- **`-P` / `--print`** — When `--params` is not used, choose what to print: `trace` (trace `*`, debug `**`, and performance `$` markers), `perf` (`$` only), or `all`. Default is `trace`.
+
+- **`-x` / `--expr`** — Evaluate an expression in the model’s context; repeat the flag for multiple expressions. 
+
+- **`-r` / `--recursive`** — Include submodels, not only the top model.
+
+- **`-w` / `--watch`** — Watch files and re-evaluate when they change.
+
+- **`-D` / `--debug`** — After errors, still show partial results.
+
+- **`--no-header`**, **`--no-test-report`**, **`--no-parameters`** — Suppress parts of the output. **`--no-parameters`** overrides `--params` and print mode.
+
+- **`--sig-figs`** — Significant figures for printed numbers (default 4).
+
+- **`--no-colors`** — Turn off ANSI colors (useful for logs or terminals without color).
+
+- **`--venv-path`** — Python virtual environment to use when Python integration is enabled; if unset and `VIRTUAL_ENV` is unset, the CLI will discover `venv` or `.venv` by searching upward from the current directory.
+
+### `test` (`t`)
+
+**Usage:** `oneil test [OPTIONS] <FILE>`
+
+Runs tests defined in the model at `<FILE>`.
+
+- **`-r` / `--recursive`** — Include test results from submodels, not only the top model.
+- **`-D` / `--debug`** — After errors, still show partial test output.
+- **`--no-header`** — Omit the results header.
+- **`--no-test-report`** — Omit the test report.
+- **`--sig-figs`**, **`--no-colors`**, **`--venv-path`** — Same role as for `eval` (see `oneil test --help`).
+
+### `tree`
+
+**Usage:** `oneil tree [OPTIONS] <FILE> <PARAM>...`
+
+Prints a tree for each named parameter. `<PARAM>...` is one or more parameter names.
+
+- **`-u` / `--up`** — Tree of parameters that *reference* the given parameters (mutually exclusive with `--down`).
+- **`-d` / `--down`** — Tree of *dependencies* of the given parameters. If neither `--up` nor `--down` is set, behavior matches `--down`.
+- **`-r` / `--recursive`** — Include submodel values in the tree, not only the top model.
+- **`--depth <DEPTH>`** — Limit tree depth (default is full depth).
+- **`-D` / `--debug`** — After errors, still show partial trees.
+- **`--sig-figs`**, **`--no-colors`**, **`--venv-path`** — Same as other commands (see `oneil tree --help`).
+
+### `independent`
+
+**Usage:** `oneil independent [OPTIONS] <FILE>`
+
+Lists parameters that are independent (assigned directly rather than by equation) in the model at `<FILE>`.
+
+- **`-r` / `--recursive`** — Include independents from submodels as well as the top model.
+- **`-D` / `--debug`** — After errors, still show partial results.
+- **`--sig-figs`**, **`--no-colors`**, **`--venv-path`** — See `oneil independent --help`.
+
+### `builtins`
+
+**Usage:** `oneil builtins [OPTIONS]` or `oneil builtins <COMMAND> ...`
+
+Without a subcommand, run `oneil builtins --help` for the command list. Subcommands:
+
+| Subcommand | Arguments | Purpose |
+|------------|-----------|---------|
+| `all` | — | Print all builtins. |
+| `unit` | optional `[UNIT]` | List units, or search for a specific unit name. |
+| `func` | optional `[FUNCTION]` | List builtin functions, or search for one. |
+| `value` | optional `[VALUE]` | List builtin values, or search for one. |
+| `prefix` | optional `[PREFIX]` | List unit prefixes, or search for one. |
+
+Each subcommand accepts **`--sig-figs`**, **`--no-colors`**, and **`--venv-path`** where applicable; see `oneil builtins <COMMAND> --help`.
+
+### Examples
+
+```sh
+oneil model.on
+oneil eval model.on -P all
+oneil eval model.on -p r,g_a -x "r / 10 * omega^2"
+oneil test model.on
+oneil tree model.on g_a
+oneil builtins unit
 ```
 
-The following CLI commands are reserved. If you use one of them as an ID in your model, you won't be able to query that ID, because Oneil will prefer the command.
+For building and running from the repository, see the [quickstart](#quickstart) (`cargo run -- path/to/your/model.on`).
 
-### Tree
+## Using Oneil with AI
 
-Print a tree of the parameters:
+Oneil can be used effectively with AI to model and design systems. The following is an example ruleset for Oneil.
 
-``` { .on }
->>> tree [parameter 1] [parameter 2] ... [parameter n]
-<parameter 1>: <result>
-<equation>
-    <equation arg>: <result>
-    ...
+```md
+---
+description: Senior systems engineer with experience in Oneil
+globs: *.on, *.one
+alwaysApply: true
+---
+
+# Oneil Development Rules
+
+You are an experienced systems engineer. As an experienced systems engineer, you are methodical in your approach to segmenting and designing complex physical systems. You follow best practices, like:
+
+- Do not use magic numbers. Always show your work or your sources. Clarify your assumptions.
+- Subdivide models into logical heirarchal subsystems. You should typically align these subsystems with a specific hardware component if it stands by itself. If a functionality is filled collaboratively by multiple subsystems, it should be modeled in a top-level system model.
+- Only model what is required to calculate performance metrics. Don't include superfluous modeling. Think carefully about all of the considerations that affect the performance metrics.
+- Model from the bottom up. Specify the design inputs and calculate the performance output, not the other way around. Independent parameters (those that are assigned a value instead of equation) should generally be design parameters that the engineer has more direct control over.
+- Do not duplicate parameters. There should be one source of truth for each physical property or relationship. If this is not possible for some reason, use comments to make clear that this is a duplicate parameter.
+
+To model your systems, you use a new specification language, called Oneil. While you are an expert in Oneil, the language and its syntax is frequently updated, so you don't assume you inherently know how to write good Oneil code. Instead you re-read the [Oneil documentation](https://github.com/careweather/oneil) and these instructions before each time you write Oneil code to make sure your code is up-to-date with the latest syntax and best practice. You also review many other Oneil files for syntax and best practice examples in @/home/patrick/careweather/nest/model and @/home/patrick/careweather/veery/model.
+
+Adhere to the following best practices in Oneil:
+
+- Mark performance metrics by prepending the parameter line with "$ ". See other model files for examples of top-level metrics.
+- Be very clear in the note that follows the parameter. Provide a description of how you derived the equation or obtained a value. Provide sources where relevant, either URLs or journal references. But do not repeat yourself. For example, if the parameter name is "Flux capacitor power consumption", don't say in the note "This is the power consumption of the flux capacitor", instead say, "taken from the Doc's own Delorean handbook, page 13."
+- Parameter names should use sentence case.
+- You should write your notes in LaTeX. This means if you give a URL in a note, you should use \href, and if you use special LaTeX characters like % and &, you need to escape them.
+- If multiple parameters would give the same URL as a source, consider including that source in the introductory note and referencing in the parameter notes. For example, if this is an off-the-shelf electronic component, the introductory note would give the source for the datasheet and the parameter notes could just say something like, "given on page # of the datasheet."
+- Your parameter IDs should be as simple as possible. Prefer short subscripts and never use multiple subscripts (v_wmx instead of v_wind_max).
+- It's generally better to structure your submodels around actual hardware, at least the lowest-level models, because then you can have a model file that's tied to the specifications and properties of one component. For example, if you have a solar.on file which represents a solar power system, it could import a SM500K12L.on, which represents a specific solar cell component that can be purchased off the shelf. If a Oneil file refers specifically to an off-the-shelf component, it is preferable to name the file after using the component model number.
+- If a parameter is a fact that is generally true regardless of the component or design, include it in a constants.on file and import it. For example, the speed of light, should go in constants.on.
+- Oneil treats units as built-in types. You don't need to specify units anywhere else. Do not specify units as a subscript to the ID, as part of the name, or in the note. Do not convert units manually. Doing so will result in duplicate conversion errors.
+- Oneil should handle all units that the user might specify. Always specify units as cited in the source. For example, if the length of an object is given as 18 inches, use `Length: L = 18 :in`, not `Length: L = 18*.254 :m`. If you get an error for an unsupported unit, you may convert the specified unit and note the original. However, in this case, you should let the user know that the unsupported unit needs to be added.
+- IDs are used to produce typeset equations. The shorter the name the better. For example, battery voltage, should use "V_b" instead of "V_batt".
+- Also in typesetting, imported submodels are given as a superscript. If the battery voltage appears in the battery submodel, then it should have no subscript at all, just "V".
+- Oneil has built in formal verification in two forms. Do not mix them up. Review your designs for potential bounds you should clarify.
+  1. You can specify bounds on any parameter. The default is (0, inf), but in some cases another bound may be appropriate. For example, if calculating an efficiency, only values in the range (0, 1) are valid. Alternatively, if calculating a net energy generation, values in the range of (-inf, inf) would be valid.
+  2. You can specify tests for relational limits. For example, let's say you are designing a smartphone. You specify the battery capacity, "C_b", and the model calculates the corresponding battery volume, "V_b". You could use a relational test to make sure the battery volume is not larger than the total smartphone volume, "V": `test : V_b < V`.
+- Don't repeat yourself. For Oneil, name, ID, math, units, and sources/notes all have their own place. Don't put units in the name, ID, or note. Don't re-state the name in the note. Don't re-state the math in the note, unless you derive it in more detail there.
+- Oneil supports built-in interval arithmetic, never make separate minimum and maximum parameters when you can make one parameter and specify the minimum and maximum edge cases.
 ```
-
-For example:
-
-``` { .on }
-(cylinder) >>> tree g_a
-g_a: 27.95 g
-=r*omega^2
-    omega: 60.0 °/s
-    r: 250.0 m
-    =D/2
-        D: 500.0 m
-```
-
-### All
-
-Print all parameters and their results, for example:
-
-``` { Oneil CLI }
-(cylinder) >>> all
-m: 1000000.0 kg -- Mass
-D: 500.0 m -- Diameter
-r: 250.0 m -- Radius
-omega: 60.0 °/s -- Rotation rate
-g_a: 27.95 g -- Artificial gravity
-```
-
-### Dependents
-
-Print all parameters dependent on the given parameter, for example:
-
-``` { Oneil CLI }
-(cylinder) >>> dependents omega
-['g_a', 't_day']
-```
-
-### Summarize
-
-Summarize the design:
-
-``` { Oneil CLI }
-(cylinder) >>> summarize
---------------------------------------------------------------------------------
-Model: cylinder
-Design: default
-Parameters: 5 (4 independent, 1 dependent, 0 constants)
-Tests: 1 (PASS/FAIL)
---------------------------------------------------------------------------------
-g_a: 27.95 g
-```
-
-### Test
-
-Run tests on the model and any added designs:
-
-``` { Oneil CLI }
->>> test
-Test (cylinder): g_E*0.9 <= g_a <= g_E*1.1
-    Result: fail
-    g_E: 1.0 g
-    g_a: 27.95 g
-    g_E: 1.0 g
-```
-
-### Export to a report (not maintained)
-
-> [!CAUTION]
-> This feature has not been maintained, but will be resored soon.
-
-Export a model (if no args) or a list of parameters (if args) to a typeset pdf:
-
-``` { Oneil CLI }
->>> export <param 1> <param 2> ... <param n>
-```
-
-This saves the pdf as `export.pdf` if you have [installed LaTeX locally](https://www.latex-project.org/get/).
-
-If there are issues with the PDF, you can review the `export.tex` file. In VSCode the [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension is helpful. Also, VS Code doesn't handle LaTeX errors well. So if you run into lots of issues, use a more established TeX IDE, like [TexMaker](https://www.xm1math.net/texmaker/).
-
-The current implementation uses biblatex for references.
-
-### Design
-
-Write a design onto the model:
-
-``` { Oneil CLI }
-(your-model) >>> design design-name [variation-name]
-----------------------------------------
-Model: your-model
-Design: variation-of-variation
-Parameters: <count>
-Tests: <count> (PASS/FAIL)
-----------------------------------------
-(variation-name@design-name@your-model) >>>
-```
-
-The compiler writes the first design to the model, overwriting any overlapping model defaults. If there are further designs, it writes the each subsequent design, overwriting any overlapping defaults or values from the preceding ones. See below for more details on designs.
-
-### Load
-
-Load a new model:
-
-``` { Oneil CLI }
->>> load model-name
-```
-
-### Unit Help
-
-See all units supported by Oneil:
-
-``` { Oneil CLI }
->>> units
-```
-
-### Quit
-
-Exit the CLI:
-
-``` { Oneil CLI }
->>> quit
-```
-
-or
-
-``` { .on }
->>> quit()
-```
-
-### Error Handling in the CLI
-
-Ideally, if there's a problem with your Oneil code or Python extensions, the Oneil compiler will catch it and tell you. In that case, you can try debugging by prepending a parameter with `*`, but debugging is limited and requires some understanding of how Oneil handles parameters in the background.
-
-If you instead see an error missed by Oneil and raised by Python, it's likely an error with the Oneil compiler which is still in development. If that happens, please post the issue in GitHub. The compiler doesn't yet support step by step debugging, so you'll have to use [VSCode for this](#oneil-has-a-bug) for now.
-
-</details>
 
 ## Known Issues and Limitations
 
