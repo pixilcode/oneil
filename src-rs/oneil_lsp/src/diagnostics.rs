@@ -2,7 +2,7 @@
 
 use indexmap::IndexMap;
 use oneil_runtime::output::error::RuntimeErrors;
-use oneil_shared::error::{Context, OneilError};
+use oneil_shared::error::{Context, DiagnosticKind, OneilDiagnostic};
 use tower_lsp_server::ls_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Position, Range, Uri,
 };
@@ -23,15 +23,15 @@ pub fn diagnostics_from_runtime_errors(errors: &RuntimeErrors) -> IndexMap<Uri, 
                 errors
                     .iter()
                     .filter(|error| !error.is_internal_error())
-                    .map(oneil_error_to_diagnostic)
+                    .map(oneil_diagnostic_to_lsp)
                     .collect(),
             ))
         })
         .collect()
 }
 
-/// Converts a single [`OneilError`] to an LSP [`Diagnostic`], if it has a valid location.
-fn oneil_error_to_diagnostic(error: &OneilError) -> Diagnostic {
+/// Converts a single [`OneilDiagnostic`] to an LSP [`Diagnostic`], if it has a valid location.
+fn oneil_diagnostic_to_lsp(error: &OneilDiagnostic) -> Diagnostic {
     let range = error.location().map_or_else(
         || Range {
             start: Position {
@@ -46,12 +46,13 @@ fn oneil_error_to_diagnostic(error: &OneilError) -> Diagnostic {
         error_location_to_range,
     );
 
+    let severity = error_kind_to_severity(error.kind());
     let message = build_diagnostic_message(error);
     let related_information = build_related_information(error);
 
     Diagnostic {
         range,
-        severity: Some(DiagnosticSeverity::ERROR),
+        severity: Some(severity),
         code: None,
         source: Some("oneil".to_string()),
         message,
@@ -62,8 +63,14 @@ fn oneil_error_to_diagnostic(error: &OneilError) -> Diagnostic {
     }
 }
 
+const fn error_kind_to_severity(kind: DiagnosticKind) -> DiagnosticSeverity {
+    match kind {
+        DiagnosticKind::Error => DiagnosticSeverity::ERROR,
+    }
+}
+
 /// Builds the diagnostic message from the error and its context.
-fn build_diagnostic_message(error: &OneilError) -> String {
+fn build_diagnostic_message(error: &OneilDiagnostic) -> String {
     let base = error.message().to_string();
 
     let context_lines: Vec<String> = error.context().iter().map(context_to_string).collect();
@@ -84,7 +91,7 @@ fn context_to_string(ctx: &Context) -> String {
 }
 
 /// Builds LSP related information from context-with-source entries.
-fn build_related_information(error: &OneilError) -> Option<Vec<DiagnosticRelatedInformation>> {
+fn build_related_information(error: &OneilDiagnostic) -> Option<Vec<DiagnosticRelatedInformation>> {
     let path = error.path();
     let uri = Uri::from_file_path(path)?;
 
