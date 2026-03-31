@@ -579,6 +579,15 @@ fn print_expression(expr: &ir::Expr, indent: usize) {
             print_expression(left, indent + 1);
             print_expression(right, indent + 1);
         }
+        ir::Expr::Fallback {
+            span: _,
+            left,
+            right,
+        } => {
+            println!("{}    ├── Fallback", "    ".repeat(indent));
+            print_expression(left, indent + 1);
+            print_expression(right, indent + 1);
+        }
         ir::Expr::UnaryOp { span: _, op, expr } => {
             println!("{}    ├── UnaryOp: {:?}", "    ".repeat(indent), op);
             print_expression(expr, indent + 1);

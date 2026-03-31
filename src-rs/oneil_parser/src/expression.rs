@@ -22,7 +22,7 @@ use crate::{
         symbol::{
             bang_equals, bar, caret, colon, comma, dot, equals_equals, greater_than,
             greater_than_equals, less_than, less_than_equals, minus, minus_minus, paren_left,
-            paren_right, percent, plus, slash, slash_slash, star,
+            paren_right, percent, plus, question, slash, slash_slash, star,
         },
     },
     unit::parse as parse_unit,
@@ -95,19 +95,20 @@ pub fn parse_complete(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError>
 /// Parses an expression with proper operator precedence.
 ///
 /// This function is the entry point for expression parsing and delegates
-/// to the highest precedence level (OR expressions). The precedence hierarchy
+/// to the highest precedence level (fallback expressions). The precedence hierarchy
 /// from lowest to highest is:
 ///
-/// 1. OR (`or`)
-/// 2. AND (`and`)
-/// 3. NOT (`not`)
-/// 4. Comparison (`==`, `!=`, `<`, `<=`, `>`, `>=`)
-/// 5. Min/Max (`|`)
-/// 6. Addition/Subtraction (`+`, `-`, `--`)
-/// 7. Multiplication/Division (`*`, `/`, `//`, `%`)
-/// 8. Exponentiation (`^`)
-/// 9. Negation (`-`)
-/// 10. Primary expressions (literals, variables, function calls, parentheses)
+/// 1. Fallback (`?`)
+/// 2. OR (`or`)
+/// 3. AND (`and`)
+/// 4. NOT (`not`)
+/// 5. Comparison (`==`, `!=`, `<`, `<=`, `>`, `>=`)
+/// 6. Min/Max (`|`)
+/// 7. Addition/Subtraction (`+`, `-`, `--`)
+/// 8. Multiplication/Division (`*`, `/`, `//`, `%`)
+/// 9. Exponentiation (`^`)
+/// 10. Negation (`-`)
+/// 11. Primary expressions (literals, variables, function calls, parentheses)
 ///
 /// # Arguments
 ///
@@ -117,12 +118,38 @@ pub fn parse_complete(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError>
 ///
 /// Returns an expression node with proper operator precedence.
 fn expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
-    or_expr
+    fallback_expr
         .convert_error_to(ParserError::expect_expr)
         .parse(input)
 }
 
-/// Parses an OR expression (lowest precedence)
+/// Parses a fallback expression (lowest precedence)
+fn fallback_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
+    let (rest, first_operand) = or_expr.parse(input)?;
+    let (rest, rest_operands) = many0(|input| {
+        let (rest, q_token) = question.convert_errors().parse(input)?;
+        let q_span = q_token.lexeme_span;
+        let (rest, operand) = or_expr
+            .or_fail_with(ParserError::expr_fallback_missing_second_operand(q_span))
+            .parse(rest)?;
+        Ok((rest, operand))
+    })
+    .parse(rest)?;
+
+    let expr = rest_operands.into_iter().fold(first_operand, |acc, expr| {
+        let left = acc;
+        let right = expr;
+
+        let span = Span::from_start_and_end(&left.span(), &right.span());
+        let whitespace_span = right.whitespace_span();
+
+        Node::new(Expr::fallback(left, right), span, whitespace_span)
+    });
+
+    Ok((rest, expr))
+}
+
+/// Parses an OR expression
 fn or_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
     let or = or
         .map(|token| token.into_node_with_value(BinaryOp::Or))
@@ -852,6 +879,68 @@ mod tests {
     }
 
     #[test]
+    fn fallback_expr() {
+        let input = InputSpan::new_extra("1 ? 2", Config::default());
+        let (_, expr) = parse(input).expect("parsing should succeed");
+
+        let Expr::Fallback { left, right } = expr.take_value() else {
+            panic!("expected fallback expr");
+        };
+
+        assert_literal_float(&left, 1.0);
+        assert_literal_float(&right, 2.0);
+    }
+
+    #[test]
+    fn fallback_binds_looser_than_or_right_operand() {
+        let input = InputSpan::new_extra("a ? b or c", Config::default());
+        let (_, expr) = parse(input).expect("parsing should succeed");
+
+        let Expr::Fallback { left, right } = expr.take_value() else {
+            panic!("expected fallback expr");
+        };
+
+        assert_variable(&left, "a");
+
+        let Expr::BinaryOp {
+            op: or_op,
+            left: or_left,
+            right: or_right,
+        } = right.take_value()
+        else {
+            panic!("expected binary op for b or c");
+        };
+
+        assert_eq!(or_op.take_value(), BinaryOp::Or);
+        assert_variable(&or_left, "b");
+        assert_variable(&or_right, "c");
+    }
+
+    #[test]
+    fn fallback_binds_looser_than_or_left_operand() {
+        let input = InputSpan::new_extra("a or b ? c", Config::default());
+        let (_, expr) = parse(input).expect("parsing should succeed");
+
+        let Expr::Fallback { left, right } = expr.take_value() else {
+            panic!("expected fallback expr");
+        };
+
+        let Expr::BinaryOp {
+            op: or_op,
+            left: or_left,
+            right: or_right,
+        } = left.take_value()
+        else {
+            panic!("expected binary op for a or b");
+        };
+
+        assert_eq!(or_op.take_value(), BinaryOp::Or);
+        assert_variable(&or_left, "a");
+        assert_variable(&or_right, "b");
+        assert_variable(&right, "c");
+    }
+
+    #[test]
     fn chained_comparison_expr() {
         let input = InputSpan::new_extra("1 < 2 < 3", Config::default());
         let (_, expr) = parse(input).expect("parsing should succeed");
@@ -1221,6 +1310,29 @@ mod tests {
             assert_eq!(operator, BinaryOp::Or);
             assert_eq!(cause.start().offset, 6);
             assert_eq!(cause.end().offset, 8);
+        }
+
+        #[test]
+        fn fallback_missing_second_operand() {
+            let input = InputSpan::new_extra("1 ?", Config::default());
+            let result = parse(input);
+
+            let Err(nom::Err::Failure(error)) = result else {
+                panic!("Unexpected result {result:?}");
+            };
+
+            assert_eq!(error.error_offset, 3);
+
+            let ParserErrorReason::Incomplete {
+                kind: IncompleteKind::Expr(ExprKind::FallbackMissingSecondOperand),
+                cause,
+            } = error.reason
+            else {
+                panic!("Unexpected reason {:?}", error.reason);
+            };
+
+            assert_eq!(cause.start().offset, 2);
+            assert_eq!(cause.end().offset, 3);
         }
 
         #[test]

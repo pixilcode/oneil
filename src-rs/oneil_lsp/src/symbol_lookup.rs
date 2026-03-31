@@ -209,7 +209,9 @@ fn find_symbol_in_expr(expr: &ir::Expr, offset: usize) -> Option<SymbolAtPositio
             rest_chained,
             ..
         } => find_symbol_in_comparison_op(left, right, rest_chained, offset),
-        ir::Expr::BinaryOp { left, right, .. } => find_symbol_in_binary_op(left, right, offset),
+        ir::Expr::BinaryOp { left, right, .. } | ir::Expr::Fallback { left, right, .. } => {
+            find_symbol_in_binary_op(left, right, offset)
+        }
         ir::Expr::UnaryOp { expr, .. } | ir::Expr::UnitCast { expr, .. } => {
             find_symbol_in_expr(expr, offset)
         }

@@ -177,6 +177,17 @@ impl ParserError {
         }
     }
 
+    /// Creates a new `ParserError` for a fallback expression missing its second operand
+    pub(crate) fn expr_fallback_missing_second_operand(
+        question_span: Span,
+    ) -> impl Fn(Self) -> Self {
+        move |error| {
+            error.convert_reason(ParserErrorReason::expr_fallback_missing_second_operand(
+                question_span,
+            ))
+        }
+    }
+
     /// Creates a new `ParserError` for a unary operation missing its operand
     pub(crate) fn unary_op_missing_operand(operator: &UnaryOpNode) -> impl Fn(Self) -> Self {
         move |error| {
