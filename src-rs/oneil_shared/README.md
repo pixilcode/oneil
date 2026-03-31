@@ -19,7 +19,7 @@ The main feature of the error handling provided by this library is the `AsOneilE
 ### Example
 
 ```rust
-use oneil_shared::error::{OneilError, AsOneilError, Context, ErrorLocation};
+use oneil_shared::error::{OneilDiagnostic, AsOneilError, Context, ErrorLocation};
 use std::path::PathBuf;
 
 // Define an error type that implements AsOneilError
@@ -46,7 +46,7 @@ impl AsOneilError for MyError {
     }
 }
 
-// Convert to OneilError
+// Convert to OneilDiagnostic
 let my_error = MyError {
     message: "Unexpected token".to_string(),
     offset: 10,
@@ -54,5 +54,5 @@ let my_error = MyError {
 
 let source = "My X: x = $";
 let path = PathBuf::from("example.on");
-let oneil_error = OneilError::from_error_with_source(&my_error, path, source);
+let diagnostic = OneilDiagnostic::from_error_with_source(&my_error, path, source);
 ```

@@ -13,7 +13,7 @@ mod util {
 
     use oneil_runtime::{
         Runtime,
-        output::{self, OneilError},
+        output::{self, OneilDiagnostic},
     };
     use oneil_shared::paths::ModelPath;
 
@@ -80,7 +80,7 @@ mod util {
     }
 
     /// Formats a collection of Oneil errors into a canonical string for snapshots.
-    fn format_errors(errors: Vec<&OneilError>, path_prefix: Option<&Path>) -> String {
+    fn format_errors(errors: Vec<&OneilDiagnostic>, path_prefix: Option<&Path>) -> String {
         errors
             .into_iter()
             .filter(|e| !e.is_internal_error())
@@ -90,7 +90,7 @@ mod util {
     }
 
     /// Formats a single error as a stable, readable string.
-    fn format_error(error: &OneilError, path_prefix: Option<&Path>) -> String {
+    fn format_error(error: &OneilDiagnostic, path_prefix: Option<&Path>) -> String {
         let path_str = normalize_path(error.path(), path_prefix);
 
         let loc = error

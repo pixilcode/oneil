@@ -10,7 +10,7 @@ use oneil_resolver::{
     },
 };
 use oneil_shared::{
-    error::OneilError,
+    error::OneilDiagnostic,
     load_result::LoadResult,
     paths::{ModelPath, PythonPath},
     symbols::{ParameterName, ReferenceName, TestIndex},
@@ -59,7 +59,7 @@ impl Runtime {
 
                 errors.add_model_error(
                     model_path.clone(),
-                    ModelError::FileError(vec![OneilError::from_error(source_err, path_buf)]),
+                    ModelError::FileError(vec![OneilDiagnostic::from_error(source_err, path_buf)]),
                 );
 
                 return errors;
@@ -74,9 +74,9 @@ impl Runtime {
         let ast_errors = match ast_entry {
             LoadResult::Failure => return RuntimeErrors::default(),
             LoadResult::Partial(_, parser_errors) => {
-                let errors: Vec<OneilError> = parser_errors
+                let errors: Vec<OneilDiagnostic> = parser_errors
                     .iter()
-                    .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+                    .map(|e| OneilDiagnostic::from_error_with_source(e, path_buf.clone(), source))
                     .collect();
 
                 Some(errors)
@@ -165,7 +165,7 @@ impl Runtime {
         if let Some(Err(source_err)) = self.source_cache.get_entry(&python_import_path.into()) {
             errors.add_python_import_error(
                 python_import_path.clone(),
-                OneilError::from_error(source_err, path_buf.clone()),
+                OneilDiagnostic::from_error(source_err, path_buf.clone()),
             );
         }
 
@@ -174,7 +174,7 @@ impl Runtime {
         {
             errors.add_python_import_error(
                 python_import_path.clone(),
-                OneilError::from_error(load_err, path_buf),
+                OneilDiagnostic::from_error(load_err, path_buf),
             );
         }
 
@@ -194,13 +194,13 @@ struct IrErrorsResult {
     /// Python import paths that have errors (for recursive collection).
     python_imports_with_errors: IndexSet<PythonPath>,
     /// Model import resolution errors by reference name.
-    model_import_errors: IndexMap<ReferenceName, OneilError>,
+    model_import_errors: IndexMap<ReferenceName, OneilDiagnostic>,
     /// Python import resolution errors by path.
-    python_import_errors: IndexMap<PythonPath, OneilError>,
+    python_import_errors: IndexMap<PythonPath, OneilDiagnostic>,
     /// Parameter resolution errors by parameter name.
-    parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
+    parameter_errors: IndexMap<ParameterName, Vec<OneilDiagnostic>>,
     /// Test resolution errors.
-    test_errors: IndexMap<TestIndex, Vec<OneilError>>,
+    test_errors: IndexMap<TestIndex, Vec<OneilDiagnostic>>,
 }
 
 /// Collects resolution errors from IR into structured error data and model/python path sets.
@@ -224,7 +224,8 @@ fn collect_ir_errors(
                 models_with_errors.insert(model_path);
             }
 
-            let error = OneilError::from_error_with_source(ref_error, path_buf.clone(), source);
+            let error =
+                OneilDiagnostic::from_error_with_source(ref_error, path_buf.clone(), source);
             model_import_errors.insert(ref_name.clone(), error);
         }
     }
@@ -237,7 +238,7 @@ fn collect_ir_errors(
             python_imports_with_errors.insert(python_path);
         }
 
-        let error = OneilError::from_error_with_source(err, path_buf.clone(), source);
+        let error = OneilDiagnostic::from_error_with_source(err, path_buf.clone(), source);
         python_import_errors.insert(python_path.clone(), error);
     }
 
@@ -261,10 +262,10 @@ fn collect_ir_errors(
             .collect();
         models_with_errors.extend(models_with_errors_in_param);
 
-        let oneil_errors: Vec<OneilError> = param_errs
+        let oneil_errors: Vec<OneilDiagnostic> = param_errs
             .iter()
             .filter(|e| !(has_python_import_errors && is_undefined_function_error(e)))
-            .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+            .map(|e| OneilDiagnostic::from_error_with_source(e, path_buf.clone(), source))
             .collect();
         parameter_errors.insert(param_name.clone(), oneil_errors);
     }
@@ -284,9 +285,9 @@ fn collect_ir_errors(
             .collect();
         models_with_errors.extend(models_with_errors_in_test);
 
-        let oneil_errors: Vec<OneilError> = test_errs
+        let oneil_errors: Vec<OneilDiagnostic> = test_errs
             .iter()
-            .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+            .map(|e| OneilDiagnostic::from_error_with_source(e, path_buf.clone(), source))
             .collect();
         test_errors.insert(*test_index, oneil_errors);
     }
@@ -320,9 +321,9 @@ struct EvalErrorsResult {
     /// Model paths that have errors (for recursive collection).
     models_with_errors: IndexSet<ModelPath>,
     /// Parameter evaluation errors by parameter name.
-    parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
+    parameter_errors: IndexMap<ParameterName, Vec<OneilDiagnostic>>,
     /// Test evaluation errors.
-    test_errors: IndexMap<TestIndex, Vec<OneilError>>,
+    test_errors: IndexMap<TestIndex, Vec<OneilDiagnostic>>,
 }
 
 /// Collects evaluation errors into structured error data and model path set.
@@ -358,9 +359,9 @@ fn collect_eval_errors(
             .collect();
         models_with_errors.extend(models_with_errors_in_param);
 
-        let oneil_errors: Vec<OneilError> = param_errs
+        let oneil_errors: Vec<OneilDiagnostic> = param_errs
             .iter()
-            .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+            .map(|e| OneilDiagnostic::from_error_with_source(e, path_buf.clone(), source))
             .collect();
         parameter_errors.insert(name.clone(), oneil_errors);
     }
@@ -376,7 +377,7 @@ fn collect_eval_errors(
                 models_with_errors.insert(p.clone());
             }
 
-            let error = OneilError::from_error_with_source(test_err, path_buf.clone(), source);
+            let error = OneilDiagnostic::from_error_with_source(test_err, path_buf.clone(), source);
             test_errors_in_test.push(error);
         }
 
@@ -402,13 +403,13 @@ struct MergedErrors {
     /// Python import paths that have errors (for recursive collection).
     pub python_imports_with_errors: IndexSet<PythonPath>,
     /// Model import errors by reference name.
-    pub model_import_errors: IndexMap<ReferenceName, OneilError>,
+    pub model_import_errors: IndexMap<ReferenceName, OneilDiagnostic>,
     /// Python import errors by path.
-    pub python_import_errors: IndexMap<PythonPath, OneilError>,
+    pub python_import_errors: IndexMap<PythonPath, OneilDiagnostic>,
     /// Parameter errors by parameter name.
-    pub parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
+    pub parameter_errors: IndexMap<ParameterName, Vec<OneilDiagnostic>>,
     /// Test errors.
-    pub test_errors: IndexMap<TestIndex, Vec<OneilError>>,
+    pub test_errors: IndexMap<TestIndex, Vec<OneilDiagnostic>>,
 }
 
 /// Merges optional IR and eval error results into a single combined result.

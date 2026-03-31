@@ -1,4 +1,4 @@
-//! Errors for the Oneil programming language
+//! Diagnostics for the Oneil programming language
 
 mod context;
 mod location;
@@ -10,17 +10,26 @@ pub use context::Context;
 pub use location::ErrorLocation;
 pub use traits::AsOneilError;
 
-/// Unified error representation for Oneil
+/// Classification of a [`OneilDiagnostic`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DiagnosticKind {
+    /// A fatal or blocking issue.
+    Error,
+}
+
+/// Unified diagnostic representation for Oneil
 ///
-/// This struct represents errors in a format suitable for display to users.
-/// It includes the file path where the error occurred, a human-readable message,
-/// and optional source location information for precise error reporting.
+/// This struct represents diagnostics in a format suitable for display to users.
+/// It includes the file path where the diagnostic occurred, a human-readable message,
+/// and optional source location information for precise reporting.
 // TODO: refactor this to use Span/SourceLocation instead of ErrorLocation
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OneilError {
-    /// The path to the file where the error occurred
+pub struct OneilDiagnostic {
+    /// How this diagnostic should be interpreted (e.g. error vs. future severities).
+    kind: DiagnosticKind,
+    /// The path to the file where the diagnostic occurred
     path: PathBuf,
-    /// Human-readable error message
+    /// Human-readable message
     message: String,
     /// Optional source location information for precise error reporting
     location: Option<ErrorLocation>,
@@ -28,14 +37,14 @@ pub struct OneilError {
     context: Vec<Context>,
     /// Optional context information with source location
     context_with_source: Vec<(Context, ErrorLocation)>,
-    /// Whether the error is an internal error.
+    /// Whether this diagnostic represents an internal error.
     is_internal_error: bool,
 }
 
-impl OneilError {
-    /// Creates a new `OneilError` from an error that implements `AsOneilError`
+impl OneilDiagnostic {
+    /// Creates a new `OneilDiagnostic` of kind [`DiagnosticKind::Error`] from an error that implements `AsOneilError`
     ///
-    /// This constructor creates an error without source location information.
+    /// This constructor creates a diagnostic without source location information.
     /// Use `from_error_with_source` if you need precise line and column information.
     ///
     /// # Arguments
@@ -45,12 +54,12 @@ impl OneilError {
     ///
     /// # Returns
     ///
-    /// Returns a new `OneilError` with the error message and context, but no source location.
+    /// Returns a new `OneilDiagnostic` with the error message and context, but no source location.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use oneil_shared::error::{OneilError, AsOneilError, Context};
+    /// use oneil_shared::error::{OneilDiagnostic, AsOneilError, Context};
     /// use std::path::PathBuf;
     ///
     /// struct SimpleError(String);
@@ -63,7 +72,7 @@ impl OneilError {
     ///
     /// let error = SimpleError("Something went wrong".to_string());
     /// let path = PathBuf::from("example.on");
-    /// let oneil_error = OneilError::from_error(&error, path);
+    /// let diagnostic = OneilDiagnostic::from_error(&error, path);
     /// ```
     pub fn from_error(error: &impl AsOneilError, path: PathBuf) -> Self {
         let message = error.message();
@@ -73,6 +82,7 @@ impl OneilError {
         let is_internal_error = error.is_internal_error();
 
         Self {
+            kind: DiagnosticKind::Error,
             path,
             message,
             location,
@@ -82,11 +92,11 @@ impl OneilError {
         }
     }
 
-    /// Creates a new `OneilError` from an error with source code for location tracking
+    /// Creates a new `OneilDiagnostic` of kind [`DiagnosticKind::Error`] from an error with source code for location tracking
     ///
-    /// This constructor creates an error with full source location information,
+    /// This constructor creates a diagnostic with full source location information,
     /// including line and column numbers. The source code is used to calculate
-    /// precise error positions for better error reporting.
+    /// precise positions for better reporting.
     ///
     /// # Arguments
     ///
@@ -96,12 +106,12 @@ impl OneilError {
     ///
     /// # Returns
     ///
-    /// Returns a new `OneilError` with error message, context, and source location information.
+    /// Returns a new `OneilDiagnostic` with message, context, and source location information.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use oneil_shared::error::{OneilError, AsOneilError, ErrorLocation};
+    /// use oneil_shared::error::{OneilDiagnostic, AsOneilError, ErrorLocation};
     /// use std::path::PathBuf;
     ///
     /// struct PositionalError {
@@ -125,7 +135,7 @@ impl OneilError {
     /// };
     /// let path = PathBuf::from("example.on");
     /// let source = "let x = 42;";
-    /// let oneil_error = OneilError::from_error_with_source(&error, path, source);
+    /// let diagnostic = OneilDiagnostic::from_error_with_source(&error, path, source);
     /// ```
     pub fn from_error_with_source(error: &impl AsOneilError, path: PathBuf, source: &str) -> Self {
         let message = error.message();
@@ -148,6 +158,7 @@ impl OneilError {
         let is_internal_error = error.is_internal_error();
 
         Self {
+            kind: DiagnosticKind::Error,
             path,
             message,
             location,
@@ -157,12 +168,12 @@ impl OneilError {
         }
     }
 
-    /// Creates a new `OneilError` with optional source code for location tracking
+    /// Creates a new `OneilDiagnostic` of kind [`DiagnosticKind::Error`] with optional source code for location tracking
     ///
     /// This constructor is a convenience method that chooses between `from_error`
     /// and `from_error_with_source` based on whether source code is available.
     /// If source code is provided, it will include location information; otherwise,
-    /// it will create an error without location details.
+    /// it will create a diagnostic without location details.
     ///
     /// # Arguments
     ///
@@ -172,13 +183,13 @@ impl OneilError {
     ///
     /// # Returns
     ///
-    /// Returns a new `OneilError`. If source code is provided, it will include
+    /// Returns a new `OneilDiagnostic`. If source code is provided, it will include
     /// location information; otherwise, it will not.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use oneil_shared::error::{OneilError, AsOneilError};
+    /// use oneil_shared::error::{OneilDiagnostic, AsOneilError};
     /// use std::path::PathBuf;
     ///
     /// struct MyError(String);
@@ -193,14 +204,14 @@ impl OneilError {
     /// let path = PathBuf::from("example.on");
     ///
     /// // With source code
-    /// let oneil_error = OneilError::from_error_with_optional_source(
+    /// let diagnostic = OneilDiagnostic::from_error_with_optional_source(
     ///     &error,
     ///     path.clone(),
     ///     Some("let x = 42;")
     /// );
     ///
     /// // Without source code
-    /// let oneil_error = OneilError::from_error_with_optional_source(
+    /// let diagnostic = OneilDiagnostic::from_error_with_optional_source(
     ///     &error,
     ///     path,
     ///     None
@@ -217,7 +228,13 @@ impl OneilError {
         }
     }
 
-    /// Returns the path to the file where the error occurred
+    /// Returns how this diagnostic is classified.
+    #[must_use]
+    pub const fn kind(&self) -> DiagnosticKind {
+        self.kind
+    }
+
+    /// Returns the path to the file where the diagnostic occurred
     ///
     /// # Returns
     ///
@@ -227,11 +244,11 @@ impl OneilError {
         &self.path
     }
 
-    /// Returns the human-readable error message
+    /// Returns the human-readable message
     ///
     /// # Returns
     ///
-    /// Returns a reference to the error message string.
+    /// Returns a reference to the message string.
     #[must_use]
     pub const fn message(&self) -> &str {
         self.message.as_str()
@@ -267,7 +284,7 @@ impl OneilError {
         self.context_with_source.as_slice()
     }
 
-    /// Returns whether the error is an internal error.
+    /// Returns whether this diagnostic represents an internal error.
     ///
     /// Internal errors are errors that are not important for the user to see,
     /// such as errors that are caused by other errors. In that case, it's most

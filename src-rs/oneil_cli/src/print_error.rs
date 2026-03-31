@@ -20,13 +20,13 @@
 use std::path::Path;
 
 use anstream::eprintln;
-use oneil_shared::error::{Context, ErrorLocation, OneilError};
+use oneil_shared::error::{Context, ErrorLocation, OneilDiagnostic};
 use owo_colors::{OwoColorize, Style};
 
 use crate::stylesheet;
 
 /// Prints a formatted error message to the specified writer
-pub fn print(error: &OneilError, show_internal_errors: bool) {
+pub fn print(error: &OneilDiagnostic, show_internal_errors: bool) {
     if !error.is_internal_error() || show_internal_errors {
         let error_string = error_to_string(error);
         eprintln!("{error_string}");
@@ -34,7 +34,7 @@ pub fn print(error: &OneilError, show_internal_errors: bool) {
 }
 
 /// Converts an error to a formatted string representation
-fn error_to_string(error: &OneilError) -> String {
+fn error_to_string(error: &OneilDiagnostic) -> String {
     let message_line = get_error_message_line(error.message());
     let location_line = get_location_line(error.path(), error.location());
     let empty_line = String::new();

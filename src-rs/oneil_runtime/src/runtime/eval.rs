@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use oneil_eval::{self as eval, IrLoadError};
 use oneil_output::{Unit, Value};
 use oneil_shared::{
-    error::OneilError,
+    error::OneilDiagnostic,
     load_result::LoadResult,
     paths::ModelPath,
     span::Span,
@@ -24,7 +24,7 @@ type EvalModelAndExpressionsResult<'runtime, 'expr> = (
         IndexMap<&'expr str, Value>,
     )>,
     RuntimeErrors,
-    Vec<OneilError>,
+    Vec<OneilDiagnostic>,
 );
 
 impl Runtime {
@@ -58,7 +58,7 @@ impl Runtime {
     /// # Errors
     ///
     /// Returns [`RuntimeErrors`] (via [`get_model_errors`](super::Runtime::get_model_errors)) if the model could not be evaluated.
-    /// Returns [`OneilError`]s if the expressions could not be evaluated.
+    /// Returns [`OneilDiagnostic`]s if the expressions could not be evaluated.
     pub fn eval_model_and_expressions<'runtime, 'expr>(
         &'runtime mut self,
         path: &ModelPath,
@@ -122,7 +122,7 @@ impl Runtime {
         &mut self,
         expressions: &'expr [String],
         model_path: &ModelPath,
-    ) -> (IndexMap<&'expr str, Value>, Vec<OneilError>) {
+    ) -> (IndexMap<&'expr str, Value>, Vec<OneilDiagnostic>) {
         let mut results = IndexMap::new();
         let mut errors = Vec::new();
 
@@ -136,7 +136,7 @@ impl Runtime {
                 Ok(expr_ast) => expr_ast,
                 Err(error) => {
                     let oneil_error =
-                        OneilError::from_error_with_source(&error, pseudo_path, expression);
+                        OneilDiagnostic::from_error_with_source(&error, pseudo_path, expression);
 
                     errors.push(oneil_error);
 
@@ -148,7 +148,11 @@ impl Runtime {
                 Ok(expr_ir) => expr_ir,
                 Err(resolution_errors) => {
                     let oneil_errors = resolution_errors.into_iter().map(|error| {
-                        OneilError::from_error_with_source(&error, pseudo_path.clone(), expression)
+                        OneilDiagnostic::from_error_with_source(
+                            &error,
+                            pseudo_path.clone(),
+                            expression,
+                        )
                     });
 
                     errors.extend(oneil_errors);
@@ -161,7 +165,11 @@ impl Runtime {
                 Ok(eval_result) => eval_result,
                 Err(eval_errors) => {
                     let oneil_errors = eval_errors.into_iter().map(|error| {
-                        OneilError::from_error_with_source(&error, pseudo_path.clone(), expression)
+                        OneilDiagnostic::from_error_with_source(
+                            &error,
+                            pseudo_path.clone(),
+                            expression,
+                        )
                     });
 
                     errors.extend(oneil_errors);

@@ -1,6 +1,6 @@
 //! Source loading for the runtime.
 
-use oneil_shared::{error::OneilError, paths::SourcePath};
+use oneil_shared::{error::OneilDiagnostic, paths::SourcePath};
 
 use super::Runtime;
 use crate::{cache::InsertSourceResult, error::SourceError};
@@ -11,9 +11,9 @@ impl Runtime {
     /// # Errors
     ///
     /// Returns [`RuntimeErrors`] (via [`get_model_errors`](super::Runtime::get_model_errors)) if the file could not be read.
-    pub fn load_source(&mut self, path: &SourcePath) -> Result<&str, Box<OneilError>> {
+    pub fn load_source(&mut self, path: &SourcePath) -> Result<&str, Box<OneilDiagnostic>> {
         self.load_source_internal(path)
-            .map_err(|e| Box::new(OneilError::from_error(e, path.clone().into_path_buf())))
+            .map_err(|e| Box::new(OneilDiagnostic::from_error(e, path.clone().into_path_buf())))
     }
 
     pub(super) fn load_source_internal(&mut self, path: &SourcePath) -> Result<&str, &SourceError> {
