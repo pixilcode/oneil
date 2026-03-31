@@ -126,6 +126,9 @@ impl fmt::Display for ExprKind {
                 };
                 write!(f, "expected operand after `{operator_str}`")
             }
+            Self::FallbackMissingSecondOperand => {
+                write!(f, "expected operand after `?`")
+            }
             Self::ParenMissingExpr => write!(f, "expected expression inside parentheses"),
             Self::UnaryOpMissingOperand { operator } => {
                 let operator_str = match operator {

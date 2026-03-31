@@ -32,6 +32,14 @@ pub enum Expr {
         right: ExprNode,
     },
 
+    /// Fallback expression: try the left operand, then use the right (`?`)
+    Fallback {
+        /// Operand evaluated first
+        left: ExprNode,
+        /// Operand used when the fallback applies
+        right: ExprNode,
+    },
+
     /// Unary operation with a single operand
     UnaryOp {
         /// The unary operator
@@ -93,6 +101,12 @@ impl Expr {
     #[must_use]
     pub const fn binary_op(op: BinaryOpNode, left: ExprNode, right: ExprNode) -> Self {
         Self::BinaryOp { op, left, right }
+    }
+
+    /// Creates a fallback expression (`left ? right`)
+    #[must_use]
+    pub const fn fallback(left: ExprNode, right: ExprNode) -> Self {
+        Self::Fallback { left, right }
     }
 
     /// Creates a unary operation expression
@@ -418,6 +432,12 @@ pub trait ExprVisitor: Sized {
         self
     }
 
+    /// Visits a fallback expression (`left ? right`)
+    #[must_use]
+    fn visit_fallback(self, span: Span, left: &ExprNode, right: &ExprNode) -> Self {
+        self
+    }
+
     /// Visits a unary operation expression
     #[must_use]
     fn visit_unary_op(self, span: Span, op: &UnaryOpNode, expr: &ExprNode) -> Self {
@@ -480,6 +500,11 @@ impl Node<Expr> {
                 let visitor = left.pre_order_visit(visitor);
                 right.pre_order_visit(visitor)
             }
+            Expr::Fallback { left, right } => {
+                let visitor = visitor.visit_fallback(span, left, right);
+                let visitor = left.pre_order_visit(visitor);
+                right.pre_order_visit(visitor)
+            }
             Expr::UnaryOp { op, expr } => {
                 let visitor = visitor.visit_unary_op(span, op, expr);
                 expr.pre_order_visit(visitor)
@@ -525,6 +550,11 @@ impl Node<Expr> {
                 let visitor = left.post_order_visit(visitor);
                 let visitor = right.post_order_visit(visitor);
                 visitor.visit_binary_op(span, op, left, right)
+            }
+            Expr::Fallback { left, right } => {
+                let visitor = left.post_order_visit(visitor);
+                let visitor = right.post_order_visit(visitor);
+                visitor.visit_fallback(span, left, right)
             }
             Expr::UnaryOp { op, expr } => {
                 let visitor = expr.post_order_visit(visitor);

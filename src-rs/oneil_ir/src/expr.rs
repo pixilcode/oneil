@@ -37,6 +37,15 @@ pub enum Expr {
         /// The right-hand operand.
         right: Box<Self>,
     },
+    /// Fallback expression: evaluate `left`, then use `right` if needed (`?`).
+    Fallback {
+        /// Span of the entire expression.
+        span: Span,
+        /// Operand evaluated first.
+        left: Box<Self>,
+        /// Operand used when the fallback applies.
+        right: Box<Self>,
+    },
     /// Unary operation applied to a single expression.
     UnaryOp {
         /// Span of the expression.
@@ -107,6 +116,16 @@ impl Expr {
         Self::BinaryOp {
             span,
             op,
+            left: Box::new(left),
+            right: Box::new(right),
+        }
+    }
+
+    /// Creates a fallback expression (`left ? right`).
+    #[must_use]
+    pub fn fallback(span: Span, left: Self, right: Self) -> Self {
+        Self::Fallback {
+            span,
             left: Box::new(left),
             right: Box::new(right),
         }
@@ -214,7 +233,7 @@ impl Expr {
                     expr.walk_variables(f);
                 }
             }
-            Self::BinaryOp { left, right, .. } => {
+            Self::BinaryOp { left, right, .. } | Self::Fallback { left, right, .. } => {
                 left.walk_variables(f);
                 right.walk_variables(f);
             }
@@ -248,7 +267,7 @@ impl Expr {
                     expr.walk_variables_mut(f);
                 }
             }
-            Self::BinaryOp { left, right, .. } => {
+            Self::BinaryOp { left, right, .. } | Self::Fallback { left, right, .. } => {
                 left.walk_variables_mut(f);
                 right.walk_variables_mut(f);
             }
@@ -291,6 +310,11 @@ impl Expr {
                 right,
             } => {
                 let visitor = visitor.visit_binary_op(*span, op, left, right);
+                let visitor = left.pre_order_visit(visitor);
+                right.pre_order_visit(visitor)
+            }
+            Self::Fallback { span, left, right } => {
+                let visitor = visitor.visit_fallback(*span, left, right);
                 let visitor = left.pre_order_visit(visitor);
                 right.pre_order_visit(visitor)
             }
@@ -345,6 +369,11 @@ impl Expr {
                 let visitor = left.post_order_visit(visitor);
                 let visitor = right.post_order_visit(visitor);
                 visitor.visit_binary_op(*span, op, left, right)
+            }
+            Self::Fallback { span, left, right } => {
+                let visitor = left.post_order_visit(visitor);
+                let visitor = right.post_order_visit(visitor);
+                visitor.visit_fallback(*span, left, right)
             }
             Self::UnaryOp { span, op, expr } => {
                 let visitor = expr.post_order_visit(visitor);
@@ -630,6 +659,12 @@ pub trait ExprVisitor: Sized {
     /// Visits a binary operation expression.
     #[must_use]
     fn visit_binary_op(self, span: Span, op: &BinaryOp, left: &Expr, right: &Expr) -> Self {
+        self
+    }
+
+    /// Visits a fallback expression (`left ? right`).
+    #[must_use]
+    fn visit_fallback(self, span: Span, left: &Expr, right: &Expr) -> Self {
         self
     }
 
