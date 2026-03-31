@@ -10,7 +10,7 @@ pub use oneil_output::{
     BuiltinDependency, DebugInfo, DependencySet, ExternalDependency, Model, Number, Parameter,
     ParameterDependency, PrintLevel, Test, TestResult, Unit, Value,
 };
-pub use oneil_shared::{error::OneilError, span::Span};
+pub use oneil_shared::{error::OneilDiagnostic, span::Span};
 
 pub mod tree {
     //! Tree output types.

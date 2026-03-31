@@ -1,6 +1,6 @@
 //! Source loading for the runtime.
 
-use oneil_shared::{error::OneilError, paths::SourcePath};
+use oneil_shared::{error::OneilDiagnostic, paths::SourcePath};
 
 use super::Runtime;
 use crate::{cache::InsertSourceResult, error::SourceError};
@@ -16,13 +16,13 @@ impl Runtime {
     ///
     /// # Errors
     ///
-    /// Returns an [`OneilError`] if the file could not be read.
+    /// Returns an [`OneilDiagnostic`] if the file could not be read.
     ///
     /// # Panics
     ///
     /// Panics if an internal cache invariant is violated (the entry was not
     /// found immediately after insertion).
-    pub fn load_source(&mut self, path: &SourcePath) -> Result<&str, Box<OneilError>> {
+    pub fn load_source(&mut self, path: &SourcePath) -> Result<&str, Box<OneilDiagnostic>> {
         let insert_result = self.insert_source(path);
         if matches!(
             insert_result,
@@ -33,7 +33,7 @@ impl Runtime {
         self.source_cache
             .get_entry(path)
             .expect("it was just inserted")
-            .map_err(|e| Box::new(OneilError::from_error(e, path.clone().into_path_buf())))
+            .map_err(|e| Box::new(OneilDiagnostic::from_error(e, path.clone().into_path_buf())))
     }
 
     /// Reads `path` from disk and caches the result without touching any

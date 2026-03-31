@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use indexmap::IndexMap;
 use oneil_shared::{
-    error::OneilError,
+    error::OneilDiagnostic,
     paths::{ModelPath, PythonPath},
     symbols::{ParameterName, ReferenceName, TestIndex},
 };
@@ -19,7 +19,7 @@ pub struct RuntimeErrors {
     errors: Box<IndexMap<ModelPath, ModelError>>,
 
     /// Map from Python import path to errors for that import.
-    python_import_errors: Box<IndexMap<PythonPath, OneilError>>,
+    python_import_errors: Box<IndexMap<PythonPath, OneilDiagnostic>>,
 }
 
 impl RuntimeErrors {
@@ -42,7 +42,7 @@ impl RuntimeErrors {
     /// Adds a Python import error for the given path.
     ///
     /// If the path already has an error, it is replaced.
-    pub fn add_python_import_error(&mut self, path: PythonPath, error: OneilError) {
+    pub fn add_python_import_error(&mut self, path: PythonPath, error: OneilDiagnostic) {
         self.python_import_errors.insert(path, error);
     }
 
@@ -61,11 +61,11 @@ impl RuntimeErrors {
 
     /// Converts the errors to a vector of Oneil errors.
     #[must_use]
-    pub fn to_vec(&self) -> Vec<&OneilError> {
+    pub fn to_vec(&self) -> Vec<&OneilDiagnostic> {
         self.errors
             .values()
             .flat_map(|error| match error {
-                ModelError::FileError(errors) => errors.iter().collect::<Vec<&OneilError>>(),
+                ModelError::FileError(errors) => errors.iter().collect::<Vec<&OneilDiagnostic>>(),
                 ModelError::EvalErrors {
                     model_import_errors,
                     python_import_errors,
@@ -86,7 +86,7 @@ impl RuntimeErrors {
 
     /// Converts the errors to a map of model paths to errors.
     #[must_use]
-    pub fn to_map(&self) -> IndexMap<PathBuf, Vec<OneilError>> {
+    pub fn to_map(&self) -> IndexMap<PathBuf, Vec<OneilDiagnostic>> {
         self.errors
             .iter()
             .map(|(path, error)| {
@@ -114,26 +114,26 @@ impl RuntimeErrors {
 #[derive(Debug)]
 pub enum ModelError {
     /// The file could not be read or parsed. Contains the reported errors.
-    FileError(Vec<OneilError>),
+    FileError(Vec<OneilDiagnostic>),
     /// The model was loaded; contains import, parameter, and test errors.
     EvalErrors {
         /// Model reference name → error for that reference.
-        model_import_errors: Box<IndexMap<ReferenceName, OneilError>>,
+        model_import_errors: Box<IndexMap<ReferenceName, OneilDiagnostic>>,
         /// Python import path → error for that import.
-        python_import_errors: Box<IndexMap<PythonPath, OneilError>>,
+        python_import_errors: Box<IndexMap<PythonPath, OneilDiagnostic>>,
         /// Parameter name → list of errors for that parameter.
-        parameter_errors: Box<IndexMap<ParameterName, Vec<OneilError>>>,
+        parameter_errors: Box<IndexMap<ParameterName, Vec<OneilDiagnostic>>>,
         /// Errors from model tests.
-        test_errors: Box<IndexMap<TestIndex, Vec<OneilError>>>,
+        test_errors: Box<IndexMap<TestIndex, Vec<OneilDiagnostic>>>,
         /// Design / `apply` resolution errors not tied to a single parameter.
-        design_resolution_errors: Box<Vec<OneilError>>,
+        design_resolution_errors: Box<Vec<OneilDiagnostic>>,
     },
 }
 
 impl ModelError {
     /// Returns all Oneil errors in this model error as a vector of references.
     #[must_use]
-    pub fn get_all_errors(&self) -> Vec<&OneilError> {
+    pub fn get_all_errors(&self) -> Vec<&OneilDiagnostic> {
         match self {
             Self::FileError(errors) => errors.iter().collect(),
             Self::EvalErrors {

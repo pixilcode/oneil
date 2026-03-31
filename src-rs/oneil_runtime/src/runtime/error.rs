@@ -14,7 +14,7 @@ use oneil_frontend::{
 use oneil_ir as ir;
 use oneil_shared::{
     InstancePath,
-    error::{AsOneilError, Context, ErrorLocation, OneilError},
+    error::{AsOneilError, Context, DiagnosticKind, ErrorLocation, OneilDiagnostic},
     load_result::LoadResult,
     paths::{ModelPath, PythonPath},
     symbols::{ParameterName, ReferenceName, TestIndex},
@@ -119,7 +119,7 @@ impl Runtime {
 
                 errors.add_model_error(
                     model_path.clone(),
-                    ModelError::FileError(vec![OneilError::from_error(source_err, path_buf)]),
+                    ModelError::FileError(vec![OneilDiagnostic::from_error(source_err, path_buf)]),
                 );
 
                 return errors;
@@ -134,9 +134,9 @@ impl Runtime {
         let ast_errors = match ast_entry {
             LoadResult::Failure => return RuntimeErrors::default(),
             LoadResult::Partial(_, parser_errors) => {
-                let errors: Vec<OneilError> = parser_errors
+                let errors: Vec<OneilDiagnostic> = parser_errors
                     .iter()
-                    .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+                    .map(|e| OneilDiagnostic::from_error_with_source(e, path_buf.clone(), source))
                     .collect();
 
                 Some(errors)
@@ -289,7 +289,7 @@ impl Runtime {
         if let Some(Err(source_err)) = self.source_cache.get_entry(&python_import_path.into()) {
             errors.add_python_import_error(
                 python_import_path.clone(),
-                OneilError::from_error(source_err, path_buf.clone()),
+                OneilDiagnostic::from_error(source_err, path_buf.clone()),
             );
         }
 
@@ -298,7 +298,7 @@ impl Runtime {
         {
             errors.add_python_import_error(
                 python_import_path.clone(),
-                OneilError::from_error(load_err, path_buf),
+                OneilDiagnostic::from_error(load_err, path_buf),
             );
         }
 
@@ -318,15 +318,15 @@ struct IrErrorsResult {
     /// Python import paths that have errors (for recursive collection).
     python_imports_with_errors: IndexSet<PythonPath>,
     /// Model import resolution errors by reference name.
-    model_import_errors: IndexMap<ReferenceName, OneilError>,
+    model_import_errors: IndexMap<ReferenceName, OneilDiagnostic>,
     /// Python import resolution errors by path.
-    python_import_errors: IndexMap<PythonPath, OneilError>,
+    python_import_errors: IndexMap<PythonPath, OneilDiagnostic>,
     /// Parameter resolution errors by parameter name.
-    parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
+    parameter_errors: IndexMap<ParameterName, Vec<OneilDiagnostic>>,
     /// Test resolution errors.
-    test_errors: IndexMap<TestIndex, Vec<OneilError>>,
+    test_errors: IndexMap<TestIndex, Vec<OneilDiagnostic>>,
     /// Design / `apply` resolution messages.
-    design_resolution_errors: Vec<OneilError>,
+    design_resolution_errors: Vec<OneilDiagnostic>,
 }
 
 /// Pushes a synthetic "applied design `<basename>` produced invalid
@@ -348,7 +348,7 @@ fn surface_apply_hop(
     model_path: &ModelPath,
     path_buf: &std::path::Path,
     source: &str,
-    out: &mut Vec<OneilError>,
+    out: &mut Vec<OneilDiagnostic>,
 ) {
     let Some(hop) = applied_via else {
         return;
@@ -367,7 +367,7 @@ fn surface_apply_hop(
         .unwrap_or("<design>");
     let message = format!("applied design `{design_basename}` produced invalid contributions");
     let synthetic = DesignResolutionError::new(message, hop.apply_span);
-    out.push(OneilError::from_error_with_source(
+    out.push(OneilDiagnostic::from_error_with_source(
         &synthetic,
         path_buf.to_path_buf(),
         source,
@@ -438,10 +438,10 @@ fn surface_contribution_diagnostic(
     model_path: &ModelPath,
     path_buf: &std::path::Path,
     source: &str,
-    out: &mut Vec<OneilError>,
+    out: &mut Vec<OneilDiagnostic>,
 ) {
     if &diag.design_file == model_path {
-        out.push(OneilError::from_error_with_source(
+        out.push(OneilDiagnostic::from_error_with_source(
             &diag.error,
             path_buf.to_path_buf(),
             source,
@@ -469,7 +469,7 @@ fn surface_design_caused_parameter_errors(
     model_path: &ModelPath,
     path_buf: &std::path::Path,
     source: &str,
-    out: &mut Vec<OneilError>,
+    out: &mut Vec<OneilDiagnostic>,
     models_with_errors: &mut IndexSet<ModelPath>,
 ) {
     // Build a lookup set of (host_path, parameter_name) pairs that
@@ -556,7 +556,7 @@ fn collect_graph_contribution_errors(
     model_path: &ModelPath,
     path_buf: &std::path::Path,
     source: &str,
-    design_resolution_errors: &mut Vec<OneilError>,
+    design_resolution_errors: &mut Vec<OneilDiagnostic>,
     models_with_errors: &mut IndexSet<ModelPath>,
 ) {
     for diag in &graph.contribution_errors {
@@ -572,7 +572,7 @@ fn collect_graph_contribution_errors(
 
     for error in &graph.cycle_errors {
         if error.source_path() == model_path {
-            design_resolution_errors.push(OneilError::from_error_with_source(
+            design_resolution_errors.push(OneilDiagnostic::from_error_with_source(
                 error,
                 path_buf.to_path_buf(),
                 source,
@@ -607,7 +607,7 @@ fn emit_submodel_import_notifications(
     model: &InstancedModel,
     path_buf: &std::path::Path,
     source: &str,
-    out: &mut Vec<OneilError>,
+    out: &mut Vec<OneilDiagnostic>,
 ) {
     // Build the set of model paths that independently own at least one failing
     // apply statement — either a contribution-time error (unit mismatch, missing
@@ -654,7 +654,7 @@ fn emit_submodel_import_notifications(
         if independently_errored.contains(submodel.instance.path()) {
             let message = format!("submodel `{}` has errors", ref_name.as_str());
             let synthetic = DesignResolutionError::new(message, submodel.name_span);
-            out.push(OneilError::from_error_with_source(
+            out.push(OneilDiagnostic::from_error_with_source(
                 &synthetic,
                 path_buf.to_path_buf(),
                 source,
@@ -665,7 +665,7 @@ fn emit_submodel_import_notifications(
         if independently_errored.contains(&ref_import.path) {
             let message = format!("reference `{}` has errors", ref_name.as_str());
             let synthetic = DesignResolutionError::new(message, ref_import.name_span);
-            out.push(OneilError::from_error_with_source(
+            out.push(OneilDiagnostic::from_error_with_source(
                 &synthetic,
                 path_buf.to_path_buf(),
                 source,
@@ -695,7 +695,8 @@ fn collect_ir_errors(
                 models_with_errors.insert(model_path);
             }
 
-            let error = OneilError::from_error_with_source(ref_error, path_buf.clone(), source);
+            let error =
+                OneilDiagnostic::from_error_with_source(ref_error, path_buf.clone(), source);
             model_import_errors.insert(ref_name.clone(), error);
         }
     }
@@ -708,7 +709,7 @@ fn collect_ir_errors(
             python_imports_with_errors.insert(python_path);
         }
 
-        let error = OneilError::from_error_with_source(err, path_buf.clone(), source);
+        let error = OneilDiagnostic::from_error_with_source(err, path_buf.clone(), source);
         python_import_errors.insert(python_path.clone(), error);
     }
 
@@ -717,10 +718,10 @@ fn collect_ir_errors(
     // collect parameter errors
     let mut parameter_errors = IndexMap::new();
     for (param_name, param_errs) in errors.get_parameter_resolution_errors() {
-        let oneil_errors: Vec<OneilError> = param_errs
+        let oneil_errors: Vec<OneilDiagnostic> = param_errs
             .iter()
             .filter(|e| !(has_python_import_errors && is_undefined_function_error(e)))
-            .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+            .map(|e| OneilDiagnostic::from_error_with_source(e, path_buf.clone(), source))
             .collect();
         parameter_errors.insert(param_name.clone(), oneil_errors);
     }
@@ -728,17 +729,17 @@ fn collect_ir_errors(
     // collect test errors
     let mut test_errors = IndexMap::new();
     for (test_index, test_errs) in errors.get_test_resolution_errors() {
-        let oneil_errors: Vec<OneilError> = test_errs
+        let oneil_errors: Vec<OneilDiagnostic> = test_errs
             .iter()
-            .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+            .map(|e| OneilDiagnostic::from_error_with_source(e, path_buf.clone(), source))
             .collect();
         test_errors.insert(*test_index, oneil_errors);
     }
 
-    let design_resolution_errors: Vec<OneilError> = errors
+    let design_resolution_errors: Vec<OneilDiagnostic> = errors
         .get_design_resolution_errors()
         .iter()
-        .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+        .map(|e| OneilDiagnostic::from_error_with_source(e, path_buf.clone(), source))
         .collect();
 
     IrErrorsResult {
@@ -771,9 +772,9 @@ struct EvalErrorsResult {
     /// Model paths that have errors (for recursive collection).
     models_with_errors: IndexSet<ModelPath>,
     /// Parameter evaluation errors by parameter name.
-    parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
+    parameter_errors: IndexMap<ParameterName, Vec<OneilDiagnostic>>,
     /// Test evaluation errors.
-    test_errors: IndexMap<TestIndex, Vec<OneilError>>,
+    test_errors: IndexMap<TestIndex, Vec<OneilDiagnostic>>,
 }
 
 /// Collects evaluation errors into structured error data and model path set.
@@ -812,12 +813,12 @@ fn collect_eval_errors(
             .collect();
         models_with_errors.extend(models_with_errors_in_param);
 
-        let oneil_errors: Vec<OneilError> = param_errs
+        let oneil_errors: Vec<OneilDiagnostic> = param_errs
             .iter()
             .filter(|e| {
                 !(suppress_cycle && matches!(e, EvalError::CircularParameterEvaluation { .. }))
             })
-            .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+            .map(|e| OneilDiagnostic::from_error_with_source(e, path_buf.clone(), source))
             .collect();
         if oneil_errors.is_empty() {
             continue;
@@ -836,7 +837,7 @@ fn collect_eval_errors(
                 models_with_errors.insert(p.clone());
             }
 
-            let error = OneilError::from_error_with_source(test_err, path_buf.clone(), source);
+            let error = OneilDiagnostic::from_error_with_source(test_err, path_buf.clone(), source);
             test_errors_in_test.push(error);
         }
 
@@ -862,15 +863,15 @@ struct MergedErrors {
     /// Python import paths that have errors (for recursive collection).
     pub python_imports_with_errors: IndexSet<PythonPath>,
     /// Model import errors by reference name.
-    pub model_import_errors: IndexMap<ReferenceName, OneilError>,
+    pub model_import_errors: IndexMap<ReferenceName, OneilDiagnostic>,
     /// Python import errors by path.
-    pub python_import_errors: IndexMap<PythonPath, OneilError>,
+    pub python_import_errors: IndexMap<PythonPath, OneilDiagnostic>,
     /// Parameter errors by parameter name.
-    pub parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
+    pub parameter_errors: IndexMap<ParameterName, Vec<OneilDiagnostic>>,
     /// Test errors.
-    pub test_errors: IndexMap<TestIndex, Vec<OneilError>>,
+    pub test_errors: IndexMap<TestIndex, Vec<OneilDiagnostic>>,
     /// Design / `apply` resolution errors.
-    pub design_resolution_errors: Vec<OneilError>,
+    pub design_resolution_errors: Vec<OneilDiagnostic>,
 }
 
 /// Merges optional IR and eval error results into a single combined result.
@@ -1037,11 +1038,11 @@ fn parameter_cycle_names(errors: &[InstanceValidationError]) -> IndexSet<Paramet
 /// same way as the IR and eval error collectors so they can be merged in.
 #[derive(Debug, Default)]
 struct ValidationErrorsResult {
-    parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
-    test_errors: IndexMap<TestIndex, Vec<OneilError>>,
+    parameter_errors: IndexMap<ParameterName, Vec<OneilDiagnostic>>,
+    test_errors: IndexMap<TestIndex, Vec<OneilDiagnostic>>,
 }
 
-/// Builds an [`OneilError`] for a single validation error.
+/// Builds an [`OneilDiagnostic`] for a single validation error.
 ///
 /// When a variant carries `design_info: Some(...)` the primary location is
 /// flipped to point into the design file so the user sees the exact line that
@@ -1052,7 +1053,7 @@ fn build_validation_oneil_error(
     host_path: &std::path::Path,
     host_source: &str,
     source_cache: &SourceCache,
-) -> OneilError {
+) -> OneilDiagnostic {
     // Extract design_info from whichever variant carries it.
     let design_info = match &error.kind {
         InstanceValidationErrorKind::ParameterCycle { design_info, .. }
@@ -1109,7 +1110,8 @@ fn build_validation_oneil_error(
             let mut context = vec![Context::Note(note_text)];
             context.extend(extra_context);
 
-            return OneilError::from_parts(
+            return OneilDiagnostic::from_parts(
+                DiagnosticKind::Error,
                 error.message(),
                 design_path_buf,
                 Some(design_location),
@@ -1120,10 +1122,10 @@ fn build_validation_oneil_error(
     }
 
     // Default: attribute to the host model file.
-    OneilError::from_error_with_source(error, host_path.to_path_buf(), host_source)
+    OneilDiagnostic::from_error_with_source(error, host_path.to_path_buf(), host_source)
 }
 
-/// Converts validation errors for `model_path` into [`OneilError`]s, deduping
+/// Converts validation errors for `model_path` into [`OneilDiagnostic`]s, deduping
 /// against any matching file-time `UndefinedParameter` already in
 /// `ir_errors` (same host parameter / test, same parameter span). Without this
 /// dedup the user would see duplicate "parameter `p` is not defined" messages
