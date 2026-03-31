@@ -204,6 +204,15 @@ pub fn percent(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     .parse(input)
 }
 
+/// Parses the '?' symbol token.
+pub fn question(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
+    token(
+        char('?'),
+        TokenError::expected_symbol(ExpectSymbol::Question),
+    )
+    .parse(input)
+}
+
 /// Parses the '+' symbol token.
 pub fn plus(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     token(char('+'), TokenError::expected_symbol(ExpectSymbol::Plus)).parse(input)

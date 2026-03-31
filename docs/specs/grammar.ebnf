@@ -85,8 +85,10 @@ TestDecl = [ Trace ], "test", ":", Expr, EndOfLine ;
    7. NOT - unary prefix
    8. AND - left associative
    9. OR - left associative
+   10. Fallback (?) - left associative
 *)
-Expr = OrExpr ;
+Expr = FallbackExpr ;
+FallbackExpr = [ FallbackExpr, "?", ], OrExpr ;
 OrExpr = [ OrExpr, "or", ], AndExpr ;
 AndExpr = [ AndExpr, "and", ], NotExpr ;
 NotExpr = [ "not", ], NotExpr | ComparisonExpr ;

@@ -37,6 +37,9 @@ where
         ast::Expr::BinaryOp { op, left, right } => {
             resolve_binary_expression(span, op, left, right, resolution_context)
         }
+        ast::Expr::Fallback { left, right } => {
+            resolve_fallback_expression(span, left, right, resolution_context)
+        }
         ast::Expr::UnaryOp { op, expr } => {
             resolve_unary_expression(span, op, expr, resolution_context)
         }
@@ -105,6 +108,22 @@ where
 
     let expr = ir::Expr::binary_op(span, op_with_span, left, right);
     Ok(expr)
+}
+
+/// Resolves a fallback expression (`left ? right`).
+fn resolve_fallback_expression<E>(
+    span: Span,
+    left: &ast::ExprNode,
+    right: &ast::ExprNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    let left = resolve_expr(left, resolution_context);
+    let right = resolve_expr(right, resolution_context);
+    let (left, right) = error::combine_errors(left, right)?;
+    Ok(ir::Expr::fallback(span, left, right))
 }
 
 /// Resolves a unary operation expression.

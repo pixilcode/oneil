@@ -83,6 +83,9 @@ pub fn eval_expr<'a, E: ExternalEvaluationContext>(
             let (expr_result, expr_result_span) = eval_expr(expr, context)?;
             eval_unary_op(*op, expr_result, *expr_result_span).map(|result| (result, span))
         }
+        ir::Expr::Fallback { left, right, span } => {
+            eval_fallback(left, right, context).map(|result| (result, span))
+        }
         ir::Expr::FunctionCall {
             name,
             args,
@@ -351,6 +354,33 @@ fn eval_unary_op(
     result.map_err(|error| vec![unary_eval_error_to_eval_error(error, expr_result_span)])
 }
 
+fn eval_fallback<E: ExternalEvaluationContext>(
+    left: &ir::Expr,
+    right: &ir::Expr,
+    context: &mut EvalContext<'_, E>,
+) -> Result<Value, Vec<EvalError>> {
+    let left_result = eval_expr(left, context);
+
+    match left_result {
+        Err(e)
+            if e.iter()
+                .all(|e| matches!(e, EvalError::PythonEvalError { .. })) =>
+        {
+            let warnings = e.into_iter().filter_map(|e| match e {
+                EvalError::PythonEvalError {
+                    function_name,
+                    function_call_span,
+                    message,
+                    traceback,
+                } => Some(todo!("figure out how to print warnings")),
+                _ => unreachable!("this is checked in the guard"),
+            });
+            let right_result = eval_expr(right, context);
+            right_result.map(|(value, _span)| value)
+        }
+        result => result.map(|(value, _span)| value),
+    }
+}
 fn eval_function_call_args<E: ExternalEvaluationContext>(
     args: &[ir::Expr],
     context: &mut EvalContext<'_, E>,

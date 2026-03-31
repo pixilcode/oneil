@@ -134,6 +134,8 @@ pub enum ExpectSymbol {
     ParenRight,
     /// Expected '%' symbol
     Percent,
+    /// Expected '?' symbol
+    Question,
     /// Expected '+' symbol
     Plus,
     /// Expected '*' symbol

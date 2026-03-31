@@ -194,6 +194,14 @@ impl ParserErrorReason {
     }
 
     #[must_use]
+    pub(crate) const fn expr_fallback_missing_second_operand(question_span: Span) -> Self {
+        Self::Incomplete {
+            cause: question_span,
+            kind: IncompleteKind::Expr(ExprKind::FallbackMissingSecondOperand),
+        }
+    }
+
+    #[must_use]
     pub(crate) const fn expr_paren_missing_expr(paren_left_span: Span) -> Self {
         Self::Incomplete {
             cause: paren_left_span,
@@ -553,6 +561,8 @@ pub enum ExprKind {
         /// The operator value
         operator: BinaryOp,
     },
+    /// Found a fallback expression (`?`) missing a second operand
+    FallbackMissingSecondOperand,
     /// Found a missing expression in parenthesized expression
     ParenMissingExpr,
     /// Found a unary operation missing its operand
