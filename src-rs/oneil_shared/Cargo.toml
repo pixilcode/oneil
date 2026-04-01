@@ -3,6 +3,7 @@ name = "oneil_shared"
 description = "Shared utilities for the Oneil programming language"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -14,7 +15,7 @@ readme = "README.md"
 random_span = ["dep:rand"]
 
 [dependencies]
-rand = { version = "0.9.2", optional = true }
+rand = { version = "0.10.0", optional = true }
 
 [lints]
 workspace = true

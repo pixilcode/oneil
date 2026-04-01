@@ -4,6 +4,7 @@ default-run = "oneil"
 description = "Oneil programming language and tools"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true

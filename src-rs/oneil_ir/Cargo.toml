@@ -4,6 +4,7 @@ name = "oneil_ir"
 description = "Intermediate representation for the Oneil programming language"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true

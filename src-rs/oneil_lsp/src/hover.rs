@@ -12,7 +12,7 @@ use oneil_shared::{
     paths::{ModelPath, PythonPath},
     symbols::{BuiltinFunctionName, BuiltinValueName, PyFunctionName},
 };
-use tower_lsp_server::lsp_types::{HoverContents, MarkedString};
+use tower_lsp_server::ls_types::{HoverContents, MarkedString};
 
 use crate::{path::trim_path, symbol_lookup::SymbolAtPosition};
 

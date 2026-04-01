@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::RwLock;
-use tower_lsp_server::lsp_types::{
+use tower_lsp_server::ls_types::{
     Position, TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem, Uri,
     VersionedTextDocumentIdentifier,
 };

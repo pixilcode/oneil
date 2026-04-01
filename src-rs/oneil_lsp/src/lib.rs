@@ -19,15 +19,19 @@ use std::sync::{Arc, Mutex};
 
 use oneil_runtime::Runtime as OneilRuntime;
 use oneil_shared::paths::ModelPath;
-use tower_lsp_server::jsonrpc::Result;
-use tower_lsp_server::lsp_types::{
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
-    HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, MessageType,
-    PositionEncodingKind, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Uri,
+use tower_lsp_server::ls_types::OneOf;
+use tower_lsp_server::{
+    Client, LanguageServer, LspService, Server,
+    jsonrpc::Result,
+    ls_types::{
+        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+        DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, Hover,
+        HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
+        InitializedParams, MessageType, PositionEncodingKind, ServerCapabilities, ServerInfo,
+        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+        TextDocumentSyncSaveOptions, Uri,
+    },
 };
-use tower_lsp_server::{Client, LanguageServer, LspService, Server, UriExt};
 
 use definition::resolve_definition;
 use diagnostics::diagnostics_from_runtime_errors;
@@ -115,7 +119,7 @@ impl LanguageServer for Backend {
                     },
                 )),
                 position_encoding: Some(PositionEncodingKind::UTF16),
-                definition_provider: Some(tower_lsp_server::lsp_types::OneOf::Left(true)),
+                definition_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 ..Default::default()
             },
@@ -123,6 +127,7 @@ impl LanguageServer for Backend {
                 name: "oneil-lsp-server".to_string(),
                 version: Some(env!("CARGO_PKG_VERSION").to_string()),
             }),
+            offset_encoding: None,
         })
     }
 

@@ -21,7 +21,10 @@ Options:
 
 Prerequisites:
   - Cargo (Rust): https://rustup.rs/
+  - gcc (or another C toolchain Cargo can use for linking on this platform)
   - For the default install: Python 3.10+ with pip (python3 -m pip / python -m pip)
+    and Python development headers (e.g. python3-devel on Fedora/RHEL,
+    python3-dev on Debian/Ubuntu)
 EOF
 }
 
@@ -61,26 +64,32 @@ EOF
 	exit 1
 fi
 
+if ! command -v gcc >/dev/null 2>&1; then
+	cat >&2 <<'EOF'
+Error: gcc was not found on your PATH.
+
+A C compiler is required to build Oneil (Rust linking and native extensions).
+
+Install one of:
+  Fedora/RHEL: sudo dnf install gcc
+  Debian/Ubuntu: sudo apt install build-essential
+EOF
+	exit 1
+fi
+
 ONEIL_PKG="$SCRIPT_DIR/src-rs/oneil"
 if [[ ! -f "$ONEIL_PKG/Cargo.toml" ]]; then
 	echo "Error: expected Cargo.toml at $ONEIL_PKG" >&2
 	exit 1
 fi
 
-echo "Installing Oneil CLI with Cargo..."
-if [[ "$NO_PYTHON" == true ]]; then
-	cargo install --force --path "$ONEIL_PKG" --no-default-features --features rust-lib
-else
-	cargo install --force --path "$ONEIL_PKG"
-fi
-
+PYTHON_CMD=""
 if [[ "$NO_PYTHON" == false ]]; then
 	if [[ ! -f "$SCRIPT_DIR/pyproject.toml" ]]; then
 		echo "Error: pyproject.toml not found at $SCRIPT_DIR" >&2
 		exit 1
 	fi
 
-	PYTHON_CMD=""
 	if command -v python3 >/dev/null 2>&1; then
 		PYTHON_CMD="python3"
 	elif command -v python >/dev/null 2>&1; then
@@ -99,6 +108,28 @@ EOF
 		exit 1
 	fi
 
+	if ! "$PYTHON_CMD" -c 'import os, sysconfig; inc=sysconfig.get_path("include"); sys.exit(0 if os.path.isfile(os.path.join(inc, "Python.h")) else 1)' 2>/dev/null; then
+		cat >&2 <<'EOF'
+Error: Python development headers were not found (Python.h is missing).
+
+The CLI build links against Python; install headers before building.
+
+Install the development package for your distribution, then re-run this script:
+  Fedora/RHEL: sudo dnf install python3-devel
+  Debian/Ubuntu: sudo apt install python3-dev
+EOF
+		exit 1
+	fi
+fi
+
+echo "Installing Oneil CLI with Cargo..."
+if [[ "$NO_PYTHON" == true ]]; then
+	cargo install --force --path "$ONEIL_PKG" --no-default-features --features rust-lib
+else
+	cargo install --force --path "$ONEIL_PKG"
+fi
+
+if [[ "$NO_PYTHON" == false ]]; then
 	echo "Installing Oneil Python package..."
 	cd "$SCRIPT_DIR"
 	if [[ "$EDITABLE" == true ]]; then
