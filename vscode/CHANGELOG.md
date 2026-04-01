@@ -8,6 +8,16 @@
 
 ## Unreleased
 
+## v0.2.0 - 2026-04-01
+
+- Initial LSP release
+
+### Added
+- jump to definition
+- docs on hover
+- inline errors
+- logo
+
 ## v0.1.0
 
 - Initial release

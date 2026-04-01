@@ -23,3 +23,24 @@ syntax highlighting](https://code.visualstudio.com/api/language-extensions/synta
 
 For details on how the extension is published, reference [the VS Code
 docs on publishing extensions](https://code.visualstudio.com/api/working-with-extensions/publishing-extension).
+
+Note that when running `vsce publish`, you will need to pass
+`--follow-symlinks` so that it can find the icons.
+
+#### OpenVSX
+
+In order to publish the extension for Cursor and other VS Code derivatives, you
+will need to publish on OpenVSX as well. Follow
+[these instructions](https://github.com/eclipse-openvsx/openvsx/wiki/Publishing-Extensions)
+to publish there.
+
+Note that because `--follow-symlinks` is needed, you will need to run
+`vsce package`, then run `ovsx publish --packagePath oneil-0.2.0.vsix`.
+
+> ![WARNING]
+> At the time of writing, Open VSX does not allow you to set a duration for your
+> PAT (Personal Access Token). For this reason, it is recommended to delete you
+> PAT after using it. This ensures that it is useless if stolen.
+>
+> There are many cases of malware being published using a non-expiring token
+> a couple years after the user forgot about it.
