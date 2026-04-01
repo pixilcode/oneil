@@ -3,6 +3,7 @@ name = "oneil_cli"
 description = "CLI tool for using the Oneil programming language"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true

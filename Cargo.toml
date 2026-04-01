@@ -5,6 +5,7 @@ resolver = "3"
 [workspace.package]
 version = "0.16.0"
 edition = "2024"
+rust-version = "1.91.0"
 authors = [
     "Brendon Bown <brendon.bown@proton.me>",
     "Preston Corless <pgattic@gmail.com>",

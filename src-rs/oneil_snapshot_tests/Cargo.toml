@@ -3,6 +3,7 @@ name = "oneil_snapshot_tests"
 description = "Snapshot tests for Oneil evaluation output and errors"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
