@@ -65,7 +65,7 @@ impl Span {
     #[cfg(feature = "random_span")]
     #[must_use]
     pub fn random_span() -> Self {
-        use rand::Rng;
+        use rand::RngExt;
         let mut rng = rand::rng();
 
         let start_offset = usize::from(rng.random::<u16>());

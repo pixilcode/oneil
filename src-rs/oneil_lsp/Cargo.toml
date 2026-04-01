@@ -20,7 +20,7 @@ indexmap = { workspace = true }
 oneil_runtime = { path = "../oneil_runtime", default-features = false }
 oneil_shared = { path = "../oneil_shared" }
 tokio = { version = "1", features = ["full"] }
-tower-lsp-server = "0.22.1"
+tower-lsp-server = "0.23.0"
 
 [lints]
 workspace = true

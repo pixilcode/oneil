@@ -3,12 +3,8 @@
 use indexmap::IndexMap;
 use oneil_runtime::output::error::RuntimeErrors;
 use oneil_shared::error::{Context, OneilError};
-use tower_lsp_server::{
-    UriExt,
-    lsp_types::{
-        Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Position, Range,
-        Uri,
-    },
+use tower_lsp_server::ls_types::{
+    Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Position, Range, Uri,
 };
 
 /// Builds LSP diagnostics for the given URI from runtime errors.

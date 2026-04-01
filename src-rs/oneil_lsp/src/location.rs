@@ -4,10 +4,7 @@ use oneil_shared::{
     paths::{ModelPath, PythonPath},
     span::Span,
 };
-use tower_lsp_server::{
-    UriExt,
-    lsp_types::{Location, Position, Range, Uri},
-};
+use tower_lsp_server::ls_types::{Location, Position, Range, Uri};
 
 /// Converts a [`Span`] to an LSP [`Range`].
 #[expect(

@@ -2,10 +2,7 @@
 
 use oneil_runtime::Runtime;
 use oneil_shared::paths::ModelPath;
-use tower_lsp_server::{
-    UriExt,
-    lsp_types::{Location, Position, Range, Uri},
-};
+use tower_lsp_server::ls_types::{Location, Position, Range, Uri};
 
 use crate::{
     location::{python_function_line_to_location, span_to_location},
