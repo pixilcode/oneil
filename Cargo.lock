@@ -687,7 +687,6 @@ name = "oneil_builtins"
 version = "0.16.0"
 dependencies = [
  "indexmap",
- "oneil_eval",
  "oneil_output",
  "oneil_shared",
 ]

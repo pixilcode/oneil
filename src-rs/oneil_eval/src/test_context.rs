@@ -6,7 +6,7 @@
 //! to it when creating an [`EvalContext`].
 
 use oneil_builtins as builtins;
-use oneil_output::{self as output, Unit, Value};
+use oneil_output::{self as output, EvalError, ModelEvalErrors, Unit, Value};
 use oneil_shared::{
     EvalInstanceKey,
     load_result::LoadResult,
@@ -15,10 +15,7 @@ use oneil_shared::{
     symbols::{BuiltinFunctionName, BuiltinValueName, UnitBaseName, UnitPrefix},
 };
 
-use crate::{
-    context::ExternalEvaluationContext,
-    error::{EvalError, EvalErrors},
-};
+use crate::context::ExternalEvaluationContext;
 
 /// Returns a [`ModelPath`] for use in tests (path without extension, e.g. `"test"` → `test.on`).
 #[must_use]
@@ -89,7 +86,7 @@ impl ExternalEvaluationContext for TestExternalContext {
 
     fn get_preloaded_models(
         &self,
-    ) -> impl Iterator<Item = (EvalInstanceKey, &LoadResult<output::Model, EvalErrors>)> {
+    ) -> impl Iterator<Item = (EvalInstanceKey, &LoadResult<output::Model, ModelEvalErrors>)> {
         std::iter::empty()
     }
 }

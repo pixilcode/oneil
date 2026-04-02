@@ -2,7 +2,7 @@ use indexmap::{IndexMap, IndexSet};
 
 use oneil_frontend::{InstanceGraph, InstancedModel};
 use oneil_ir as ir;
-use oneil_output as output;
+use oneil_output::{self as output, EvalError};
 use oneil_shared::{
     EvalInstanceKey,
     load_result::LoadResult,
@@ -15,7 +15,6 @@ use oneil_shared::{
     },
 };
 
-use crate::error::{EvalError, EvalErrors};
 use crate::eval_parameter;
 
 /// Error indicating that an IR model could not be loaded.
@@ -66,7 +65,12 @@ pub trait ExternalEvaluationContext {
     /// Returns pre-loaded evaluated models (each distinct import instance).
     fn get_preloaded_models(
         &self,
-    ) -> impl Iterator<Item = (EvalInstanceKey, &LoadResult<output::Model, EvalErrors>)>;
+    ) -> impl Iterator<
+        Item = (
+            EvalInstanceKey,
+            &LoadResult<output::Model, output::ModelEvalErrors>,
+        ),
+    >;
 }
 
 /// State of a parameter in the lazy evaluation memo table.
@@ -364,12 +368,12 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     ///
     /// Each entry maps an [`EvalInstanceKey`] to a [`MaybePartialResult`]: either a full
     /// success with the evaluated [`output::Model`], or a partial result (the model) and
-    /// any [`EvalErrors`] that occurred during evaluation (e.g. from parameters
+    /// any [`ModelEvalErrors`] that occurred during evaluation (e.g. from parameters
     /// or tests that failed).
     #[must_use]
     pub fn into_result(
         self,
-    ) -> IndexMap<EvalInstanceKey, MaybePartialResult<output::Model, EvalErrors>> {
+    ) -> IndexMap<EvalInstanceKey, MaybePartialResult<output::Model, output::ModelEvalErrors>> {
         let mut result = IndexMap::new();
 
         // for each model, collect the parameters and tests, and any errors
@@ -432,7 +436,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                     key,
                     MaybePartialResult::err(
                         output_model,
-                        EvalErrors {
+                        output::ModelEvalErrors {
                             parameters: parameter_errors,
                             tests: test_errors,
                             references: model.references_with_errors,
