@@ -4,7 +4,7 @@ use oneil_ir as ir;
 use oneil_shared::{EvalInstanceKey, paths::ModelPath, span::Span};
 
 use oneil_output::{
-    EvalError, ExpectedType, Number, Unit, UnitConversionError, Value,
+    EvalError, EvalWarning, ExpectedType, Number, Unit, UnitConversionError, Value,
     error::convert::{binary_eval_error_to_eval_error, unary_eval_error_to_eval_error},
 };
 
@@ -361,23 +361,43 @@ fn eval_fallback<E: ExternalEvaluationContext>(
     let left_result = eval_expr(left, context);
 
     match left_result {
-        Err(e)
-            if e.iter()
-                .all(|e| matches!(e, EvalError::PythonEvalError { .. })) =>
-        {
-            let warnings = e.into_iter().filter_map(|e| match e {
-                EvalError::PythonEvalError {
-                    function_name,
-                    function_call_span,
-                    message,
-                    traceback,
-                } => Some(todo!("figure out how to print warnings")),
-                _ => unreachable!("this is checked in the guard"),
-            });
-            let right_result = eval_expr(right, context);
-            right_result.map(|(value, _span)| value)
+        Err(left_errors) => {
+            // partition the errors into Python evaluation errors and other errors
+            let (python_eval_errors, rest_errors): (Vec<_>, Vec<_>) = left_errors
+                .into_iter()
+                .partition(|err| matches!(err, EvalError::PythonEvalError { .. }));
+
+            if rest_errors.is_empty() {
+                // if there are no other errors,
+                // push the Python evaluation errors as warnings
+                for err in python_eval_errors {
+                    let EvalError::PythonEvalError {
+                        function_name,
+                        function_call_span,
+                        message,
+                        traceback,
+                    } = err
+                    else {
+                        unreachable!("this is checked in the guard");
+                    };
+
+                    context.push_eval_warning(EvalWarning::UsedFallback {
+                        function_name,
+                        function_call_span,
+                        message: message.clone(),
+                        traceback: traceback.clone(),
+                    });
+                }
+
+                // evaluate the right operand
+                let right_result = eval_expr(right, context);
+                right_result.map(|(value, _span)| value)
+            } else {
+                // if there are other errors, return them
+                Err(rest_errors)
+            }
         }
-        result => result.map(|(value, _span)| value),
+        Ok((value, _span)) => Ok(value),
     }
 }
 fn eval_function_call_args<E: ExternalEvaluationContext>(

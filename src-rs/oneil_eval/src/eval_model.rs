@@ -99,13 +99,17 @@ fn eval_test<E: ExternalEvaluationContext>(
     test: &ir::Test,
     context: &mut EvalContext<'_, E>,
 ) -> Result<output::Test, Vec<EvalError>> {
+    context.begin_expression_evaluation();
     let (test_result, expr_span) = eval_expr::eval_expr(test.expr(), context)?;
+    let warnings = context.take_expression_warnings();
+
     let expr_span = *expr_span;
 
     match test_result {
         Value::Boolean(true) => Ok(output::Test {
             result: output::TestResult::Passed,
             expr_span,
+            warnings,
         }),
         Value::Boolean(false) => {
             let builtin_dependency_values = eval_parameter::get_builtin_dependency_values(
@@ -129,6 +133,7 @@ fn eval_test<E: ExternalEvaluationContext>(
             Ok(output::Test {
                 result: output::TestResult::Failed { debug_info },
                 expr_span,
+                warnings,
             })
         }
         Value::String(_) | Value::Number(_) | Value::MeasuredNumber(_) => {

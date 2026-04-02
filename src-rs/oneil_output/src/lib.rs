@@ -15,7 +15,7 @@ mod value;
 
 pub use dependency::{BuiltinDependency, DependencySet, ExternalDependency, ParameterDependency};
 pub use error::{
-    BinaryEvalError, EvalError, ExpectedArgumentCount, ExpectedType, ModelEvalErrors,
+    BinaryEvalError, EvalError, EvalWarning, ExpectedArgumentCount, ExpectedType, ModelEvalErrors,
     UnaryEvalError, UnitConversionError,
 };
 pub use interval::Interval;

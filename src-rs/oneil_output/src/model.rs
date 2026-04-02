@@ -11,8 +11,7 @@ use oneil_shared::span::Span;
 use oneil_shared::symbols::{BuiltinValueName, ParameterName, ReferenceName, TestIndex};
 use oneil_shared::{EvalInstanceKey, InstancePath};
 
-use crate::Value;
-use crate::dependency::DependencySet;
+use crate::{EvalWarning, Value, dependency::DependencySet};
 
 /// The result of evaluating a model.
 ///
@@ -62,6 +61,8 @@ pub struct Test {
     pub expr_span: Span,
     /// The evaluated result of the test expression.
     pub result: TestResult,
+    /// Warnings produced while evaluating the test expression (e.g. Python fallback).
+    pub warnings: Vec<EvalWarning>,
 }
 
 impl Test {
@@ -109,6 +110,8 @@ pub struct Parameter {
     pub dependencies: DependencySet,
     /// The span of the parameter expression.
     pub expr_span: Span,
+    /// Warnings produced while evaluating this parameter (e.g. Python fallback).
+    pub warnings: Vec<EvalWarning>,
 }
 
 impl Parameter {

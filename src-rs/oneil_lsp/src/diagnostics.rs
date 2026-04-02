@@ -66,6 +66,7 @@ fn oneil_diagnostic_to_lsp(error: &OneilDiagnostic) -> Diagnostic {
 const fn error_kind_to_severity(kind: DiagnosticKind) -> DiagnosticSeverity {
     match kind {
         DiagnosticKind::Error => DiagnosticSeverity::ERROR,
+        DiagnosticKind::Warning => DiagnosticSeverity::WARNING,
     }
 }
 

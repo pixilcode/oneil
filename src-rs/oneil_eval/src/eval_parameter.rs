@@ -7,7 +7,7 @@ use oneil_shared::{
 };
 
 use oneil_output::{
-    self as output, BuiltinDependency, DependencySet, EvalError, ExternalDependency,
+    self as output, BuiltinDependency, DependencySet, EvalError, EvalWarning, ExternalDependency,
     MeasuredNumber, Number, ParameterDependency, Unit, Value,
 };
 
@@ -19,6 +19,7 @@ use crate::{
 pub struct EvalParameterResult {
     pub value: Value,
     pub expr_span: Span,
+    pub warnings: Vec<EvalWarning>,
 }
 
 /// Evaluates a parameter and returns the resulting value.
@@ -52,6 +53,8 @@ pub fn eval_parameter_from_resolved_value<E: ExternalEvaluationContext>(
     parameter: &ir::Parameter,
     context: &mut EvalContext<'_, E>,
 ) -> Result<EvalParameterResult, Vec<EvalError>> {
+    context.begin_expression_evaluation();
+
     // evaluate the value and the unit
     let (value, expr_span, unit_ir) = match value_source {
         ir::ParameterValue::Simple(expr, unit) => {
@@ -121,9 +124,12 @@ pub fn eval_parameter_from_resolved_value<E: ExternalEvaluationContext>(
     let limits = eval_limits(parameter.limits(), context)?;
     verify_value_is_within_limits(&value, expr_span, limits)?;
 
+    let warnings = context.take_expression_warnings();
+
     Ok(EvalParameterResult {
         value,
         expr_span: *expr_span,
+        warnings,
     })
 }
 
@@ -771,6 +777,7 @@ fn verify_value_is_within_string_discrete_limit(
 pub fn build_output_parameter<E: ExternalEvaluationContext>(
     value: Value,
     expr_span: Span,
+    warnings: Vec<EvalWarning>,
     parameter: &ir::Parameter,
     context: &mut EvalContext<'_, E>,
 ) -> output::Parameter {
@@ -862,6 +869,7 @@ pub fn build_output_parameter<E: ExternalEvaluationContext>(
         debug_info,
         dependencies,
         expr_span,
+        warnings,
     }
 }
 
@@ -2250,6 +2258,7 @@ mod tests {
                 debug_info: None,
                 dependencies: output::DependencySet::default(),
                 expr_span: random_span(),
+                warnings: Vec::new(),
             }
         }
     }

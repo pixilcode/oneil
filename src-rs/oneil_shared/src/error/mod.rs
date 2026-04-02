@@ -15,6 +15,8 @@ pub use traits::AsOneilDiagnostic;
 pub enum DiagnosticKind {
     /// A fatal or blocking issue.
     Error,
+    /// A non-fatal issue the user should be aware of.
+    Warning,
 }
 
 /// Unified diagnostic representation for Oneil
