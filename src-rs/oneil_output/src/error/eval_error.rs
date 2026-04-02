@@ -3,10 +3,10 @@
 use std::{error::Error, fmt};
 
 use oneil_shared::{
+    EvalInstanceKey,
     error::{AsOneilDiagnostic, Context as ErrorContext, DiagnosticKind, ErrorLocation},
-    paths::ModelPath,
     span::Span,
-    symbols::{BuiltinFunctionName, ParameterName, PyFunctionName},
+    symbols::{BuiltinFunctionName, ParameterName, PyFunctionName, ReferenceName},
 };
 
 use crate::{DisplayUnit, ExpectedType, Interval, NumberType, Value, ValueType};
@@ -128,8 +128,8 @@ pub enum EvalError {
     /// For error reporting, this error can typically be ignored. The main purpose of this error
     /// is error propagation, not error reporting.
     ParameterHasError {
-        /// The path of the model that contains the parameter.
-        model_path: Option<ModelPath>,
+        /// The instance key of the model that contains the parameter.
+        eval_instance_key: Option<EvalInstanceKey>,
         /// The name of the parameter that has errors.
         parameter_name: ParameterName,
         /// The source span of the parameter name.
@@ -151,8 +151,8 @@ pub enum EvalError {
     /// Detected by the lazy evaluator when it re-enters evaluation of a parameter already
     /// marked as in-progress in the memo table.
     CircularParameterEvaluation {
-        /// The path of the model whose parameter is being evaluated circularly.
-        model_path: Option<ModelPath>,
+        /// The instance key of the model whose parameter is being evaluated circularly.
+        eval_instance_key: Option<EvalInstanceKey>,
         /// The name of the parameter that was re-entered.
         parameter_name: ParameterName,
         /// The source span of the variable reference that triggered the cycle.
@@ -526,32 +526,35 @@ impl fmt::Display for EvalError {
                 exponent_value_span: _,
             } => write!(f, "exponent cannot be an interval"),
             Self::ParameterHasError {
-                model_path,
+                eval_instance_key,
                 parameter_name,
                 variable_span: _,
             } => {
-                let model_path = model_path.as_ref().map_or_else(
+                let eval_instance_key = eval_instance_key.as_ref().map_or_else(
                     || "current model".to_string(),
-                    |path| format!("model `{}`", path.as_path().display()),
-                );
-                let parameter_name = parameter_name.as_str();
-
-                write!(f, "parameter `{parameter_name}` in {model_path} has errors")
-            }
-            Self::CircularParameterEvaluation {
-                model_path,
-                parameter_name,
-                variable_span: _,
-            } => {
-                let model_path = model_path.as_ref().map_or_else(
-                    || "current model".to_string(),
-                    |path| format!("model `{}`", path.as_path().display()),
+                    |key| format!("model `{}`", key.model_path.as_path().display()),
                 );
                 let parameter_name = parameter_name.as_str();
 
                 write!(
                     f,
-                    "parameter `{parameter_name}` in {model_path} depends on itself"
+                    "parameter `{parameter_name}` in {eval_instance_key} has errors"
+                )
+            }
+            Self::CircularParameterEvaluation {
+                eval_instance_key,
+                parameter_name,
+                variable_span: _,
+            } => {
+                let eval_instance_key = eval_instance_key.as_ref().map_or_else(
+                    || "current model".to_string(),
+                    |key| format!("model `{}`", key.model_path.as_path().display()),
+                );
+                let parameter_name = parameter_name.as_str();
+
+                write!(
+                    f,
+                    "parameter `{parameter_name}` in {eval_instance_key} depends on itself"
                 )
             }
             Self::DesignApplicationError { message, span: _ } => write!(f, "{message}"),
@@ -832,12 +835,12 @@ impl AsOneilDiagnostic for EvalError {
                 exponent_value_span: location_span,
             }
             | Self::ParameterHasError {
-                model_path: _,
+                eval_instance_key: _,
                 parameter_name: _,
                 variable_span: location_span,
             }
             | Self::CircularParameterEvaluation {
-                model_path: _,
+                eval_instance_key: _,
                 parameter_name: _,
                 variable_span: location_span,
             }
@@ -1049,16 +1052,27 @@ impl AsOneilDiagnostic for EvalError {
                 exponent_interval.max(),
             ))],
             Self::ParameterHasError {
-                model_path: _,
+                eval_instance_key,
                 parameter_name: _,
                 variable_span: _,
             }
             | Self::CircularParameterEvaluation {
-                model_path: _,
+                eval_instance_key,
                 parameter_name: _,
                 variable_span: _,
-            }
-            | Self::DesignApplicationError {
+            } => eval_instance_key
+                .as_ref()
+                .map(|key| {
+                    let segments = key.instance_path.segments();
+                    let segments_str = segments
+                        .iter()
+                        .map(ReferenceName::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    vec![ErrorContext::Note(format!("in instance `{segments_str}`"))]
+                })
+                .unwrap_or_default(),
+            Self::DesignApplicationError {
                 message: _,
                 span: _,
             } => Vec::new(),
@@ -1355,12 +1369,12 @@ impl AsOneilDiagnostic for EvalError {
                 exponent_value_span: _,
             } => Vec::new(),
             Self::ParameterHasError {
-                model_path: _,
+                eval_instance_key: _,
                 parameter_name: _,
                 variable_span: _,
             }
             | Self::CircularParameterEvaluation {
-                model_path: _,
+                eval_instance_key: _,
                 parameter_name: _,
                 variable_span: _,
             }
