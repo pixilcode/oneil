@@ -44,7 +44,7 @@ impl Runtime {
             });
 
         let include_indirect_errors = true;
-        let errors = self.get_model_errors(path, include_indirect_errors);
+        let errors = self.get_model_diagnostics(path, include_indirect_errors);
 
         (template_opt, errors)
     }
