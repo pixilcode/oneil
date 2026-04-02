@@ -13,10 +13,10 @@ use oneil_frontend::{
 use oneil_ir as ir;
 use oneil_output::{EvalError, Model, ModelEvalErrors};
 use oneil_shared::{
-    InstancePath,
+    EvalInstanceKey, InstancePath,
     error::{AsOneilDiagnostic, Context, DiagnosticKind, ErrorLocation, OneilDiagnostic},
     load_result::LoadResult,
-    paths::{ModelPath, PythonPath},
+    paths::{ModelPath, PythonPath, SourcePath},
     symbols::{ParameterName, ReferenceName, TestIndex},
 };
 
@@ -78,7 +78,8 @@ impl Runtime {
         include_indirect_errors: bool,
     ) -> RuntimeErrors {
         let mut visited = IndexSet::new();
-        self.get_model_diagnostics_inner(model_path, include_indirect_errors, &mut visited)
+        let eval_instance_key = EvalInstanceKey::root(model_path.clone());
+        self.get_model_diagnostics_inner(&eval_instance_key, include_indirect_errors, &mut visited)
     }
 
     /// Recursive worker for [`get_model_diagnostics`].
@@ -89,26 +90,34 @@ impl Runtime {
     /// that mutually reference one another's contribution diagnostics
     /// — every file participating in a chain otherwise re-discovers
     /// the chain and re-recurses indefinitely.
+    ///
+    /// TODO: AST and IR errors are duplicated if the same model is
+    ///       referenced multiple times (eg. `use model_a as a1` and
+    ///       `use model_a as a2`). This is because `visited` tracks
+    ///       `EvalInstanceKey`s, but `AST` and `IR` errors are keyed by
+    ///       `ModelPath`.
     #[expect(
         clippy::too_many_lines,
         reason = "cohesive error-aggregation logic; splitting would obscure the overall flow"
     )]
     fn get_model_diagnostics_inner(
         &self,
-        model_path: &ModelPath,
+        eval_instance_key: &EvalInstanceKey,
         include_indirect_errors: bool,
-        visited: &mut IndexSet<ModelPath>,
+        visited: &mut IndexSet<EvalInstanceKey>,
     ) -> RuntimeErrors {
-        if !visited.insert(model_path.clone()) {
+        let model_path = &eval_instance_key.model_path;
+        if !visited.insert(eval_instance_key.clone()) {
             return RuntimeErrors::default();
         }
+
         let path_buf = model_path.clone().into_path_buf();
 
         // Handle source errors
         //
         // If the source failed to load, then there can be no
         // other errors, so we return early
-        let Some(source_entry) = self.source_cache.get_entry(&model_path.into()) else {
+        let Some(source_entry) = self.source_cache.get_entry(&SourcePath::from(model_path)) else {
             return RuntimeErrors::default();
         };
 
@@ -147,6 +156,7 @@ impl Runtime {
         let ir_error_collection = self.resolution_errors_for(model_path);
         let ir_errors = ir_error_collection
             .map(|errors| collect_ir_errors(errors, model_path, source, include_indirect_errors));
+
         let raw_validation_errors: Option<Vec<InstanceValidationError>> = self
             .composed_graph
             .as_ref()
@@ -170,7 +180,7 @@ impl Runtime {
         // flagged on the composed graph: the runtime's `ParamSlot::InProgress`
         // backstop is defense-in-depth; with SCC catching the cycle we don't
         // want to surface both diagnostics for the same parameter.
-        let eval_entry = self.eval_cache.get_entry(model_path);
+        let eval_entry = self.eval_cache.get_entry_instance(eval_instance_key);
         let eval_errors = eval_entry.and_then(|entry| entry.error()).map(|errors| {
             collect_eval_errors(
                 errors,
@@ -181,6 +191,7 @@ impl Runtime {
             )
         });
 
+        // get the evaluation warnings, if any
         let eval_model = eval_entry.and_then(|entry| entry.value());
         let eval_warning_diagnostics =
             eval_model.map(|model| extract_eval_warning_diagnostics(model, model_path, source));
@@ -234,12 +245,34 @@ impl Runtime {
         #[cfg(not(feature = "python"))]
         let _ = python_imports_with_errors;
 
+        // add the errors for models that are referenced
+        //
+        // this includes both models that have errors and models
+        // that were successfully resolved, since models that
+        // were successfully resolved may have evaluation warnings
+
         let mut errors = RuntimeErrors::new();
 
-        // add the errors for models that are referenced
-        for model_path in models_with_errors {
-            let model_errors =
-                self.get_model_diagnostics_inner(&model_path, include_indirect_errors, visited);
+        let model_successful_references = self
+            .eval_cache
+            .get_entry(model_path)
+            .as_ref()
+            .and_then(|entry| entry.value())
+            .map(|model| model.references.values())
+            .into_iter()
+            .flatten();
+
+        let model_references = models_with_errors
+            .iter()
+            .chain(model_successful_references)
+            .collect::<IndexSet<_>>();
+
+        for eval_instance_key in model_references {
+            let model_errors = self.get_model_diagnostics_inner(
+                eval_instance_key,
+                include_indirect_errors,
+                visited,
+            );
             errors.extend(model_errors);
         }
 
@@ -388,19 +421,19 @@ fn surface_apply_hop(
 fn extend_models_with_apply(
     applied_via: Option<&ir::DesignApplication>,
     extra_files: &[&ModelPath],
-    models_with_errors: &mut IndexSet<ModelPath>,
+    models_with_errors: &mut IndexSet<EvalInstanceKey>,
     model_path: &ModelPath,
 ) {
     for path in extra_files {
         if *path != model_path {
-            models_with_errors.insert((*path).clone());
+            models_with_errors.insert(EvalInstanceKey::root((*path).clone()));
         }
     }
     if let Some(hop) = applied_via
         && hop.apply_span.start() != hop.apply_span.end()
         && &hop.applied_in != model_path
     {
-        models_with_errors.insert(hop.applied_in.clone());
+        models_with_errors.insert(EvalInstanceKey::root(hop.applied_in.clone()));
     }
 }
 
@@ -416,7 +449,7 @@ fn extend_models_with_apply(
 /// view of the same diagnostic.
 fn extend_models_with_chain_files(
     diag: &ContributionDiagnostic,
-    models_with_errors: &mut IndexSet<ModelPath>,
+    models_with_errors: &mut IndexSet<EvalInstanceKey>,
     model_path: &ModelPath,
 ) {
     extend_models_with_apply(
@@ -472,7 +505,7 @@ fn surface_design_caused_parameter_errors(
     path_buf: &std::path::Path,
     source: &str,
     out: &mut Vec<OneilDiagnostic>,
-    models_with_errors: &mut IndexSet<ModelPath>,
+    models_with_errors: &mut IndexSet<EvalInstanceKey>,
 ) {
     // Build a lookup set of (host_path, parameter_name) pairs that
     // have validation errors, to detect design-applied parameters
@@ -559,7 +592,7 @@ fn collect_graph_contribution_errors(
     path_buf: &std::path::Path,
     source: &str,
     design_resolution_errors: &mut Vec<OneilDiagnostic>,
-    models_with_errors: &mut IndexSet<ModelPath>,
+    models_with_errors: &mut IndexSet<EvalInstanceKey>,
 ) {
     for diag in &graph.contribution_errors {
         surface_contribution_diagnostic(
@@ -772,7 +805,7 @@ const fn is_undefined_function_error(error: &ParameterResolutionError) -> bool {
 #[derive(Debug)]
 struct EvalErrorsResult {
     /// Model paths that have errors (for recursive collection).
-    models_with_errors: IndexSet<ModelPath>,
+    models_with_errors: IndexSet<EvalInstanceKey>,
     /// Parameter evaluation errors by parameter name.
     parameter_errors: IndexMap<ParameterName, Vec<OneilDiagnostic>>,
     /// Test evaluation errors.
@@ -795,7 +828,7 @@ fn collect_eval_errors(
 
     if include_indirect_errors {
         for reference_key in &errors.references {
-            models_with_errors.insert(reference_key.model_path.clone());
+            models_with_errors.insert(reference_key.clone());
         }
     }
 
@@ -806,8 +839,11 @@ fn collect_eval_errors(
         let models_with_errors_in_param: IndexSet<_> = param_errs
             .iter()
             .filter_map(|error| {
-                if let EvalError::ParameterHasError { model_path, .. } = error {
-                    model_path.clone()
+                if let EvalError::ParameterHasError {
+                    eval_instance_key, ..
+                } = error
+                {
+                    eval_instance_key.clone()
                 } else {
                     None
                 }
@@ -833,10 +869,12 @@ fn collect_eval_errors(
         let mut test_errors_in_test = Vec::new();
 
         for test_err in test_errs {
-            if let EvalError::ParameterHasError { model_path, .. } = test_err
-                && let Some(p) = model_path
+            if let EvalError::ParameterHasError {
+                eval_instance_key, ..
+            } = test_err
+                && let Some(eval_instance_key) = eval_instance_key
             {
-                models_with_errors.insert(p.clone());
+                models_with_errors.insert(eval_instance_key.clone());
             }
 
             let error = OneilDiagnostic::from_error_with_source(test_err, path_buf.clone(), source);
@@ -908,7 +946,7 @@ fn extract_eval_warning_diagnostics(
 #[derive(Debug)]
 struct MergedErrors {
     /// Model paths that have errors (for recursive collection).
-    pub models_with_errors: IndexSet<ModelPath>,
+    pub models_with_errors: IndexSet<EvalInstanceKey>,
     /// Python import paths that have errors (for recursive collection).
     pub python_imports_with_errors: IndexSet<PythonPath>,
     /// Model import errors by reference name.
@@ -937,8 +975,9 @@ fn merge_ir_eval_diagnostics(
         (Some(ir), Some(eval)) => MergedErrors {
             models_with_errors: ir
                 .models_with_errors
-                .union(&eval.models_with_errors)
-                .cloned()
+                .into_iter()
+                .map(EvalInstanceKey::root)
+                .chain(eval.models_with_errors)
                 .collect(),
             python_imports_with_errors: ir.python_imports_with_errors,
             model_import_errors: ir.model_import_errors,
@@ -955,7 +994,11 @@ fn merge_ir_eval_diagnostics(
         },
 
         (Some(ir), None) => MergedErrors {
-            models_with_errors: ir.models_with_errors,
+            models_with_errors: ir
+                .models_with_errors
+                .into_iter()
+                .map(EvalInstanceKey::root)
+                .collect(),
             python_imports_with_errors: ir.python_imports_with_errors,
             model_import_errors: ir.model_import_errors,
             python_import_errors: ir.python_import_errors,

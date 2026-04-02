@@ -571,10 +571,10 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
         variable_span: Span,
         is_current_model: bool,
     ) -> Result<output::Value, Vec<EvalError>> {
-        let model_path_for_err = if is_current_model {
+        let eval_instance_key_for_err = if is_current_model {
             None
         } else {
-            Some(key.model_path.clone())
+            Some(key.clone())
         };
 
         // Inspect and potentially take ownership of the pending IR from the memo slot.
@@ -590,7 +590,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 // `UndefinedReferenceParameter`.  Return a graceful error instead of
                 // panicking so the composed graph error bucket surfaces it cleanly.
                 return Err(vec![EvalError::ParameterHasError {
-                    model_path: model_path_for_err,
+                    eval_instance_key: eval_instance_key_for_err,
                     parameter_name: parameter_name.clone(),
                     variable_span,
                 }]);
@@ -600,7 +600,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 ParamSlot::Done(Ok(param)) => SlotPeek::Done(Ok(param.value.clone())),
                 ParamSlot::Done(Err(_)) => {
                     SlotPeek::Done(Err(vec![EvalError::ParameterHasError {
-                        model_path: model_path_for_err.clone(),
+                        eval_instance_key: eval_instance_key_for_err.clone(),
                         parameter_name: parameter_name.clone(),
                         variable_span,
                     }]))
@@ -619,7 +619,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
         match peek {
             SlotPeek::Done(r) => r,
             SlotPeek::Cycle => Err(vec![EvalError::CircularParameterEvaluation {
-                model_path: model_path_for_err,
+                eval_instance_key: eval_instance_key_for_err,
                 parameter_name: parameter_name.clone(),
                 variable_span,
             }]),
@@ -670,7 +670,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 match done_slot {
                     Ok(p) => Ok(p.value),
                     Err(_) => Err(vec![EvalError::ParameterHasError {
-                        model_path: model_path_for_err,
+                        eval_instance_key: eval_instance_key_for_err,
                         parameter_name: parameter_name.clone(),
                         variable_span,
                     }]),
