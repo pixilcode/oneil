@@ -11,7 +11,7 @@
 
 use oneil_shared::{
     InstancePath,
-    error::{AsOneilError, Context, ErrorLocation},
+    error::{AsOneilDiagnostic, Context, DiagnosticKind, ErrorLocation},
     paths::ModelPath,
     span::Span,
     symbols::{ParameterName, ReferenceName, TestIndex},
@@ -153,7 +153,11 @@ impl InstanceValidationError {
     }
 }
 
-impl AsOneilError for InstanceValidationError {
+impl AsOneilDiagnostic for InstanceValidationError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         match &self.kind {
             InstanceValidationErrorKind::UndefinedParameter {
@@ -235,7 +239,7 @@ impl AsOneilError for InstanceValidationError {
         }
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         Some(ErrorLocation::from_source_and_span(
             source,
             self.primary_span(),

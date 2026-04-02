@@ -22,7 +22,7 @@ pub fn diagnostics_from_runtime_errors(errors: &RuntimeErrors) -> IndexMap<Uri, 
                 uri,
                 errors
                     .iter()
-                    .filter(|error| !error.is_internal_error())
+                    .filter(|error| !error.is_internal_diagnostic())
                     .map(oneil_diagnostic_to_lsp)
                     .collect(),
             ))
@@ -43,7 +43,7 @@ fn oneil_diagnostic_to_lsp(error: &OneilDiagnostic) -> Diagnostic {
                 character: 0,
             },
         },
-        error_location_to_range,
+        diagnostic_location_to_range,
     );
 
     let severity = error_kind_to_severity(error.kind());
@@ -101,7 +101,7 @@ fn build_related_information(error: &OneilDiagnostic) -> Option<Vec<DiagnosticRe
         .map(|(ctx, loc)| DiagnosticRelatedInformation {
             location: Location {
                 uri: uri.clone(),
-                range: error_location_to_range(loc),
+                range: diagnostic_location_to_range(loc),
             },
             message: context_to_string(ctx),
         })
@@ -121,7 +121,7 @@ fn build_related_information(error: &OneilDiagnostic) -> Option<Vec<DiagnosticRe
     clippy::cast_possible_truncation,
     reason = "line and column values are from source and fit in u32"
 )]
-fn error_location_to_range(loc: &oneil_shared::error::ErrorLocation) -> Range {
+fn diagnostic_location_to_range(loc: &oneil_shared::error::ErrorLocation) -> Range {
     let line = (loc.line().saturating_sub(1)) as u32;
     let col = (loc.column().saturating_sub(1)) as u32;
     let length = loc.length() as u32;

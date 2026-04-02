@@ -14,7 +14,7 @@ use oneil_ir as ir;
 use oneil_output::{EvalError, ModelEvalErrors};
 use oneil_shared::{
     InstancePath,
-    error::{AsOneilError, Context, DiagnosticKind, ErrorLocation, OneilDiagnostic},
+    error::{AsOneilDiagnostic, Context, DiagnosticKind, ErrorLocation, OneilDiagnostic},
     load_result::LoadResult,
     paths::{ModelPath, PythonPath},
     symbols::{ParameterName, ReferenceName, TestIndex},

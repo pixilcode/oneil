@@ -3,7 +3,7 @@
 use std::fmt;
 
 use oneil_shared::{
-    error::{AsOneilError, ErrorLocation},
+    error::{AsOneilDiagnostic, DiagnosticKind, ErrorLocation},
     span::Span,
 };
 
@@ -43,12 +43,16 @@ impl fmt::Display for DesignResolutionError {
     }
 }
 
-impl AsOneilError for DesignResolutionError {
+impl AsOneilDiagnostic for DesignResolutionError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         Some(ErrorLocation::from_source_and_span(source, self.span))
     }
 }
