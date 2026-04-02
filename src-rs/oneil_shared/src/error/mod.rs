@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 pub use context::Context;
 pub use location::ErrorLocation;
-pub use traits::AsOneilError;
+pub use traits::AsOneilDiagnostic;
 
 /// Classification of a [`OneilDiagnostic`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -37,19 +37,20 @@ pub struct OneilDiagnostic {
     context: Vec<Context>,
     /// Optional context information with source location
     context_with_source: Vec<(Context, ErrorLocation)>,
-    /// Whether this diagnostic represents an internal error.
-    is_internal_error: bool,
+    /// Whether this diagnostic represents an internal diagnostic.
+    is_internal_diagnostic: bool,
 }
 
 impl OneilDiagnostic {
-    /// Creates a new `OneilDiagnostic` of kind [`DiagnosticKind::Error`] from an error that implements `AsOneilError`
+    /// Creates a new `OneilDiagnostic` from a value that implements [`AsOneilDiagnostic`].
+    /// The kind is taken from [`AsOneilDiagnostic::kind`].
     ///
     /// This constructor creates a diagnostic without source location information.
     /// Use `from_error_with_source` if you need precise line and column information.
     ///
     /// # Arguments
     ///
-    /// * `error` - The error that implements `AsOneilError`
+    /// * `error` - The value that implements [`AsOneilDiagnostic`]
     /// * `path` - The path to the file where the error occurred
     ///
     /// # Returns
@@ -59,12 +60,16 @@ impl OneilDiagnostic {
     /// # Examples
     ///
     /// ```rust
-    /// use oneil_shared::error::{OneilDiagnostic, AsOneilError, Context};
+    /// use oneil_shared::error::{DiagnosticKind, OneilDiagnostic, AsOneilDiagnostic, Context};
     /// use std::path::PathBuf;
     ///
     /// struct SimpleError(String);
     ///
-    /// impl AsOneilError for SimpleError {
+    /// impl AsOneilDiagnostic for SimpleError {
+    ///     fn kind(&self) -> DiagnosticKind {
+    ///         DiagnosticKind::Error
+    ///     }
+    ///
     ///     fn message(&self) -> String {
     ///         self.0.clone()
     ///     }
@@ -74,25 +79,27 @@ impl OneilDiagnostic {
     /// let path = PathBuf::from("example.on");
     /// let diagnostic = OneilDiagnostic::from_error(&error, path);
     /// ```
-    pub fn from_error(error: &impl AsOneilError, path: PathBuf) -> Self {
+    pub fn from_error(error: &impl AsOneilDiagnostic, path: PathBuf) -> Self {
+        let kind = error.kind();
         let message = error.message();
         let location = None;
         let context = error.context();
         let context_with_source = vec![];
-        let is_internal_error = error.is_internal_error();
+        let is_internal_diagnostic = error.is_internal_diagnostic();
 
         Self {
-            kind: DiagnosticKind::Error,
+            kind,
             path,
             message,
             location,
             context,
             context_with_source,
-            is_internal_error,
+            is_internal_diagnostic,
         }
     }
 
-    /// Creates a new `OneilDiagnostic` of kind [`DiagnosticKind::Error`] from an error with source code for location tracking
+    /// Creates a new `OneilDiagnostic` with source code for location tracking.
+    /// The kind is taken from [`AsOneilDiagnostic::kind`].
     ///
     /// This constructor creates a diagnostic with full source location information,
     /// including line and column numbers. The source code is used to calculate
@@ -100,7 +107,7 @@ impl OneilDiagnostic {
     ///
     /// # Arguments
     ///
-    /// * `error` - The error that implements `AsOneilError`
+    /// * `error` - The value that implements [`AsOneilDiagnostic`]
     /// * `path` - The path to the file where the error occurred
     /// * `source` - The complete source code content for location calculation
     ///
@@ -111,7 +118,7 @@ impl OneilDiagnostic {
     /// # Examples
     ///
     /// ```rust
-    /// use oneil_shared::error::{OneilDiagnostic, AsOneilError, ErrorLocation};
+    /// use oneil_shared::error::{DiagnosticKind, OneilDiagnostic, AsOneilDiagnostic, ErrorLocation};
     /// use std::path::PathBuf;
     ///
     /// struct PositionalError {
@@ -119,12 +126,16 @@ impl OneilDiagnostic {
     ///     offset: usize,
     /// }
     ///
-    /// impl AsOneilError for PositionalError {
+    /// impl AsOneilDiagnostic for PositionalError {
+    ///     fn kind(&self) -> DiagnosticKind {
+    ///         DiagnosticKind::Error
+    ///     }
+    ///
     ///     fn message(&self) -> String {
     ///         self.message.clone()
     ///     }
     ///
-    ///     fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    ///     fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
     ///         Some(ErrorLocation::from_source_and_offset(source, self.offset))
     ///     }
     /// }
@@ -137,9 +148,14 @@ impl OneilDiagnostic {
     /// let source = "let x = 42;";
     /// let diagnostic = OneilDiagnostic::from_error_with_source(&error, path, source);
     /// ```
-    pub fn from_error_with_source(error: &impl AsOneilError, path: PathBuf, source: &str) -> Self {
+    pub fn from_error_with_source(
+        error: &impl AsOneilDiagnostic,
+        path: PathBuf,
+        source: &str,
+    ) -> Self {
+        let kind = error.kind();
         let message = error.message();
-        let location = error.error_location(source);
+        let location = error.diagnostic_location(source);
 
         let mut context = error.context();
         let mut context_with_source = vec![];
@@ -155,20 +171,21 @@ impl OneilDiagnostic {
             }
         }
 
-        let is_internal_error = error.is_internal_error();
+        let is_internal_diagnostic = error.is_internal_diagnostic();
 
         Self {
-            kind: DiagnosticKind::Error,
+            kind,
             path,
             message,
             location,
             context,
             context_with_source,
-            is_internal_error,
+            is_internal_diagnostic,
         }
     }
 
-    /// Creates a new `OneilDiagnostic` of kind [`DiagnosticKind::Error`] with optional source code for location tracking
+    /// Creates a new `OneilDiagnostic` with optional source code for location tracking.
+    /// The kind is taken from [`AsOneilDiagnostic::kind`].
     ///
     /// This constructor is a convenience method that chooses between `from_error`
     /// and `from_error_with_source` based on whether source code is available.
@@ -177,7 +194,7 @@ impl OneilDiagnostic {
     ///
     /// # Arguments
     ///
-    /// * `error` - The error that implements `AsOneilError`
+    /// * `error` - The value that implements [`AsOneilDiagnostic`]
     /// * `path` - The path to the file where the error occurred
     /// * `source` - Optional source code content for location calculation
     ///
@@ -189,12 +206,16 @@ impl OneilDiagnostic {
     /// # Examples
     ///
     /// ```rust
-    /// use oneil_shared::error::{OneilDiagnostic, AsOneilError};
+    /// use oneil_shared::error::{DiagnosticKind, OneilDiagnostic, AsOneilDiagnostic};
     /// use std::path::PathBuf;
     ///
     /// struct MyError(String);
     ///
-    /// impl AsOneilError for MyError {
+    /// impl AsOneilDiagnostic for MyError {
+    ///     fn kind(&self) -> DiagnosticKind {
+    ///         DiagnosticKind::Error
+    ///     }
+    ///
     ///     fn message(&self) -> String {
     ///         self.0.clone()
     ///     }
@@ -218,7 +239,7 @@ impl OneilDiagnostic {
     /// );
     /// ```
     pub fn from_error_with_optional_source(
-        error: &impl AsOneilError,
+        error: &impl AsOneilDiagnostic,
         path: PathBuf,
         source: Option<&str>,
     ) -> Self {
@@ -284,13 +305,13 @@ impl OneilDiagnostic {
         self.context_with_source.as_slice()
     }
 
-    /// Returns whether this diagnostic represents an internal error.
+    /// Returns whether this diagnostic represents an internal diagnostic.
     ///
-    /// Internal errors are errors that are not important for the user to see,
-    /// such as errors that are caused by other errors. In that case, it's most
+    /// Internal diagnostics are not important for the user to see,
+    /// such as diagnostics that are caused by other errors. In that case, it's most
     /// useful to see only the first error.
     #[must_use]
-    pub const fn is_internal_error(&self) -> bool {
-        self.is_internal_error
+    pub const fn is_internal_diagnostic(&self) -> bool {
+        self.is_internal_diagnostic
     }
 }

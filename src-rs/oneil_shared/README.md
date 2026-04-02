@@ -12,28 +12,32 @@ This crate enables components to use their own error types while also defining a
 
 Spans refer to a location in a source file. They store the the offset, line, and column for the beginnig and end of the important text.
 
-## `AsOneilError`
+## `AsOneilDiagnostic`
 
-The main feature of the error handling provided by this library is the `AsOneilError` trait found in [`traits.rs`](src/traits.rs). Errors should implement this trait in order to be compatible with Oneil CLI error printing.
+The main feature of the error handling provided by this library is the `AsOneilDiagnostic` trait found in [`traits.rs`](src/traits.rs). Error and other diagnostic types should implement this trait in order to be compatible with Oneil CLI diagnostic printing.
 
 ### Example
 
 ```rust
-use oneil_shared::error::{OneilDiagnostic, AsOneilError, Context, ErrorLocation};
+use oneil_shared::error::{DiagnosticKind, OneilDiagnostic, AsOneilDiagnostic, Context, ErrorLocation};
 use std::path::PathBuf;
 
-// Define an error type that implements AsOneilError
+// Define an error type that implements AsOneilDiagnostic
 struct MyError {
     message: String,
     offset: usize,
 }
 
-impl AsOneilError for MyError {
+impl AsOneilDiagnostic for MyError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.message.clone()
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         if self.offset < source.len() {
             Some(ErrorLocation::from_source_and_offset(source, self.offset))
         } else {

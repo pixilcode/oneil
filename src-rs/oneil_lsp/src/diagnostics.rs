@@ -22,7 +22,7 @@ pub fn diagnostics_from_runtime_errors(errors: &RuntimeErrors) -> IndexMap<Uri, 
                 uri,
                 errors
                     .iter()
-                    .filter(|error| !error.is_internal_error())
+                    .filter(|error| !error.is_internal_diagnostic())
                     .map(oneil_diagnostic_to_lsp)
                     .collect(),
             ))

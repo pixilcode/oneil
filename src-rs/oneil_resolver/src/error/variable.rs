@@ -1,7 +1,7 @@
 use std::fmt;
 
 use oneil_shared::{
-    error::{AsOneilError, Context, ErrorLocation},
+    error::{AsOneilDiagnostic, Context, DiagnosticKind, ErrorLocation},
     paths::{ModelPath, PythonPath},
     span::Span,
     symbols::{ParameterName, ReferenceName},
@@ -262,12 +262,16 @@ impl fmt::Display for VariableResolutionError {
     }
 }
 
-impl AsOneilError for VariableResolutionError {
+impl AsOneilDiagnostic for VariableResolutionError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         match self {
             Self::ModelHasError {
                 path: _,
@@ -308,7 +312,7 @@ impl AsOneilError for VariableResolutionError {
                 let location = ErrorLocation::from_source_and_span(source, *relevant_span);
                 Some(location)
             }
-            Self::UnitResolution(unit_error) => unit_error.error_location(source),
+            Self::UnitResolution(unit_error) => unit_error.diagnostic_location(source),
         }
     }
 
@@ -361,7 +365,7 @@ impl AsOneilError for VariableResolutionError {
         }
     }
 
-    fn is_internal_error(&self) -> bool {
+    fn is_internal_diagnostic(&self) -> bool {
         matches!(
             self,
             Self::ModelHasError { .. }

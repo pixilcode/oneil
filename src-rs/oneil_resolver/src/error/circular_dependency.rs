@@ -2,7 +2,10 @@
 
 use std::fmt;
 
-use oneil_shared::{error::AsOneilError, paths::ModelPath};
+use oneil_shared::{
+    error::{AsOneilDiagnostic, DiagnosticKind},
+    paths::ModelPath,
+};
 
 /// Represents a circular dependency detected during model loading.
 ///
@@ -41,7 +44,11 @@ impl fmt::Display for CircularDependencyError {
     }
 }
 
-impl AsOneilError for CircularDependencyError {
+impl AsOneilDiagnostic for CircularDependencyError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }

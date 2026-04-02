@@ -3,7 +3,7 @@
 use std::{error::Error, fmt};
 
 use oneil_shared::{
-    error::{AsOneilError, Context as ErrorContext, ErrorLocation},
+    error::{AsOneilDiagnostic, Context as ErrorContext, DiagnosticKind, ErrorLocation},
     paths::ModelPath,
     span::Span,
     symbols::{BuiltinFunctionName, ParameterName, PyFunctionName},
@@ -738,13 +738,17 @@ impl fmt::Display for EvalError {
 
 impl Error for EvalError {}
 
-impl AsOneilError for EvalError {
+impl AsOneilDiagnostic for EvalError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }
 
     #[expect(clippy::too_many_lines, reason = "matching on each enum variant")]
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         match self {
             Self::TypeMismatch {
                 expected_type: _,
@@ -1509,7 +1513,7 @@ impl AsOneilError for EvalError {
         }
     }
 
-    fn is_internal_error(&self) -> bool {
+    fn is_internal_diagnostic(&self) -> bool {
         matches!(self, Self::ParameterHasError { .. })
     }
 }
