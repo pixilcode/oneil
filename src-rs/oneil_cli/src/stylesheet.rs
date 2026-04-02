@@ -2,6 +2,7 @@ use owo_colors::Style;
 
 // Error styles
 pub const ERROR_COLOR: Style = Style::new().red();
+pub const WARNING_COLOR: Style = Style::new().yellow();
 pub const NOTE_COLOR: Style = Style::new().blue();
 pub const HELP_COLOR: Style = Style::new().blue();
 pub const SOURCE_ANNOTATION: Style = Style::new().blue().bold();
