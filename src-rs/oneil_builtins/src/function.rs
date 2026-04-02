@@ -1,8 +1,7 @@
 //! Standard builtin functions (e.g. min, max, sqrt).
 
 use indexmap::IndexMap;
-use oneil_eval::EvalError;
-use oneil_output::Value;
+use oneil_output::{EvalError, Value};
 use oneil_shared::{
     span::Span,
     symbols::{BuiltinFunctionName, UnitBaseName},
@@ -215,11 +214,10 @@ mod fns {
     use indexmap::IndexMap;
     use std::borrow::Cow;
 
-    use oneil_eval::{
-        EvalError,
+    use oneil_output::{
+        EvalError, MeasuredNumber, Number, NumberType, Value,
         error::{ExpectedArgumentCount, ExpectedType, convert::binary_eval_error_to_eval_error},
     };
-    use oneil_output::{MeasuredNumber, Number, NumberType, Value};
     use oneil_shared::{span::Span, symbols::BuiltinFunctionName, symbols::UnitBaseName};
 
     use crate::unit::BuiltinUnit;
@@ -943,13 +941,11 @@ mod fns {
 mod helper {
     use std::borrow::Cow;
 
-    use oneil_shared::{span::Span, symbols::BuiltinFunctionName};
-
-    use oneil_eval::{
-        EvalError,
+    use oneil_output::{
+        EvalError, MeasuredNumber, Number, Unit, Value, ValueType,
         error::{ExpectedArgumentCount, ExpectedType},
     };
-    use oneil_output::{MeasuredNumber, Number, Unit, Value, ValueType};
+    use oneil_shared::{span::Span, symbols::BuiltinFunctionName};
 
     pub fn unary_number_or_measured_number_fn<F, G>(
         identifier_span: Span,

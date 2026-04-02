@@ -4,7 +4,7 @@
 //! for runtime values (numbers, units, intervals, etc.).
 
 mod dependency;
-mod error;
+pub mod error;
 mod interval;
 mod model;
 mod number_kinds;
@@ -14,7 +14,10 @@ pub mod util;
 mod value;
 
 pub use dependency::{BuiltinDependency, DependencySet, ExternalDependency, ParameterDependency};
-pub use error::{BinaryEvalError, ExpectedType, UnaryEvalError, UnitConversionError};
+pub use error::{
+    BinaryEvalError, EvalError, ExpectedArgumentCount, ExpectedType, ModelEvalErrors,
+    UnaryEvalError, UnitConversionError,
+};
 pub use interval::Interval;
 pub use model::{DebugInfo, Model, Parameter, PrintLevel, Test, TestResult};
 pub use number_kinds::{MeasuredNumber, Number};

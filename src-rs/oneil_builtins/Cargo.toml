@@ -12,7 +12,6 @@ categories.workspace = true
 readme = "README.md"
 
 [dependencies]
-oneil_eval = { path = "../oneil_eval", default-features = false }
 oneil_output = { path = "../oneil_output" }
 oneil_shared = { path = "../oneil_shared" }
 indexmap = { workspace = true }

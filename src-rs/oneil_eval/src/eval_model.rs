@@ -10,14 +10,12 @@ use oneil_shared::{
 use oneil_shared::{span::Span, symbols::ParameterName};
 
 use oneil_output::{
-    self as output, BuiltinDependency, DependencySet, ExternalDependency, Model,
-    ParameterDependency, Value,
+    self as output, BuiltinDependency, DependencySet, EvalError, ExpectedType, ExternalDependency,
+    Model, ModelEvalErrors, ParameterDependency, Value,
 };
 
 use crate::{
-    EvalError,
     context::{EvalContext, ExternalEvaluationContext},
-    error::{EvalErrors, ExpectedType},
     eval_expr, eval_parameter,
 };
 
@@ -26,7 +24,7 @@ use crate::{
 pub fn eval_model<E: ExternalEvaluationContext>(
     model_path: &ModelPath,
     external_context: &mut E,
-) -> IndexMap<ModelPath, MaybePartialResult<Model, EvalErrors>> {
+) -> IndexMap<ModelPath, MaybePartialResult<Model, ModelEvalErrors>> {
     let mut context = EvalContext::new(external_context);
 
     eval_model_from_context(model_path, &mut context);

@@ -1,59 +1,17 @@
-//! Errors for the Oneil evaluator.
+//! The [`EvalError`] enum and its trait implementations.
 
 use std::{error::Error, fmt};
 
-use indexmap::{IndexMap, IndexSet};
 use oneil_shared::{
     error::{AsOneilError, Context as ErrorContext, ErrorLocation},
     paths::ModelPath,
     span::Span,
-    symbols::{BuiltinFunctionName, ParameterName, PyFunctionName, TestIndex},
+    symbols::{BuiltinFunctionName, ParameterName, PyFunctionName},
 };
 
-use oneil_output::{DisplayUnit, Interval, NumberType, Value, ValueType};
+use crate::{DisplayUnit, ExpectedType, Interval, NumberType, Value, ValueType};
 
-pub use oneil_output::ExpectedType;
-
-/// Errors that occurred during evaluation of a model.
-#[derive(Debug, Clone)]
-pub struct EvalErrors {
-    /// Errors that occurred during evaluation of the parameters.
-    pub parameters: IndexMap<ParameterName, Vec<EvalError>>,
-    /// Errors that occurred during evaluation of the tests.
-    pub tests: IndexMap<TestIndex, Vec<EvalError>>,
-    /// References that had errors.
-    pub references: IndexSet<ModelPath>,
-}
-
-/// Represents the expected number of arguments for a function call.
-///
-/// This enum is used to specify argument count requirements when validating
-/// function calls.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExpectedArgumentCount {
-    /// Exactly the specified number of arguments is required.
-    Exact(usize),
-    /// At least the specified number of arguments is required.
-    AtLeast(usize),
-    /// At most the specified number of arguments is allowed.
-    AtMost(usize),
-    /// Between the minimum (inclusive) and maximum (inclusive) number of arguments is required.
-    Between(usize, usize),
-}
-
-impl fmt::Display for ExpectedArgumentCount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Exact(1) => write!(f, "1 argument"),
-            Self::Exact(count) => write!(f, "{count} arguments"),
-            Self::AtLeast(1) => write!(f, "at least 1 argument"),
-            Self::AtLeast(count) => write!(f, "at least {count} arguments"),
-            Self::AtMost(1) => write!(f, "at most 1 argument"),
-            Self::AtMost(count) => write!(f, "at most {count} arguments"),
-            Self::Between(min, max) => write!(f, "between {min} and {max} arguments"),
-        }
-    }
-}
+use super::expected_argument_count::ExpectedArgumentCount;
 
 /// Errors that can occur during expression evaluation.
 ///
@@ -1553,153 +1511,5 @@ impl AsOneilError for EvalError {
 
     fn is_internal_error(&self) -> bool {
         matches!(self, Self::ParameterHasError { .. })
-    }
-}
-
-/// Conversion from value-level errors (`oneil_output`) to evaluator errors.
-pub mod convert {
-    use oneil_output::{BinaryEvalError, UnaryEvalError, ValueType};
-    use oneil_shared::span::Span;
-
-    use super::{EvalError, ExpectedType};
-
-    /// Converts a binary eval error from the output crate into an evaluator error.
-    #[must_use]
-    pub fn binary_eval_error_to_eval_error(
-        error: BinaryEvalError,
-        lhs_span: Span,
-        rhs_span: Span,
-    ) -> EvalError {
-        match error {
-            BinaryEvalError::UnitMismatch { lhs_unit, rhs_unit } => EvalError::UnitMismatch {
-                expected_unit: lhs_unit,
-                expected_source_span: lhs_span,
-                found_unit: rhs_unit,
-                found_span: rhs_span,
-            },
-            BinaryEvalError::TypeMismatch { lhs_type, rhs_type } => EvalError::TypeMismatch {
-                expected_type: value_type_to_expected_type(*lhs_type),
-                expected_source_span: lhs_span,
-                found_type: *rhs_type,
-                found_span: rhs_span,
-            },
-            BinaryEvalError::InvalidLhsType {
-                expected_type,
-                lhs_type,
-            } => EvalError::InvalidType {
-                expected_type,
-                found_type: *lhs_type,
-                found_span: lhs_span,
-            },
-            BinaryEvalError::InvalidRhsType {
-                expected_type,
-                rhs_type,
-            } => EvalError::InvalidType {
-                expected_type,
-                found_type: *rhs_type,
-                found_span: rhs_span,
-            },
-            BinaryEvalError::ExponentHasUnits { exponent_unit } => EvalError::ExponentHasUnits {
-                exponent_span: rhs_span,
-                exponent_unit,
-            },
-            BinaryEvalError::ExponentIsInterval { exponent_interval } => {
-                EvalError::ExponentIsInterval {
-                    exponent_interval,
-                    exponent_value_span: rhs_span,
-                }
-            }
-        }
-    }
-
-    /// Converts a binary eval error that only applies to the left-hand side into an evaluator error.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the error is not `InvalidLhsType`.
-    #[must_use]
-    pub fn binary_eval_error_expect_only_lhs(error: BinaryEvalError, lhs_span: Span) -> EvalError {
-        match error {
-            BinaryEvalError::InvalidLhsType {
-                expected_type,
-                lhs_type,
-            } => EvalError::InvalidType {
-                expected_type,
-                found_type: *lhs_type,
-                found_span: lhs_span,
-            },
-            BinaryEvalError::UnitMismatch { .. }
-            | BinaryEvalError::TypeMismatch { .. }
-            | BinaryEvalError::InvalidRhsType { .. }
-            | BinaryEvalError::ExponentHasUnits { .. }
-            | BinaryEvalError::ExponentIsInterval { .. } => {
-                panic!("expected only lhs errors, but got {error:?}")
-            }
-        }
-    }
-
-    /// Converts a binary eval error that only applies to the right-hand side into an evaluator error.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the error is not `InvalidRhsType`, `ExponentHasUnits`, or `ExponentIsInterval`.
-    #[must_use]
-    pub fn binary_eval_error_expect_only_rhs(error: BinaryEvalError, rhs_span: Span) -> EvalError {
-        match error {
-            BinaryEvalError::InvalidRhsType {
-                expected_type,
-                rhs_type,
-            } => EvalError::InvalidType {
-                expected_type,
-                found_type: *rhs_type,
-                found_span: rhs_span,
-            },
-            BinaryEvalError::ExponentHasUnits { exponent_unit } => EvalError::ExponentHasUnits {
-                exponent_span: rhs_span,
-                exponent_unit,
-            },
-            BinaryEvalError::ExponentIsInterval { exponent_interval } => {
-                EvalError::ExponentIsInterval {
-                    exponent_interval,
-                    exponent_value_span: rhs_span,
-                }
-            }
-            BinaryEvalError::UnitMismatch { .. }
-            | BinaryEvalError::TypeMismatch { .. }
-            | BinaryEvalError::InvalidLhsType { .. } => {
-                panic!("expected only rhs errors, but got {error:?}")
-            }
-        }
-    }
-
-    /// Converts a unary eval error from the output crate into an evaluator error.
-    #[must_use]
-    pub fn unary_eval_error_to_eval_error(error: UnaryEvalError, value_span: Span) -> EvalError {
-        match error {
-            UnaryEvalError::InvalidNegType { value_type } => EvalError::InvalidType {
-                expected_type: ExpectedType::Number { number_type: None },
-                found_type: *value_type,
-                found_span: value_span,
-            },
-            UnaryEvalError::InvalidNotType { value_type } => EvalError::InvalidType {
-                expected_type: ExpectedType::Boolean,
-                found_type: *value_type,
-                found_span: value_span,
-            },
-        }
-    }
-
-    fn value_type_to_expected_type(value_type: ValueType) -> ExpectedType {
-        match value_type {
-            ValueType::Boolean => ExpectedType::Boolean,
-            ValueType::String => ExpectedType::String,
-            ValueType::Number { number_type } => ExpectedType::Number {
-                number_type: Some(number_type),
-            },
-            ValueType::MeasuredNumber { unit, number_type } => ExpectedType::MeasuredNumber {
-                number_type: Some(number_type),
-                unit: Some(unit.display_unit),
-            },
-        }
     }
 }

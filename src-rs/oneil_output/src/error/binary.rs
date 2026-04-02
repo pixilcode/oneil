@@ -17,9 +17,9 @@ pub enum BinaryEvalError {
     },
     /// Type mismatch between operands.
     TypeMismatch {
-        /// Type of the left-hand side.
-        lhs_type: Box<ValueType>,
-        /// Type of the right-hand side.
+        /// Expected type implied by the left-hand side.
+        expected_type_from_lhs: ExpectedType,
+        /// Actual type of the right-hand side.
         rhs_type: Box<ValueType>,
     },
     /// Left-hand side has an invalid type.

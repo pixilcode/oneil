@@ -3,7 +3,6 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use indexmap::IndexMap;
-use oneil_eval as eval;
 use oneil_parser::error::ParserError;
 use oneil_resolver as resolver;
 #[cfg(feature = "python")]
@@ -127,7 +126,7 @@ pub type AstCache = ModelCache<output::ast::ModelNode, Vec<ParserError>>;
 pub type IrCache = ModelCache<output::ir::Model, resolver::ResolutionErrorCollection>;
 
 /// Cache for evaluated output models keyed by path.
-pub type EvalCache = ModelCache<output::Model, eval::EvalErrors>;
+pub type EvalCache = ModelCache<output::Model, output::ModelEvalErrors>;
 
 /// Cache for Python import function maps keyed by path.
 ///

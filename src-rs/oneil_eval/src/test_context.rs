@@ -7,7 +7,7 @@
 
 use oneil_builtins as builtins;
 use oneil_ir as ir;
-use oneil_output::{self as output, Unit, Value};
+use oneil_output::{self as output, EvalError, ModelEvalErrors, Unit, Value};
 use oneil_shared::{
     load_result::LoadResult,
     paths::ModelPath,
@@ -15,10 +15,7 @@ use oneil_shared::{
     symbols::{BuiltinFunctionName, BuiltinValueName, UnitBaseName, UnitPrefix},
 };
 
-use crate::{
-    context::{ExternalEvaluationContext, IrLoadError},
-    error::{EvalError, EvalErrors},
-};
+use crate::context::{ExternalEvaluationContext, IrLoadError};
 
 /// Returns a [`ModelPath`] for use in tests (path without extension, e.g. `"test"` → `test.on`).
 #[must_use]
@@ -94,7 +91,7 @@ impl ExternalEvaluationContext for TestExternalContext {
     #[expect(unreachable_code, reason = "this is unused in tests")]
     fn get_preloaded_models(
         &self,
-    ) -> impl Iterator<Item = (ModelPath, &LoadResult<output::Model, EvalErrors>)> {
+    ) -> impl Iterator<Item = (ModelPath, &LoadResult<output::Model, ModelEvalErrors>)> {
         (unimplemented!("this is unused in tests") as Vec<_>).into_iter()
     }
 }

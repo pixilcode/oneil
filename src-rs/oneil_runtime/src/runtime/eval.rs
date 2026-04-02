@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use indexmap::IndexMap;
 use oneil_eval::{self as eval, IrLoadError};
-use oneil_output::{Unit, Value};
+use oneil_output::{EvalError, Unit, Value};
 use oneil_shared::{
     error::OneilDiagnostic,
     load_result::LoadResult,
@@ -88,7 +88,7 @@ impl Runtime {
     pub(super) fn eval_model_internal(
         &mut self,
         path: &ModelPath,
-    ) -> &LoadResult<output::Model, eval::EvalErrors> {
+    ) -> &LoadResult<output::Model, output::ModelEvalErrors> {
         // make sure the IR is loaded for the model and its dependencies
         // TODO: once caching works, evaluating the model should load the IR as it goes
         let _ir_results = self.load_ir_internal(path);
@@ -190,7 +190,7 @@ impl Runtime {
         &mut self,
         expr_ir: &output::ir::Expr,
         model_path: &ModelPath,
-    ) -> Result<Value, Vec<eval::EvalError>> {
+    ) -> Result<Value, Vec<EvalError>> {
         eval::eval_expr_in_model(expr_ir, model_path, self)
     }
 }
@@ -212,7 +212,7 @@ impl eval::ExternalEvaluationContext for Runtime {
         name: &BuiltinFunctionName,
         name_span: Span,
         args: Vec<(Value, Span)>,
-    ) -> Option<Result<Value, Vec<eval::EvalError>>> {
+    ) -> Option<Result<Value, Vec<EvalError>>> {
         let builtin = self.builtins.get_function(name)?;
         Some(builtin.call(name_span, args))
     }
@@ -224,7 +224,7 @@ impl eval::ExternalEvaluationContext for Runtime {
         identifier: &PyFunctionName,
         function_call_span: Span,
         args: Vec<(output::Value, Span)>,
-    ) -> Option<Result<output::Value, Box<eval::EvalError>>> {
+    ) -> Option<Result<output::Value, Box<EvalError>>> {
         self.evaluate_python_function(python_path, identifier, function_call_span, args)
     }
 
@@ -238,7 +238,12 @@ impl eval::ExternalEvaluationContext for Runtime {
 
     fn get_preloaded_models(
         &self,
-    ) -> impl Iterator<Item = (ModelPath, &LoadResult<output::Model, eval::EvalErrors>)> {
+    ) -> impl Iterator<
+        Item = (
+            ModelPath,
+            &LoadResult<output::Model, output::ModelEvalErrors>,
+        ),
+    > {
         self.eval_cache
             .iter()
             .map(|(path, result)| (path.clone(), result))

@@ -3,11 +3,10 @@ use indexmap::IndexMap;
 use oneil_ir as ir;
 use oneil_shared::{span::Span, symbols::ParameterName};
 
-use oneil_output::{MeasuredNumber, Number, Unit, Value};
+use oneil_output::{EvalError, MeasuredNumber, Number, Unit, Value};
 
 use crate::{
     context::{EvalContext, ExternalEvaluationContext},
-    error::EvalError,
     eval_expr, eval_unit,
 };
 

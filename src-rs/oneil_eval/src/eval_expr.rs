@@ -3,14 +3,13 @@ use std::iter;
 use oneil_ir as ir;
 use oneil_shared::{paths::ModelPath, span::Span};
 
-use oneil_output::{Number, Unit, UnitConversionError, Value};
+use oneil_output::{
+    EvalError, ExpectedType, Number, Unit, UnitConversionError, Value,
+    error::convert::{binary_eval_error_to_eval_error, unary_eval_error_to_eval_error},
+};
 
 use crate::{
     context::{EvalContext, ExternalEvaluationContext},
-    error::{
-        EvalError, ExpectedType,
-        convert::{binary_eval_error_to_eval_error, unary_eval_error_to_eval_error},
-    },
     eval_unit::eval_unit,
 };
 

@@ -1,7 +1,7 @@
 //! Error reporting for models and parameters.
 
 use indexmap::{IndexMap, IndexSet};
-use oneil_eval::{EvalError, EvalErrors};
+use oneil_output::{EvalError, ModelEvalErrors};
 use oneil_resolver::{
     ResolutionErrorCollection,
     error::{
@@ -330,7 +330,7 @@ struct EvalErrorsResult {
 ///
 /// See [`Runtime::get_model_errors`] for more details on the `include_indirect_errors` parameter.
 fn collect_eval_errors(
-    errors: &EvalErrors,
+    errors: &ModelEvalErrors,
     path: &ModelPath,
     source: &str,
     include_indirect_errors: bool,

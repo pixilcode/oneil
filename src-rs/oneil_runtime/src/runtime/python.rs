@@ -1,7 +1,7 @@
 //! Python import and evaluation for the runtime (when the `python` feature is enabled).
 
 use indexmap::IndexSet;
-use oneil_eval::EvalError;
+use oneil_output::EvalError;
 use oneil_python::{PythonEvalError, PythonFunction, function::PythonModule};
 
 use crate::error::PythonImportError;

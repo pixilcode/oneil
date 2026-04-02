@@ -687,22 +687,27 @@ fn binary_eval_error_to_py_err(err: BinaryEvalError) -> PyErr {
             format!("unit mismatch: {lhs_unit} vs {rhs_unit}")
         }
 
-        BinaryEvalError::TypeMismatch { lhs_type, rhs_type } => {
-            format!("type mismatch: {lhs_type:?} vs {rhs_type:?}")
+        BinaryEvalError::TypeMismatch {
+            expected_type_from_lhs,
+            rhs_type,
+        } => {
+            format!(
+                "type mismatch: expected {expected_type_from_lhs} from left operand, found {rhs_type} on right"
+            )
         }
 
         BinaryEvalError::InvalidLhsType {
             expected_type,
             lhs_type,
         } => {
-            format!("invalid left-hand side type: expected {expected_type:?}, got {lhs_type:?}")
+            format!("invalid left-hand side type: expected {expected_type}, got {lhs_type}")
         }
 
         BinaryEvalError::InvalidRhsType {
             expected_type,
             rhs_type,
         } => {
-            format!("invalid right-hand side type: expected {expected_type:?}, got {rhs_type:?}")
+            format!("invalid right-hand side type: expected {expected_type}, got {rhs_type}")
         }
 
         BinaryEvalError::ExponentHasUnits { exponent_unit } => {
