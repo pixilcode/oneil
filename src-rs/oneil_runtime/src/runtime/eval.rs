@@ -42,7 +42,7 @@ impl Runtime {
     ///
     /// # Errors
     ///
-    /// Returns [`RuntimeErrors`] if the model or design file could not be evaluated.
+    /// Returns [`RuntimeErrors`]  if the model or design file could not be evaluated.
     pub fn eval_model(
         &mut self,
         path: &ModelPath,
@@ -59,12 +59,12 @@ impl Runtime {
             .map(|model| output::reference::ModelReference::new(model, &self.eval_cache));
 
         let include_indirect_errors = true;
-        let mut errors = self.get_model_errors(path, include_indirect_errors);
+        let mut errors = self.get_model_diagnostics(path, include_indirect_errors);
 
         // Also include design file errors if present
         if let Some(design_path) = design_path {
             let design_errors =
-                self.get_model_errors(&design_path.to_model_path(), include_indirect_errors);
+                self.get_model_diagnostics(&design_path.to_model_path(), include_indirect_errors);
             errors.extend(design_errors);
         }
 
@@ -76,7 +76,7 @@ impl Runtime {
     ///
     /// # Errors
     ///
-    /// Returns [`RuntimeErrors`] (via [`get_model_errors`](super::Runtime::get_model_errors)) if the model could not be evaluated.
+    /// Returns [`RuntimeErrors`] (via [`get_model_diagnostics`](super::Runtime::get_model_diagnostics)) if the model could not be evaluated.
     /// Returns [`OneilDiagnostic`]s if the expressions could not be evaluated.
     pub fn eval_model_and_expressions<'runtime, 'expr>(
         &'runtime mut self,
@@ -100,12 +100,12 @@ impl Runtime {
         let result = model_opt.map(|model| (model, expr_results));
 
         let include_indirect_errors = true;
-        let mut model_errors = self.get_model_errors(path, include_indirect_errors);
+        let mut model_errors = self.get_model_diagnostics(path, include_indirect_errors);
 
         // Also include design file errors if present
         if let Some(design_path) = design_path {
             let design_errors =
-                self.get_model_errors(&design_path.to_model_path(), include_indirect_errors);
+                self.get_model_diagnostics(&design_path.to_model_path(), include_indirect_errors);
             model_errors.extend(design_errors);
         }
 
@@ -123,7 +123,7 @@ impl Runtime {
     /// [`Self::eval_model`] (loads IR, applies the optional runtime
     /// design at the root, splices through the per-unit graph cache,
     /// runs `validate_instance_graph`), stashes the composed graph on
-    /// `self` so [`Self::get_model_errors`] can pull per-instance
+    /// `self` so [`Self::get_model_diagnostics`] can pull per-instance
     /// diagnostics off it, and returns:
     ///
     /// - The unique model paths visited in the composed graph (so
@@ -158,7 +158,7 @@ impl Runtime {
             .unwrap_or_default();
 
         let include_indirect_errors = true;
-        let mut errors = self.get_model_errors(path, include_indirect_errors);
+        let mut errors = self.get_model_diagnostics(path, include_indirect_errors);
 
         // Mirror `eval_model`'s design-error merge: design files are
         // their own model-path keyed bucket in the IR / source
@@ -166,7 +166,7 @@ impl Runtime {
         // root model's recursive walk.
         if let Some(design_path) = design_path {
             let design_errors =
-                self.get_model_errors(&design_path.to_model_path(), include_indirect_errors);
+                self.get_model_diagnostics(&design_path.to_model_path(), include_indirect_errors);
             errors.extend(design_errors);
         }
 
@@ -251,7 +251,7 @@ impl Runtime {
             }
         }
 
-        // Hand the composed graph to the runtime so `get_model_errors`
+        // Hand the composed graph to the runtime so `get_model_diagnostics`
         // can pull diagnostics directly off the per-instance buckets.
         self.composed_graph = Some(graph);
     }

@@ -70,7 +70,7 @@ pub struct Runtime {
     design_info: IndexMap<ModelPath, ModelDesignInfo>,
     eval_cache: EvalCache,
     /// The most recently composed instance graph, kept reachable from
-    /// `&self` so [`Runtime::get_model_errors`] can pull per-instance
+    /// `&self` so [`Runtime::get_model_diagnostics`] can pull per-instance
     /// diagnostics straight off it (validation, contribution, overlay-target-missing)
     /// and the graph-level cycle bucket.
     ///
@@ -79,7 +79,7 @@ pub struct Runtime {
     /// [`Runtime::clear_non_source_caches`]) since stale graphs would
     /// surface diagnostics whose spans no longer match the current
     /// source. `None` before the first eval (or after a cache clear),
-    /// which `get_model_errors` treats as "no graph-time errors yet".
+    /// which `get_model_diagnostics` treats as "no graph-time errors yet".
     composed_graph: Option<InstanceGraph>,
     #[cfg(feature = "python")]
     python_import_cache: PythonImportCache,
