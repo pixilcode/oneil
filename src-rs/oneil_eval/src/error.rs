@@ -12,6 +12,8 @@ use oneil_shared::{
 
 use oneil_output::{DisplayUnit, Interval, NumberType, Value, ValueType};
 
+pub use oneil_output::ExpectedType;
+
 /// Errors that occurred during evaluation of a model.
 #[derive(Debug, Clone)]
 pub struct EvalErrors {
@@ -21,71 +23,6 @@ pub struct EvalErrors {
     pub tests: IndexMap<TestIndex, Vec<EvalError>>,
     /// References that had errors.
     pub references: IndexSet<ModelPath>,
-}
-
-/// Represents the expected type for type checking operations.
-///
-/// This enum is used to specify what type is expected in various type checking
-/// contexts, such as function arguments or expression evaluation.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExpectedType {
-    /// A boolean value.
-    Boolean,
-    /// A string value.
-    String,
-    /// A unitless number (scalar or interval without units).
-    Number {
-        /// The type of the expected number (if any)
-        number_type: Option<NumberType>,
-    },
-    /// A number with a unit (measured number).
-    MeasuredNumber {
-        /// The type of the expected number (if any)
-        number_type: Option<NumberType>,
-        /// The unit of the expected measured number (if any)
-        unit: Option<DisplayUnit>,
-    },
-    /// Either a unitless number or a number with a unit.
-    NumberOrMeasuredNumber {
-        /// The type of the expected number (if any)
-        number_type: Option<NumberType>,
-    },
-}
-
-impl fmt::Display for ExpectedType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let number_type_to_string = |type_: &Option<NumberType>| match type_ {
-            Some(NumberType::Scalar) => "scalar",
-            Some(NumberType::Interval) => "interval",
-            None => "number",
-        };
-
-        let unit_to_string = |unit: &Option<DisplayUnit>| {
-            unit.as_ref()
-                .map_or_else(|| "a unit".to_string(), |unit| format!("unit `{unit}`"))
-        };
-
-        match self {
-            Self::Boolean => write!(f, "boolean"),
-            Self::String => write!(f, "string"),
-            Self::Number { number_type: type_ } => {
-                let type_str = number_type_to_string(type_);
-                write!(f, "unitless {type_str}")
-            }
-            Self::MeasuredNumber {
-                number_type: type_,
-                unit,
-            } => {
-                let type_str = number_type_to_string(type_);
-                let unit_str = unit_to_string(unit);
-                write!(f, "{type_str} with {unit_str}")
-            }
-            Self::NumberOrMeasuredNumber { number_type: type_ } => {
-                let type_str = number_type_to_string(type_);
-                write!(f, "{type_str}")
-            }
-        }
-    }
 }
 
 /// Represents the expected number of arguments for a function call.
@@ -1621,10 +1558,7 @@ impl AsOneilError for EvalError {
 
 /// Conversion from value-level errors (`oneil_output`) to evaluator errors.
 pub mod convert {
-    use oneil_output::{
-        BinaryEvalError, ExpectedType as OutputExpectedType, UnaryEvalError, UnaryOperation,
-        ValueType,
-    };
+    use oneil_output::{BinaryEvalError, UnaryEvalError, ValueType};
     use oneil_shared::span::Span;
 
     use super::{EvalError, ExpectedType};
@@ -1653,7 +1587,7 @@ pub mod convert {
                 expected_type,
                 lhs_type,
             } => EvalError::InvalidType {
-                expected_type: expected_type_to_eval(expected_type),
+                expected_type,
                 found_type: *lhs_type,
                 found_span: lhs_span,
             },
@@ -1661,7 +1595,7 @@ pub mod convert {
                 expected_type,
                 rhs_type,
             } => EvalError::InvalidType {
-                expected_type: expected_type_to_eval(expected_type),
+                expected_type,
                 found_type: *rhs_type,
                 found_span: rhs_span,
             },
@@ -1690,7 +1624,7 @@ pub mod convert {
                 expected_type,
                 lhs_type,
             } => EvalError::InvalidType {
-                expected_type: expected_type_to_eval(expected_type),
+                expected_type,
                 found_type: *lhs_type,
                 found_span: lhs_span,
             },
@@ -1716,7 +1650,7 @@ pub mod convert {
                 expected_type,
                 rhs_type,
             } => EvalError::InvalidType {
-                expected_type: expected_type_to_eval(expected_type),
+                expected_type,
                 found_type: *rhs_type,
                 found_span: rhs_span,
             },
@@ -1742,32 +1676,16 @@ pub mod convert {
     #[must_use]
     pub fn unary_eval_error_to_eval_error(error: UnaryEvalError, value_span: Span) -> EvalError {
         match error {
-            UnaryEvalError::InvalidType { op, value_type } => {
-                let expected_type = match op {
-                    UnaryOperation::Neg => ExpectedType::Number { number_type: None },
-                    UnaryOperation::Not => ExpectedType::Boolean,
-                };
-                EvalError::InvalidType {
-                    expected_type,
-                    found_type: *value_type,
-                    found_span: value_span,
-                }
-            }
-        }
-    }
-
-    const fn expected_type_to_eval(e: OutputExpectedType) -> ExpectedType {
-        match e {
-            OutputExpectedType::Boolean => ExpectedType::Boolean,
-            OutputExpectedType::String => ExpectedType::String,
-            OutputExpectedType::Number => ExpectedType::Number { number_type: None },
-            OutputExpectedType::MeasuredNumber => ExpectedType::MeasuredNumber {
-                number_type: None,
-                unit: None,
+            UnaryEvalError::InvalidNegType { value_type } => EvalError::InvalidType {
+                expected_type: ExpectedType::Number { number_type: None },
+                found_type: *value_type,
+                found_span: value_span,
             },
-            OutputExpectedType::NumberOrMeasuredNumber => {
-                ExpectedType::NumberOrMeasuredNumber { number_type: None }
-            }
+            UnaryEvalError::InvalidNotType { value_type } => EvalError::InvalidType {
+                expected_type: ExpectedType::Boolean,
+                found_type: *value_type,
+                found_span: value_span,
+            },
         }
     }
 
