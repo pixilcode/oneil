@@ -1,6 +1,9 @@
 use std::io::Error as IoError;
 
-use oneil_shared::{error::AsOneilError, paths::SourcePath};
+use oneil_shared::{
+    error::{AsOneilDiagnostic, DiagnosticKind},
+    paths::SourcePath,
+};
 
 /// Error type for source loading failures.
 #[derive(Debug)]
@@ -17,7 +20,11 @@ impl SourceError {
     }
 }
 
-impl AsOneilError for SourceError {
+impl AsOneilDiagnostic for SourceError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         format!(
             "couldn't read `{}` - {}",

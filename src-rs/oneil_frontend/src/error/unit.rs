@@ -2,7 +2,7 @@ use std::{error::Error, fmt};
 
 use oneil_ast as ast;
 use oneil_shared::{
-    error::{AsOneilError, ErrorLocation},
+    error::{AsOneilDiagnostic, DiagnosticKind, ErrorLocation},
     span::Span,
 };
 
@@ -46,12 +46,16 @@ impl fmt::Display for UnitResolutionError {
 
 impl Error for UnitResolutionError {}
 
-impl AsOneilError for UnitResolutionError {
+impl AsOneilDiagnostic for UnitResolutionError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         let location = ErrorLocation::from_source_and_span(source, self.unit_name_span);
         Some(location)
     }

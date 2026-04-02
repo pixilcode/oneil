@@ -13,7 +13,7 @@
 use std::fmt;
 
 use oneil_shared::{
-    error::{AsOneilError, Context, ErrorLocation},
+    error::{AsOneilDiagnostic, Context, DiagnosticKind, ErrorLocation},
     paths::ModelPath,
     span::Span,
 };
@@ -108,12 +108,16 @@ impl fmt::Display for CompilationCycleError {
     }
 }
 
-impl AsOneilError for CompilationCycleError {
+impl AsOneilDiagnostic for CompilationCycleError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         Some(ErrorLocation::from_source_and_span(source, self.span))
     }
 

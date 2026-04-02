@@ -99,7 +99,7 @@ mod util {
     fn format_errors(errors: Vec<&OneilDiagnostic>, path_prefix: Option<&Path>) -> String {
         errors
             .into_iter()
-            .filter(|e| !e.is_internal_error())
+            .filter(|e| !e.is_internal_diagnostic())
             .map(|e| format_error(e, path_prefix))
             .collect::<Vec<_>>()
             .join("\n\n")

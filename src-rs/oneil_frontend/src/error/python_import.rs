@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use oneil_shared::{
-    error::{AsOneilError, Context, ErrorLocation},
+    error::{AsOneilDiagnostic, Context, DiagnosticKind, ErrorLocation},
     paths::PythonPath,
     span::Span,
 };
@@ -80,12 +80,16 @@ impl Display for PythonImportResolutionError {
     }
 }
 
-impl AsOneilError for PythonImportResolutionError {
+impl AsOneilDiagnostic for PythonImportResolutionError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         match self {
             Self::PythonNotEnabled { span, .. } => {
                 let location = ErrorLocation::from_source_and_span(source, *span);

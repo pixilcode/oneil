@@ -1,7 +1,7 @@
 use std::fmt;
 
 use oneil_shared::{
-    error::{AsOneilError, Context, ErrorLocation},
+    error::{AsOneilDiagnostic, Context, DiagnosticKind, ErrorLocation},
     paths::ModelPath,
     span::Span,
     symbols::{ReferenceName, SubmodelName},
@@ -215,12 +215,16 @@ impl fmt::Display for ModelImportResolutionError {
     }
 }
 
-impl AsOneilError for ModelImportResolutionError {
+impl AsOneilDiagnostic for ModelImportResolutionError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         match self {
             Self::ModelHasError {
                 model_path: _,
@@ -305,7 +309,7 @@ impl AsOneilError for ModelImportResolutionError {
         }
     }
 
-    fn is_internal_error(&self) -> bool {
+    fn is_internal_diagnostic(&self) -> bool {
         matches!(
             self,
             Self::ModelHasError { .. } | Self::ParentModelHasError { .. }

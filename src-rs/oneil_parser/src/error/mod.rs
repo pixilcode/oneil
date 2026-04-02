@@ -4,7 +4,7 @@ use std::fmt;
 
 use oneil_ast::{BinaryOpNode, ComparisonOpNode, UnaryOpNode, UnitOpNode};
 use oneil_shared::{
-    error::{AsOneilError, Context, ErrorLocation},
+    error::{AsOneilDiagnostic, Context, DiagnosticKind, ErrorLocation},
     span::Span,
 };
 
@@ -522,12 +522,16 @@ impl From<TokenError> for ParserError {
     }
 }
 
-impl AsOneilError for ParserError {
+impl AsOneilDiagnostic for ParserError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         let location = ErrorLocation::from_source_and_offset(source, self.error_offset);
         Some(location)
     }

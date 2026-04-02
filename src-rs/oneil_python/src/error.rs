@@ -1,6 +1,6 @@
 //! Error types for Python integration.
 
-use oneil_shared::error::{AsOneilError, Context};
+use oneil_shared::error::{AsOneilDiagnostic, Context, DiagnosticKind};
 use pyo3::Python;
 use pyo3::types::PyTracebackMethods;
 
@@ -13,7 +13,11 @@ pub enum LoadPythonImportError {
     CouldNotLoadPythonModule(pyo3::PyErr),
 }
 
-impl AsOneilError for LoadPythonImportError {
+impl AsOneilDiagnostic for LoadPythonImportError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         match self {
             Self::SourceHasNullByte => "Python source contains a null byte".to_string(),

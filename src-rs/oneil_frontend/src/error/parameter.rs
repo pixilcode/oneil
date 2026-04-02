@@ -1,7 +1,7 @@
 use std::fmt;
 
 use oneil_shared::{
-    error::{AsOneilError, Context, ErrorLocation},
+    error::{AsOneilDiagnostic, Context, DiagnosticKind, ErrorLocation},
     span::Span,
     symbols::ParameterName,
 };
@@ -85,15 +85,19 @@ impl From<UnitResolutionError> for ParameterResolutionError {
     }
 }
 
-impl AsOneilError for ParameterResolutionError {
+impl AsOneilDiagnostic for ParameterResolutionError {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Error
+    }
+
     fn message(&self) -> String {
         self.to_string()
     }
 
-    fn error_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
         match self {
-            Self::VariableResolution(error) => error.error_location(source),
-            Self::UnitResolution(error) => error.error_location(source),
+            Self::VariableResolution(error) => error.diagnostic_location(source),
+            Self::UnitResolution(error) => error.diagnostic_location(source),
             Self::DuplicateParameter { duplicate_span, .. } => {
                 let location = ErrorLocation::from_source_and_span(source, *duplicate_span);
                 Some(location)
@@ -113,10 +117,10 @@ impl AsOneilError for ParameterResolutionError {
         }
     }
 
-    fn is_internal_error(&self) -> bool {
+    fn is_internal_diagnostic(&self) -> bool {
         match self {
-            Self::VariableResolution(error) => error.is_internal_error(),
-            Self::UnitResolution(error) => error.is_internal_error(),
+            Self::VariableResolution(error) => error.is_internal_diagnostic(),
+            Self::UnitResolution(error) => error.is_internal_diagnostic(),
             Self::DuplicateParameter { .. } => false,
         }
     }
