@@ -17,7 +17,7 @@ impl Runtime {
     ///
     /// # Errors
     ///
-    /// Returns [`RuntimeErrors`] (via [`get_model_errors`](super::Runtime::get_model_errors)) if that
+    /// Returns [`RuntimeErrors`] (via [`get_model_diagnostics`](super::Runtime::get_model_diagnostics)) if that
     /// model had parse or resolution errors.
     pub fn load_ir(
         &mut self,
@@ -36,7 +36,7 @@ impl Runtime {
 
         let include_indirect_errors = true;
 
-        let errors = self.get_model_errors(path, include_indirect_errors);
+        let errors = self.get_model_diagnostics(path, include_indirect_errors);
 
         (ir_opt, errors)
     }

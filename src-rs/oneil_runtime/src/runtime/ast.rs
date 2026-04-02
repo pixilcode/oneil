@@ -19,7 +19,7 @@ impl Runtime {
         let include_indirect_errors = true;
 
         let ast_opt = self.ast_cache.get_entry(path).and_then(LoadResult::value);
-        let errors = self.get_model_errors(path, include_indirect_errors);
+        let errors = self.get_model_diagnostics(path, include_indirect_errors);
 
         (ast_opt, errors)
     }

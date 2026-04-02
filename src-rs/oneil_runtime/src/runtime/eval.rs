@@ -32,7 +32,7 @@ impl Runtime {
     ///
     /// # Errors
     ///
-    /// Returns [`RuntimeErrors`] (via [`get_model_errors`](super::Runtime::get_model_errors)) if the model could not be evaluated.
+    /// Returns [`RuntimeErrors`] (via [`get_model_diagnostics`](super::Runtime::get_model_diagnostics)) if the model could not be evaluated.
     pub fn eval_model(
         &mut self,
         path: &ModelPath,
@@ -47,7 +47,7 @@ impl Runtime {
 
         let include_indirect_errors = true;
 
-        let errors = self.get_model_errors(path, include_indirect_errors);
+        let errors = self.get_model_diagnostics(path, include_indirect_errors);
 
         (model_opt, errors)
     }
@@ -57,7 +57,7 @@ impl Runtime {
     ///
     /// # Errors
     ///
-    /// Returns [`RuntimeErrors`] (via [`get_model_errors`](super::Runtime::get_model_errors)) if the model could not be evaluated.
+    /// Returns [`RuntimeErrors`] (via [`get_model_diagnostics`](super::Runtime::get_model_diagnostics)) if the model could not be evaluated.
     /// Returns [`OneilDiagnostic`]s if the expressions could not be evaluated.
     pub fn eval_model_and_expressions<'runtime, 'expr>(
         &'runtime mut self,
@@ -80,7 +80,7 @@ impl Runtime {
 
         let include_indirect_errors = true;
 
-        let model_errors = self.get_model_errors(path, include_indirect_errors);
+        let model_errors = self.get_model_diagnostics(path, include_indirect_errors);
 
         (result, model_errors, expr_errors)
     }

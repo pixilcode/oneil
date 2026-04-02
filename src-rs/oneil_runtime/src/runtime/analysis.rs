@@ -40,7 +40,7 @@ impl Runtime {
         let errors = tree_errors
             .model_paths()
             .fold(RuntimeErrors::new(), |mut acc, path| {
-                acc.extend(self.get_model_errors(path, include_indirect_errors));
+                acc.extend(self.get_model_diagnostics(path, include_indirect_errors));
                 acc
             });
 
@@ -78,7 +78,7 @@ impl Runtime {
         let errors = tree_errors
             .model_paths()
             .fold(RuntimeErrors::new(), |mut acc, path| {
-                acc.extend(self.get_model_errors(path, include_indirect_errors));
+                acc.extend(self.get_model_diagnostics(path, include_indirect_errors));
                 acc
             });
 
@@ -110,7 +110,7 @@ impl Runtime {
         let errors = independents_errors
             .paths()
             .fold(RuntimeErrors::new(), |mut acc, path| {
-                acc.extend(self.get_model_errors(path, include_indirect_errors));
+                acc.extend(self.get_model_diagnostics(path, include_indirect_errors));
                 acc
             });
 
