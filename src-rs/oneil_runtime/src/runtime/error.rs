@@ -1,6 +1,7 @@
 //! Error reporting for models and parameters.
 
 use indexmap::{IndexMap, IndexSet};
+use oneil_ir::ReferenceImport;
 use oneil_output::{EvalError, Model, ModelEvalErrors};
 use oneil_resolver::{
     ResolutionErrorCollection,
@@ -85,17 +86,18 @@ impl Runtime {
         };
 
         // get the IR errors, if any
-        let ir_errors = self
-            .ir_cache
-            .get_entry(model_path)
+        let ir_entry = self.ir_cache.get_entry(model_path);
+        let ir_errors = ir_entry
             .and_then(|entry| entry.error())
             .map(|errors| collect_ir_errors(errors, model_path, source, include_indirect_errors));
 
+        // get the evaluation errors, if any
         let eval_entry = self.eval_cache.get_entry(model_path);
         let eval_errors = eval_entry
             .and_then(|entry| entry.error())
             .map(|errors| collect_eval_errors(errors, model_path, source, include_indirect_errors));
 
+        // get the evaluation warnings, if any
         let eval_model = eval_entry.and_then(|entry| entry.value());
         let eval_warning_diagnostics =
             eval_model.map(|model| extract_eval_warning_diagnostics(model, model_path, source));
@@ -114,11 +116,28 @@ impl Runtime {
         #[cfg(not(feature = "python"))]
         let _ = python_imports_with_errors;
 
+        // add the errors for models that are referenced
+        //
+        // this includes both models that have errors and models
+        // that were successfully resolved, since models that
+        // were successfully resolved may have evaluation warnings
+
         let mut errors = RuntimeErrors::new();
 
-        // add the errors for models that are referenced
-        for model_path in models_with_errors {
-            let model_errors = self.get_model_diagnostics(&model_path, include_indirect_errors);
+        let model_successful_references = ir_entry
+            .and_then(|entry| entry.value())
+            .map(|model| model.get_references().values())
+            .into_iter()
+            .flatten()
+            .map(ReferenceImport::path);
+
+        let model_references = models_with_errors
+            .iter()
+            .chain(model_successful_references)
+            .collect::<IndexSet<_>>();
+
+        for model_path in model_references {
+            let model_errors = self.get_model_diagnostics(model_path, include_indirect_errors);
             errors.extend(model_errors);
         }
 
