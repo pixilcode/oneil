@@ -1,7 +1,6 @@
 //! Error reporting for models and parameters.
 
 use indexmap::{IndexMap, IndexSet};
-use oneil_eval::{EvalError, EvalErrors};
 use oneil_frontend::{
     CompilationUnit, ContributionDiagnostic, DesignResolutionError, HostLocation, InstanceGraph,
     InstanceValidationError, InstanceValidationErrorKind, InstancedModel,
@@ -12,6 +11,7 @@ use oneil_frontend::{
     },
 };
 use oneil_ir as ir;
+use oneil_output::{EvalError, ModelEvalErrors};
 use oneil_shared::{
     InstancePath,
     error::{AsOneilError, Context, DiagnosticKind, ErrorLocation, OneilDiagnostic},
@@ -781,7 +781,7 @@ struct EvalErrorsResult {
 ///
 /// See [`Runtime::get_model_errors`] for more details on the `include_indirect_errors` parameter.
 fn collect_eval_errors(
-    errors: &EvalErrors,
+    errors: &ModelEvalErrors,
     path: &ModelPath,
     source: &str,
     include_indirect_errors: bool,

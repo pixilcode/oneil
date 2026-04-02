@@ -7,13 +7,12 @@ use oneil_shared::{
 };
 
 use oneil_output::{
-    self as output, BuiltinDependency, DependencySet, ExternalDependency, MeasuredNumber, Number,
-    ParameterDependency, Unit, Value,
+    self as output, BuiltinDependency, DependencySet, EvalError, ExternalDependency,
+    MeasuredNumber, Number, ParameterDependency, Unit, Value,
 };
 
 use crate::{
     context::{EvalContext, ExternalEvaluationContext},
-    error::EvalError,
     eval_expr, eval_unit,
 };
 

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{DisplayUnit, NumberType};
+use crate::{DisplayUnit, NumberType, ValueType};
 
 /// Represents the expected type for type checking operations in value-level errors.
 #[derive(Debug, Clone, PartialEq)]
@@ -26,6 +26,35 @@ pub enum ExpectedType {
         /// The type of the expected number, if specified.
         number_type: Option<NumberType>,
     },
+}
+
+impl ExpectedType {
+    /// Returns an expected type with the same kind as `value_type` (boolean, string, unitless
+    /// number, or measured number including display unit), while treating scalar vs interval as
+    /// unspecified (`number_type: None` on number variants).
+    ///
+    /// ```
+    /// # use oneil_output::{ExpectedType, NumberType, ValueType};
+    /// let vt = ValueType::Number {
+    ///     number_type: NumberType::Interval,
+    /// };
+    /// assert_eq!(
+    ///     ExpectedType::matching_value_type_ignoring_number_kind(&vt),
+    ///     ExpectedType::Number { number_type: None }
+    /// );
+    /// ```
+    #[must_use]
+    pub fn matching_value_type_ignoring_number_kind(value_type: &ValueType) -> Self {
+        match value_type {
+            ValueType::Boolean => Self::Boolean,
+            ValueType::String => Self::String,
+            ValueType::Number { .. } => Self::Number { number_type: None },
+            ValueType::MeasuredNumber { unit, .. } => Self::MeasuredNumber {
+                number_type: None,
+                unit: Some(unit.display_unit.clone()),
+            },
+        }
+    }
 }
 
 impl fmt::Display for ExpectedType {

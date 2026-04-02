@@ -9,7 +9,7 @@ use oneil_frontend::{
     ApplyDesign, CompilationUnit, InstanceGraph, InstancedModel, ResolutionErrorCollection,
     apply_designs,
 };
-use oneil_output::{Unit, Value};
+use oneil_output::{EvalError, Unit, Value};
 use oneil_shared::{
     EvalInstanceKey,
     error::OneilDiagnostic,
@@ -330,7 +330,7 @@ impl Runtime {
         &mut self,
         expr_ir: &output::ir::Expr,
         model_path: &ModelPath,
-    ) -> Result<Value, Vec<eval::EvalError>> {
+    ) -> Result<Value, Vec<EvalError>> {
         eval::eval_expr_in_model(expr_ir, model_path, self)
     }
 }
@@ -406,7 +406,7 @@ impl eval::ExternalEvaluationContext for Runtime {
         name: &BuiltinFunctionName,
         name_span: Span,
         args: Vec<(Value, Span)>,
-    ) -> Option<Result<Value, Vec<eval::EvalError>>> {
+    ) -> Option<Result<Value, Vec<EvalError>>> {
         let builtin = self.builtins.get_function(name)?;
         Some(builtin.call(name_span, args))
     }
@@ -418,7 +418,7 @@ impl eval::ExternalEvaluationContext for Runtime {
         identifier: &PyFunctionName,
         function_call_span: Span,
         args: Vec<(output::Value, Span)>,
-    ) -> Option<Result<output::Value, Box<eval::EvalError>>> {
+    ) -> Option<Result<output::Value, Box<EvalError>>> {
         self.evaluate_python_function(python_path, identifier, function_call_span, args)
     }
 
@@ -435,7 +435,7 @@ impl eval::ExternalEvaluationContext for Runtime {
     ) -> impl Iterator<
         Item = (
             EvalInstanceKey,
-            &LoadResult<output::Model, eval::EvalErrors>,
+            &LoadResult<output::Model, output::ModelEvalErrors>,
         ),
     > {
         self.eval_cache

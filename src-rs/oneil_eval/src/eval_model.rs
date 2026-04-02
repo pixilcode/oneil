@@ -3,12 +3,10 @@ use oneil_frontend::{InstanceGraph, InstancedModel};
 use oneil_ir as ir;
 use oneil_shared::{EvalInstanceKey, partial::MaybePartialResult};
 
-use oneil_output::{self as output, Model, Value};
+use oneil_output::{self as output, EvalError, ExpectedType, Model, ModelEvalErrors, Value};
 
 use crate::{
-    EvalError,
     context::{EvalContext, ExternalEvaluationContext},
-    error::{EvalErrors, ExpectedType},
     eval_expr, eval_parameter,
 };
 
@@ -18,7 +16,7 @@ use crate::{
 pub fn eval_model_from_graph<E: ExternalEvaluationContext>(
     graph: &InstanceGraph,
     external_context: &mut E,
-) -> IndexMap<EvalInstanceKey, MaybePartialResult<Model, EvalErrors>> {
+) -> IndexMap<EvalInstanceKey, MaybePartialResult<Model, ModelEvalErrors>> {
     let mut context = EvalContext::from_graph(graph, external_context);
 
     force_all_models(graph, &mut context);

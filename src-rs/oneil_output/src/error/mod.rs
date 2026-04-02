@@ -1,14 +1,19 @@
-//! Errors that can occur when evaluating binary or unary operations on values.
-//!
-//! These error types are used during expression evaluation. Conversion to
-//! evaluator-level errors (`EvalError`) is done by the `oneil_eval` crate.
+//! Errors for Oneil: value-level checked operations, evaluation-time diagnostics, and conversions
+//! between them.
 
 mod binary;
+pub mod convert;
+mod eval_error;
+mod expected_argument_count;
 mod expected_type;
+mod model_eval_errors;
 mod unary;
 mod unit_conversion;
 
 pub use binary::BinaryEvalError;
+pub use eval_error::EvalError;
+pub use expected_argument_count::ExpectedArgumentCount;
 pub use expected_type::ExpectedType;
+pub use model_eval_errors::ModelEvalErrors;
 pub use unary::UnaryEvalError;
 pub use unit_conversion::UnitConversionError;

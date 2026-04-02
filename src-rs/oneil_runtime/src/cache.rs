@@ -3,7 +3,6 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use indexmap::IndexMap;
-use oneil_eval as eval;
 use oneil_parser::error::ParserError;
 #[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
@@ -138,7 +137,7 @@ pub type AstCache = ModelCache<output::ast::ModelNode, Vec<ParserError>>;
 /// Cache for evaluated output models keyed by file path and import instance.
 #[derive(Debug, Default)]
 pub struct EvalCache {
-    entries: IndexMap<EvalInstanceKey, LoadResult<output::Model, eval::EvalErrors>>,
+    entries: IndexMap<EvalInstanceKey, LoadResult<output::Model, output::ModelEvalErrors>>,
 }
 
 impl EvalCache {
@@ -153,7 +152,7 @@ impl EvalCache {
     pub fn get_entry(
         &self,
         path: &ModelPath,
-    ) -> Option<&LoadResult<output::Model, eval::EvalErrors>> {
+    ) -> Option<&LoadResult<output::Model, output::ModelEvalErrors>> {
         self.entries.get(&EvalInstanceKey::root(path.clone()))
     }
 
@@ -162,7 +161,7 @@ impl EvalCache {
     pub fn get_entry_instance(
         &self,
         key: &EvalInstanceKey,
-    ) -> Option<&LoadResult<output::Model, eval::EvalErrors>> {
+    ) -> Option<&LoadResult<output::Model, output::ModelEvalErrors>> {
         self.entries.get(key)
     }
 
@@ -170,7 +169,7 @@ impl EvalCache {
     pub fn insert(
         &mut self,
         key: EvalInstanceKey,
-        result: LoadResult<output::Model, eval::EvalErrors>,
+        result: LoadResult<output::Model, output::ModelEvalErrors>,
     ) {
         self.entries.insert(key, result);
     }
@@ -188,7 +187,8 @@ impl EvalCache {
     /// Iterates all instance keys and their load results.
     pub fn iter(
         &self,
-    ) -> indexmap::map::Iter<'_, EvalInstanceKey, LoadResult<output::Model, eval::EvalErrors>> {
+    ) -> indexmap::map::Iter<'_, EvalInstanceKey, LoadResult<output::Model, output::ModelEvalErrors>>
+    {
         self.entries.iter()
     }
 }
