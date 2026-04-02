@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::{
     MeasuredNumber, Number, Unit, ValueType,
-    error::{BinaryEvalError, ExpectedType, UnaryEvalError, UnaryOperation, UnitConversionError},
+    error::{BinaryEvalError, ExpectedType, UnaryEvalError, UnitConversionError},
 };
 
 // TODO: document the layers of a value
@@ -86,7 +86,7 @@ impl Value {
                 rhs_type: Box::new(rhs.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -116,7 +116,7 @@ impl Value {
                 rhs_type: Box::new(rhs.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -146,7 +146,7 @@ impl Value {
                 rhs_type: Box::new(rhs.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -176,7 +176,7 @@ impl Value {
                 rhs_type: Box::new(rhs.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -217,7 +217,7 @@ impl Value {
                 rhs_type: Box::new(rhs_number.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -258,7 +258,7 @@ impl Value {
                 rhs_type: Box::new(rhs_number.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -301,7 +301,7 @@ impl Value {
                 rhs_type: Box::new(rhs_number.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -338,7 +338,7 @@ impl Value {
                 rhs_type: Box::new(rhs_number.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -375,7 +375,7 @@ impl Value {
                 rhs_type: Box::new(rhs_number.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -414,7 +414,7 @@ impl Value {
                 rhs_type: Box::new(rhs_number.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -455,7 +455,7 @@ impl Value {
                 rhs_type: Box::new(rhs_number.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -489,12 +489,12 @@ impl Value {
             }
             (Self::Number(_) | Self::MeasuredNumber(_), exponent) => {
                 Err(BinaryEvalError::InvalidRhsType {
-                    expected_type: ExpectedType::Number,
+                    expected_type: ExpectedType::Number { number_type: None },
                     rhs_type: Box::new(exponent.type_()),
                 })
             }
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -579,7 +579,7 @@ impl Value {
                 rhs_type: Box::new(rhs.type_()),
             }),
             (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber,
+                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
                 lhs_type: Box::new(lhs.type_()),
             }),
         }
@@ -594,8 +594,7 @@ impl Value {
         match self {
             Self::Number(number) => Ok(Self::Number(-number)),
             Self::MeasuredNumber(number) => Ok(Self::MeasuredNumber(number.checked_neg())),
-            Self::Boolean(_) | Self::String(_) => Err(UnaryEvalError::InvalidType {
-                op: UnaryOperation::Neg,
+            Self::Boolean(_) | Self::String(_) => Err(UnaryEvalError::InvalidNegType {
                 value_type: Box::new(self.type_()),
             }),
         }
@@ -610,8 +609,7 @@ impl Value {
         match self {
             Self::Boolean(boolean) => Ok(Self::Boolean(!boolean)),
             Self::String(_) | Self::Number(_) | Self::MeasuredNumber(_) => {
-                Err(UnaryEvalError::InvalidType {
-                    op: UnaryOperation::Not,
+                Err(UnaryEvalError::InvalidNotType {
                     value_type: Box::new(self.type_()),
                 })
             }

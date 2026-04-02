@@ -14,9 +14,7 @@ pub mod util;
 mod value;
 
 pub use dependency::{BuiltinDependency, DependencySet, ExternalDependency, ParameterDependency};
-pub use error::{
-    BinaryEvalError, ExpectedType, UnaryEvalError, UnaryOperation, UnitConversionError,
-};
+pub use error::{BinaryEvalError, ExpectedType, UnaryEvalError, UnitConversionError};
 pub use interval::Interval;
 pub use model::{DebugInfo, Model, Parameter, PrintLevel, Test, TestResult};
 pub use number_kinds::{MeasuredNumber, Number};
