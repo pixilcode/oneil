@@ -20,7 +20,7 @@
 use std::path::Path;
 
 use anstream::eprintln;
-use oneil_shared::error::{Context, ErrorLocation, OneilDiagnostic};
+use oneil_shared::error::{Context, DiagnosticKind, ErrorLocation, OneilDiagnostic};
 use owo_colors::{OwoColorize, Style};
 
 use crate::stylesheet;
@@ -35,12 +35,16 @@ pub fn print(error: &OneilDiagnostic, show_internal_errors: bool) {
 
 /// Converts an error to a formatted string representation
 fn error_to_string(error: &OneilDiagnostic) -> String {
-    let message_line = get_error_message_line(error.message());
+    let highlight_color = match error.kind() {
+        DiagnosticKind::Error => stylesheet::ERROR_COLOR,
+        DiagnosticKind::Warning => stylesheet::WARNING_COLOR,
+    };
+    let message_line = primary_diagnostic_message_line(error);
     let location_line = get_location_line(error.path(), error.location());
     let empty_line = String::new();
     let maybe_source_line = error.location().map_or_else(
         || get_context_lines(error.context(), 0),
-        |location| get_source_and_context_lines(location, error.context(), stylesheet::ERROR_COLOR),
+        |location| get_source_and_context_lines(location, error.context(), highlight_color),
     );
     let context_with_source_lines =
         get_context_with_source_lines(error.path(), error.context_with_source());
@@ -53,9 +57,16 @@ fn error_to_string(error: &OneilDiagnostic) -> String {
     lines.join("\n")
 }
 
-/// Formats the main error message line
-fn get_error_message_line(message: &str) -> String {
-    get_message_line("error", stylesheet::ERROR_COLOR, message)
+/// Formats the main diagnostic line (`error:` or `warning:`) from [`OneilDiagnostic::kind`].
+fn primary_diagnostic_message_line(error: &OneilDiagnostic) -> String {
+    match error.kind() {
+        DiagnosticKind::Error => {
+            get_message_line("error", stylesheet::ERROR_COLOR, error.message())
+        }
+        DiagnosticKind::Warning => {
+            get_message_line("warning", stylesheet::WARNING_COLOR, error.message())
+        }
+    }
 }
 
 /// Formats a note message line

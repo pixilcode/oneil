@@ -4,7 +4,7 @@ use oneil_ir as ir;
 use oneil_shared::{paths::ModelPath, span::Span};
 
 use oneil_output::{
-    EvalError, ExpectedType, Number, Unit, UnitConversionError, Value,
+    EvalError, EvalWarning, ExpectedType, Number, Unit, UnitConversionError, Value,
     error::convert::{binary_eval_error_to_eval_error, unary_eval_error_to_eval_error},
 };
 
@@ -29,7 +29,7 @@ pub fn eval_expr_in_model<E: ExternalEvaluationContext>(
     let mut eval_context = EvalContext::with_preloaded_models(context);
     eval_context.push_active_model(model_path.clone());
 
-    eval_expr(expr, &eval_context).map(|(value, _span)| value)
+    eval_expr(expr, &mut eval_context).map(|(value, _span)| value)
 }
 
 /// Evaluates an expression and returns the resulting value.
@@ -39,7 +39,7 @@ pub fn eval_expr_in_model<E: ExternalEvaluationContext>(
 /// Returns an error if the expression is invalid.
 pub fn eval_expr<'a, E: ExternalEvaluationContext>(
     expr: &'a ir::Expr,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<(Value, &'a Span), Vec<EvalError>> {
     match expr {
         ir::Expr::ComparisonOp {
@@ -127,7 +127,7 @@ fn eval_comparison_subexpressions<E: ExternalEvaluationContext>(
     op: ir::ComparisonOp,
     right: &ir::Expr,
     rest_chained: &[(ir::ComparisonOp, ir::Expr)],
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<ComparisonSubexpressionsResult, Vec<EvalError>> {
     let left_result = eval_expr(left, context);
     let rest_results = iter::once((op, right))
@@ -286,7 +286,7 @@ struct BinaryOpSubexpressionsResult {
 fn eval_binary_op_subexpressions<E: ExternalEvaluationContext>(
     left: &ir::Expr,
     right: &ir::Expr,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<BinaryOpSubexpressionsResult, Vec<EvalError>> {
     let left_result = eval_expr(left, context);
     let right_result = eval_expr(right, context);
@@ -354,33 +354,53 @@ fn eval_unary_op(
 fn eval_fallback<E: ExternalEvaluationContext>(
     left: &ir::Expr,
     right: &ir::Expr,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Value, Vec<EvalError>> {
     let left_result = eval_expr(left, context);
 
     match left_result {
-        Err(e)
-            if e.iter()
-                .all(|e| matches!(e, EvalError::PythonEvalError { .. })) =>
-        {
-            let warnings = e.into_iter().filter_map(|e| match e {
-                EvalError::PythonEvalError {
-                    function_name,
-                    function_call_span,
-                    message,
-                    traceback,
-                } => Some(todo!("figure out how to print warnings")),
-                _ => unreachable!("this is checked in the guard"),
-            });
-            let right_result = eval_expr(right, context);
-            right_result.map(|(value, _span)| value)
+        Err(left_errors) => {
+            // partition the errors into Python evaluation errors and other errors
+            let (python_eval_errors, rest_errors): (Vec<_>, Vec<_>) = left_errors
+                .into_iter()
+                .partition(|err| matches!(err, EvalError::PythonEvalError { .. }));
+
+            if rest_errors.is_empty() {
+                // if there are no other errors,
+                // push the Python evaluation errors as warnings
+                for err in python_eval_errors {
+                    let EvalError::PythonEvalError {
+                        function_name,
+                        function_call_span,
+                        message,
+                        traceback,
+                    } = err
+                    else {
+                        unreachable!("this is checked in the guard");
+                    };
+
+                    context.push_eval_warning(EvalWarning::UsedFallback {
+                        function_name,
+                        function_call_span,
+                        message: message.clone(),
+                        traceback: traceback.clone(),
+                    });
+                }
+
+                // evaluate the right operand
+                let right_result = eval_expr(right, context);
+                right_result.map(|(value, _span)| value)
+            } else {
+                // if there are other errors, return them
+                Err(rest_errors)
+            }
         }
-        result => result.map(|(value, _span)| value),
+        Ok((value, _span)) => Ok(value),
     }
 }
 fn eval_function_call_args<E: ExternalEvaluationContext>(
     args: &[ir::Expr],
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Vec<(Value, Span)>, Vec<EvalError>> {
     let args_results = args.iter().map(|arg| eval_expr(arg, context));
 

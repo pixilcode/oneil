@@ -10,8 +10,8 @@ use oneil_shared::{
 use oneil_shared::{span::Span, symbols::ParameterName};
 
 use oneil_output::{
-    self as output, BuiltinDependency, DependencySet, EvalError, ExpectedType, ExternalDependency,
-    Model, ModelEvalErrors, ParameterDependency, Value,
+    self as output, BuiltinDependency, DependencySet, EvalError, EvalWarning, ExpectedType,
+    ExternalDependency, Model, ModelEvalErrors, ParameterDependency, Value,
 };
 
 use crate::{
@@ -81,8 +81,15 @@ fn eval_model_from_context<E: ExternalEvaluationContext>(
 
         let value = eval_parameter::eval_parameter(parameter, context);
 
-        let parameter_result = value
-            .map(|value| parameter_result_from(value.value, value.expr_span, parameter, context));
+        let parameter_result = value.map(|value| {
+            parameter_result_from(
+                value.value,
+                value.expr_span,
+                value.warnings,
+                parameter,
+                context,
+            )
+        });
 
         context.add_parameter_result(parameter_name, parameter_result);
     }
@@ -100,6 +107,7 @@ fn eval_model_from_context<E: ExternalEvaluationContext>(
 fn parameter_result_from<E: ExternalEvaluationContext>(
     value: Value,
     expr_span: Span,
+    warnings: Vec<EvalWarning>,
     parameter: &ir::Parameter,
     context: &EvalContext<'_, E>,
 ) -> output::Parameter {
@@ -188,6 +196,7 @@ fn parameter_result_from<E: ExternalEvaluationContext>(
         debug_info,
         dependencies,
         expr_span,
+        warnings,
     }
 }
 
@@ -246,14 +255,17 @@ fn process_parameter_dependencies(
 
 fn eval_test<E: ExternalEvaluationContext>(
     test: &ir::Test,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<output::Test, Vec<EvalError>> {
+    context.begin_expression_evaluation();
     let (test_result, expr_span) = eval_expr::eval_expr(test.expr(), context)?;
+    let warnings = context.take_expression_warnings();
 
     match test_result {
         Value::Boolean(true) => Ok(output::Test {
             result: output::TestResult::Passed,
             expr_span: *expr_span,
+            warnings,
         }),
         Value::Boolean(false) => {
             let builtin_dependency_values =
@@ -271,6 +283,7 @@ fn eval_test<E: ExternalEvaluationContext>(
             Ok(output::Test {
                 result: output::TestResult::Failed { debug_info },
                 expr_span: *expr_span,
+                warnings,
             })
         }
         Value::String(_) | Value::Number(_) | Value::MeasuredNumber(_) => {

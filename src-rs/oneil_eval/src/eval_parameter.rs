@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use oneil_ir as ir;
 use oneil_shared::{span::Span, symbols::ParameterName};
 
-use oneil_output::{EvalError, MeasuredNumber, Number, Unit, Value};
+use oneil_output::{EvalError, EvalWarning, MeasuredNumber, Number, Unit, Value};
 
 use crate::{
     context::{EvalContext, ExternalEvaluationContext},
@@ -13,6 +13,7 @@ use crate::{
 pub struct EvalParameterResult {
     pub value: Value,
     pub expr_span: Span,
+    pub warnings: Vec<EvalWarning>,
 }
 
 /// Evaluates a parameter and returns the resulting value.
@@ -26,10 +27,12 @@ pub struct EvalParameterResult {
 /// - The parameter unit does not match the limit.
 pub fn eval_parameter<E: ExternalEvaluationContext>(
     parameter: &ir::Parameter,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<EvalParameterResult, Vec<EvalError>> {
     // TODO: this is about where we would use `trace_level`, but I'm not yet sure
     //       how to handle it.
+
+    context.begin_expression_evaluation();
 
     // evaluate the value and the unit
     let (value, expr_span, unit_ir) = match parameter.value() {
@@ -100,9 +103,12 @@ pub fn eval_parameter<E: ExternalEvaluationContext>(
     let limits = eval_limits(parameter.limits(), context)?;
     verify_value_is_within_limits(&value, expr_span, limits)?;
 
+    let warnings = context.take_expression_warnings();
+
     Ok(EvalParameterResult {
         value,
         expr_span: *expr_span,
+        warnings,
     })
 }
 
@@ -110,7 +116,7 @@ fn get_piecewise_result<'a, E: ExternalEvaluationContext>(
     piecewise: &'a [ir::PiecewiseExpr],
     param_ident: ParameterName,
     param_ident_span: Span,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<(Value, &'a Span), Vec<EvalError>> {
     // evaluate each of the conditions and their bodies
     let results = piecewise.iter().map(|piecewise_expr| {
@@ -206,7 +212,7 @@ enum Limits {
 
 fn eval_limits<E: ExternalEvaluationContext>(
     limits: &ir::Limits,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Limits, Vec<EvalError>> {
     match limits {
         ir::Limits::Default => Ok(Limits::AnyStringOrBooleanOrPositiveNumber),
@@ -226,7 +232,7 @@ fn eval_continuous_limits<E: ExternalEvaluationContext>(
     min: &oneil_ir::Expr,
     max: &oneil_ir::Expr,
     limit_expr_span: &Span,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Limits, Vec<EvalError>> {
     let min = eval_expr::eval_expr(min, context).and_then(|(value, expr_span)| match value {
         Value::MeasuredNumber(number) => {
@@ -302,7 +308,7 @@ fn eval_continuous_limits<E: ExternalEvaluationContext>(
 fn eval_discrete_limits<E: ExternalEvaluationContext>(
     values: &[ir::Expr],
     limit_expr_span: &Span,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Limits, Vec<EvalError>> {
     let values = values
         .iter()
@@ -767,7 +773,8 @@ mod tests {
         let mut context = EvalContext::new(&mut external);
         context.push_active_model(test_model_path("test"));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         // check the parameter value
         let Value::Number(number) = parameter_value.value else {
@@ -794,7 +801,8 @@ mod tests {
         let mut context = EvalContext::new(&mut external);
         context.push_active_model(test_model_path("test"));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -831,7 +839,8 @@ mod tests {
         let mut context = EvalContext::new(&mut external);
         context.push_active_model(test_model_path("test"));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -871,7 +880,8 @@ mod tests {
         let mut context = EvalContext::new(&mut external);
         context.push_active_model(test_model_path("test"));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0), (Dimension::Time, -1.0)];
 
@@ -909,7 +919,8 @@ mod tests {
         let mut context = EvalContext::new(&mut external);
         context.push_active_model(test_model_path("test"));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [];
 
@@ -947,7 +958,8 @@ mod tests {
         let mut context = EvalContext::new(&mut external);
         context.push_active_model(test_model_path("test"));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [
             (Dimension::Mass, 1.0),
@@ -1006,7 +1018,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), Some("k"), false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -1066,7 +1079,8 @@ mod tests {
             [helper::UnitSpec::new(Some("N"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [
             (Dimension::Mass, 1.0),
@@ -1126,7 +1140,8 @@ mod tests {
             [helper::UnitSpec::new(Some("W"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [
             (Dimension::Mass, 1.0),
@@ -1180,7 +1195,8 @@ mod tests {
             [helper::UnitSpec::new(Some("W"), None, false, 2.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [
             (Dimension::Mass, 2.0),
@@ -1239,7 +1255,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), None, false, 2.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 2.0)];
 
@@ -1294,7 +1311,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -1353,7 +1371,8 @@ mod tests {
             ],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [];
 
@@ -1410,7 +1429,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -1466,7 +1486,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -2059,6 +2080,7 @@ mod tests {
                 debug_info: None,
                 dependencies: output::DependencySet::default(),
                 expr_span: random_span(),
+                warnings: Vec::new(),
             }
         }
     }

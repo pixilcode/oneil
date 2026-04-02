@@ -112,6 +112,9 @@ pub struct EvalContext<'external, E: ExternalEvaluationContext> {
     models: IndexMap<ModelPath, ModelInProgress>,
     active_models: Vec<ModelPath>,
     external_context: &'external mut E,
+
+    /// Warnings for the parameter or test expression currently being evaluated.
+    expression_eval_warnings: Vec<output::EvalWarning>,
 }
 
 impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
@@ -122,6 +125,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
             models: IndexMap::new(),
             active_models: Vec::new(),
             external_context,
+            expression_eval_warnings: Vec::new(),
         }
     }
 
@@ -188,6 +192,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
             models,
             active_models: Vec::new(),
             external_context,
+            expression_eval_warnings: Vec::new(),
         }
     }
 
@@ -410,6 +415,27 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     #[must_use]
     pub fn lookup_prefix(&self, name: &UnitPrefix) -> Option<f64> {
         self.external_context.lookup_prefix(name)
+    }
+
+    /// Clears warnings for a new parameter or test expression evaluation.
+    ///
+    /// Call at the start of evaluating each top-level parameter or test expression.
+    pub fn begin_expression_evaluation(&mut self) {
+        self.expression_eval_warnings.clear();
+    }
+
+    /// Takes warnings collected while evaluating the current expression.
+    ///
+    /// Typically called after successful evaluation to attach them to the evaluated
+    /// `oneil_output::Parameter` or `oneil_output::Test`.
+    #[must_use]
+    pub fn take_expression_warnings(&mut self) -> Vec<output::EvalWarning> {
+        std::mem::take(&mut self.expression_eval_warnings)
+    }
+
+    /// Records an evaluation warning for the expression currently being evaluated.
+    pub fn push_eval_warning(&mut self, warning: output::EvalWarning) {
+        self.expression_eval_warnings.push(warning);
     }
 
     /// Pushes the active model for evaluation.
