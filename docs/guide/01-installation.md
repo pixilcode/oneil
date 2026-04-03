@@ -68,7 +68,6 @@ On Windows, run `install.bat` from the repository root with the same flags (`--n
 
 If Cargo is missing, the script prints how to install Rust via [rustup](https://rustup.rs/). For the default install you also need **Python 3.10+** with pip. Vim syntax highlighting is not part of the script; see the README [Vim support](https://github.com/careweather/oneil#vim-support) section.
 
-
 ## Option 3: Install from source with Cargo
 
 Use this if you want the latest development version or need to customize the build.
@@ -123,7 +122,6 @@ Currently, there is no dedicated way to update Oneil. If you installed from sour
 
 - **VS Code / Cursor**: Install the [Oneil extension](https://marketplace.visualstudio.com/items?itemName=careweather.oneil) from the Marketplace for LSP and syntax highlighting.
 
-
 ## Install Oneil Python library
 
 To install the `oneil` package into your current Python environment from a checkout of the repository, run `pip install .` from the **project root** (the directory that contains `pyproject.toml`):
@@ -144,7 +142,6 @@ After installation you can `import oneil` in Python.
 
 > ![NOTE]
 > `pip install .` alone does not install the CLI. Use **Option 2** (`./install.sh`) or **Option 3** (`cargo install --path src-rs/oneil`) if you want both the CLI and the library.
-
 
 ## Troubleshooting
 

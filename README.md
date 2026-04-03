@@ -1,5 +1,6 @@
 # The Oneil Design Language
 
+<!-- markdownlint-disable-next-line no-inline-html -->
 <img alt="The Oneil Logo" src="docs/icons/oneil-logo.svg" align="right" width="25%">
 
 Oneil is a design specification language for rapid, comprehensive system modeling.
@@ -40,20 +41,21 @@ To run the Rust version of Oneil locally:
 1. [Install Rust and Cargo](https://www.rust-lang.org/tools/install) if you haven't already.
 
 2. Clone the repository and navigate to the Rust project directory:
-```sh
-git clone git@github.com/careweather/oneil.git
-cd oneil
-```
+
+   ```sh
+   git clone git@github.com/careweather/oneil.git
+   cd oneil
+   ```
 
 3. Build and run the project:
-```sh
-cargo run -- path/to/your/model.on
-```
+
+   ```sh
+   cargo run -- path/to/your/model.on
+   ```
 
 See [Installation](docs/installation.md) for installing the `oneil` binary from a release or from source.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more details on how to work on Oneil code.
-
 
 ### Model Syntax Updates for Rust Version
 
@@ -134,7 +136,7 @@ Oneil has the several tools available for working with Oneil code.
 
 Oneil supports syntax highlighting in vim. Oneil is already designed for readability, but syntax highlighting makes it even better.
 
-*This highlighting has not been updated since the updates to the syntax have been released, so it might have some problems highlighting*
+*This highlighting has not been updated since the updates to the syntax have been released, so it might have some problems highlighting*.
 
 Create a `~/.vim` directory with subdirectories `syntax` and `ftdetect` if they don't exist yet. From this directory create soft links to the files in the `vim` directory of the Oneil repository.
 
@@ -273,7 +275,7 @@ Artificial gravity: g_a = r*omega^2 :m/s^2
 Temperature: T = temperature(D) :K
 ```
 
-You can review supported units using the [CLI units command](#unit-help). If a unit isn't supported, you can specify it in terms of base units: `kg`, `m`, `s`, `K`, `A`, `b`, `$`.
+You can review supported units using the [CLI builtin units command](#builtins). If a unit isn't supported, you can specify it in terms of base units: `kg`, `m`, `s`, `K`, `A`, `b`, `$`.
 
 Oneil supports `dB` as a nonlinear display unit. When any unit is specified with prefix `dB`, Oneil internally converts the parameter to the corresponding linear value, performs all calculations in linear terms, and reconverts the value to dB for display. This means that equations that contain parameters with dB units should use linear math. For example, when calculating the signal to noise ratio by hand, you might subtract the noise (dB) from the signal (dB), but in oneil, you divide the signal by the noise:
 
@@ -294,25 +296,24 @@ In Oneil, all number values are 64-bit floating-point values. Thus, `1`, `-0.2`,
 `3.0e14`, and `-inf` are all valid values. Regular arithmetic operations are available,
 including:
 
-- `a + b` - addition
-- `a - b` - subtraction
-- `a \* b` - multiplication
-- `a / b` - division
-- `a % b` - modulo
-- `a ^ b` - exponent
-- `(a)` - grouping
+* `a + b` - addition
+* `a - b` - subtraction
+* `a \* b` - multiplication
+* `a / b` - division
+* `a % b` - modulo
+* `a ^ b` - exponent
+* `(a)` - grouping
 
 In addition, numbers can be compared with comparison operators:
 
-- `a == b` - equals
-- `a != b` - not equal
-- `a < b` - less than
-- `a <= b` - less than or equal
-- `a > b` - greater than
-- `a >= b` - greater than or equal
+* `a == b` - equals
+* `a != b` - not equal
+* `a < b` - less than
+* `a <= b` - less than or equal
+* `a > b` - greater than
+* `a >= b` - greater than or equal
 
 In addition, builtin functions are provided, as described later.
-
 
 ### Interval Arithmetic
 
@@ -337,7 +338,6 @@ Combined: c = i1 | i2
 # => min(0, 4) | max(2, 6)
 # => 0 | 6
 ```
-
 
 #### Arithmetic Operators
 
@@ -380,7 +380,6 @@ the implementation code.
 
 <!-- TODO: figure out the best way to make these details accessible -->
 
-
 #### Escaping the interval arithmetic implementation
 
 Oneil's implementation of interval arithmetic intends to be arithmetically correct.
@@ -417,7 +416,6 @@ which behave as follows:
 | `a -- b` | `min(a) - min(b) \| max(a) - max(b)` |
 | `a // b` | `min(a) / min(b) \| max(a) / max(b)` |
 
-
 #### Comparison
 
 Intervals can also be compared with each other using the comparison operators,
@@ -432,38 +430,36 @@ which are implemented as defined below.
 | `a > b`  | `min(a) > max(b)`                       | The min value of `a` is greater than the max value of `b`             |
 | `a >= b` | `min(a) >= max(b)`                      | The min value of `a` is greater than or equal to the max value of `b` |
 
-
 ### Builtin Functions
 
 Oneil has the following builtin functions.
 
 **NOTE: currently, only some of these functions are supported, although there are plans to support all of them in the future.**
 
-| Function         | Description | Supported |
-|------------------|-------------|-----------|
-| `min(a)`         | If `a` is an interval, return the minimum value of the interval. Otherwise, return the value of `a`| ✓ |
-| `min(a, ...)` | Find the minimum value of the given values. If a value is an interval, the minimum value of the interval is used | ✓ |
-| `max(a)`         | If `a` is an interval, return the maximum value of the interval. Otherwise, return the value of `a`| ✓ |
-| `max(a, ...)` | Find the maximum value of the given values. If a value is an interval, the maximum value of the interval is used | ✓ |
-| `mid(a, b)`      | Find the midpoint between the | × |
-| `range(a)`       | Return the width of an interval (max−min) | ✓ |
-| `sqrt(a)`        | Calculate the square root | ✓ |
-| `sin(a)`         | Calculate the sine | × |
-| `cos(a)`         | Calculate the cosine | × |
-| `tan(a)`         | Calculate the tangent | × |
-| `asin(a)`        | Calculate the arcsine | × |
-| `acos(a)`        | Calculate the arccosine | × |
-| `atan(a)`        | Calculate the arctangent | × |
-| `ln(a)`          | Natural logarithm | × |
-| `log(a)`         | Base 10 logarithm | × |
-| `log10(a)`       | Base 10 logarithm (alias for `log(a)`) | × |
-| `floor(a)`       | Round down to nearest integer | × |
-| `ceiling(a)`     | Round up to nearest integer | × |
-| `abs(a)`         | Absolute value | × |
-| `sign(a)`        | Sign of value (−1, 0, 1) | × |
-| `strip(a)`       | Remove units from calculation | × |
-| `mnmx(...)`      | Gets the minimum and maximum of the list of values | × |
-
+| Function      | Description                                                                                                      | Supported |
+|---------------|------------------------------------------------------------------------------------------------------------------|-----------|
+| `min(a)`      | If `a` is an interval, return the minimum value of the interval. Otherwise, return the value of `a`              | ✓         |
+| `min(a, ...)` | Find the minimum value of the given values. If a value is an interval, the minimum value of the interval is used | ✓         |
+| `max(a)`      | If `a` is an interval, return the maximum value of the interval. Otherwise, return the value of `a`              | ✓         |
+| `max(a, ...)` | Find the maximum value of the given values. If a value is an interval, the maximum value of the interval is used | ✓         |
+| `mid(a, b)`   | Find the midpoint between the                                                                                    | ×         |
+| `range(a)`    | Return the width of an interval (max−min)                                                                        | ✓         |
+| `sqrt(a)`     | Calculate the square root                                                                                        | ✓         |
+| `sin(a)`      | Calculate the sine                                                                                               | ×         |
+| `cos(a)`      | Calculate the cosine                                                                                             | ×         |
+| `tan(a)`      | Calculate the tangent                                                                                            | ×         |
+| `asin(a)`     | Calculate the arcsine                                                                                            | ×         |
+| `acos(a)`     | Calculate the arccosine                                                                                          | ×         |
+| `atan(a)`     | Calculate the arctangent                                                                                         | ×         |
+| `ln(a)`       | Natural logarithm                                                                                                | ×         |
+| `log(a)`      | Base 10 logarithm                                                                                                | ×         |
+| `log10(a)`    | Base 10 logarithm (alias for `log(a)`)                                                                           | ×         |
+| `floor(a)`    | Round down to nearest integer                                                                                    | ×         |
+| `ceiling(a)`  | Round up to nearest integer                                                                                      | ×         |
+| `abs(a)`      | Absolute value                                                                                                   | ×         |
+| `sign(a)`     | Sign of value (−1, 0, 1)                                                                                         | ×         |
+| `strip(a)`    | Remove units from calculation                                                                                    | ×         |
+| `mnmx(...)`   | Gets the minimum and maximum of the list of values                                                               | ×         |
 
 ### Piecewise Equations
 
@@ -568,7 +564,7 @@ case = clockwise
 L = L.d
 ```
 
-To use a design, see [the command line interface `design` command](#design). A design parameter overwrites the value of the model parameter while keeping the original metadata. If you want your design to alter a submodel parameter, you'll need to make sure the corresponding model uses that submodel.
+To use a design, see the command line interface `design` command. A design parameter overwrites the value of the model parameter while keeping the original metadata. If you want your design to alter a submodel parameter, you'll need to make sure the corresponding model uses that submodel.
 
 ### Tests
 
@@ -622,39 +618,39 @@ You can use the CLI in two ways:
 
 These are the commands listed by `oneil --help`:
 
-| Command | Alias | Purpose |
-|---------|-------|---------|
-| `eval` | `e` | Evaluate a model and print results. |
-| `test` | `t` | Run tests in a model. |
-| `tree` | — | Print the dependency or reference tree for one or more parameters. |
-| `builtins` | — | Print language builtins; see `oneil builtins --help` for subcommands (`all`, `unit`, `func`, `value`, `prefix`). |
-| `independent` | — | Print independent parameters in a model. |
-| `lsp` | — | Run the language server. |
-| `help` | — | Print help for the program or subcommands. |
+| Command       | Alias | Purpose                                                                                                          |
+|---------------|-------|------------------------------------------------------------------------------------------------------------------|
+| `eval`        | `e`   | Evaluate a model and print results.                                                                              |
+| `test`        | `t`   | Run tests in a model.                                                                                            |
+| `tree`        | —     | Print the dependency or reference tree for one or more parameters.                                               |
+| `builtins`    | —     | Print language builtins; see `oneil builtins --help` for subcommands (`all`, `unit`, `func`, `value`, `prefix`). |
+| `independent` | —     | Print independent parameters in a model.                                                                         |
+| `lsp`         | —     | Run the language server.                                                                                         |
+| `help`        | —     | Print help for the program or subcommands.                                                                       |
 
 ### Options for evaluation (`eval` and default `<FILE>`)
 
 The evaluation path accepts the options shown in `oneil --help` / `oneil eval --help`. In short:
 
-- **`-p` / `--params`** — Comma-separated parameters to print. Use dots for submodels (for example `a.sub2.sub1` is parameter `a` inside nested submodels). When set, the default print mode for “which parameters to show” is replaced by this explicit list.
+* **`-p` / `--params`** — Comma-separated parameters to print. Use dots for submodels (for example `a.sub2.sub1` is parameter `a` inside nested submodels). When set, the default print mode for “which parameters to show” is replaced by this explicit list.
 
-- **`-P` / `--print`** — When `--params` is not used, choose what to print: `trace` (trace `*`, debug `**`, and performance `$` markers), `perf` (`$` only), or `all`. Default is `trace`.
+* **`-P` / `--print`** — When `--params` is not used, choose what to print: `trace` (trace `*`, debug `**`, and performance `$` markers), `perf` (`$` only), or `all`. Default is `trace`.
 
-- **`-x` / `--expr`** — Evaluate an expression in the model’s context; repeat the flag for multiple expressions. 
+* **`-x` / `--expr`** — Evaluate an expression in the model’s context; repeat the flag for multiple expressions.
 
-- **`-r` / `--recursive`** — Include submodels, not only the top model.
+* **`-r` / `--recursive`** — Include submodels, not only the top model.
 
-- **`-w` / `--watch`** — Watch files and re-evaluate when they change.
+* **`-w` / `--watch`** — Watch files and re-evaluate when they change.
 
-- **`-D` / `--debug`** — After errors, still show partial results.
+* **`-D` / `--debug`** — After errors, still show partial results.
 
-- **`--no-header`**, **`--no-test-report`**, **`--no-parameters`** — Suppress parts of the output. **`--no-parameters`** overrides `--params` and print mode.
+* **`--no-header`**, **`--no-test-report`**, **`--no-parameters`** — Suppress parts of the output. **`--no-parameters`** overrides `--params` and print mode.
 
-- **`--sig-figs`** — Significant figures for printed numbers (default 4).
+* **`--sig-figs`** — Significant figures for printed numbers (default 4).
 
-- **`--no-colors`** — Turn off ANSI colors (useful for logs or terminals without color).
+* **`--no-colors`** — Turn off ANSI colors (useful for logs or terminals without color).
 
-- **`--venv-path`** — Python virtual environment to use when Python integration is enabled; if unset and `VIRTUAL_ENV` is unset, the CLI will discover `venv` or `.venv` by searching upward from the current directory.
+* **`--venv-path`** — Python virtual environment to use when Python integration is enabled; if unset and `VIRTUAL_ENV` is unset, the CLI will discover `venv` or `.venv` by searching upward from the current directory.
 
 ### `test` (`t`)
 
@@ -662,11 +658,11 @@ The evaluation path accepts the options shown in `oneil --help` / `oneil eval --
 
 Runs tests defined in the model at `<FILE>`.
 
-- **`-r` / `--recursive`** — Include test results from submodels, not only the top model.
-- **`-D` / `--debug`** — After errors, still show partial test output.
-- **`--no-header`** — Omit the results header.
-- **`--no-test-report`** — Omit the test report.
-- **`--sig-figs`**, **`--no-colors`**, **`--venv-path`** — Same role as for `eval` (see `oneil test --help`).
+* **`-r` / `--recursive`** — Include test results from submodels, not only the top model.
+* **`-D` / `--debug`** — After errors, still show partial test output.
+* **`--no-header`** — Omit the results header.
+* **`--no-test-report`** — Omit the test report.
+* **`--sig-figs`**, **`--no-colors`**, **`--venv-path`** — Same role as for `eval` (see `oneil test --help`).
 
 ### `tree`
 
@@ -674,12 +670,12 @@ Runs tests defined in the model at `<FILE>`.
 
 Prints a tree for each named parameter. `<PARAM>...` is one or more parameter names.
 
-- **`-u` / `--up`** — Tree of parameters that *reference* the given parameters (mutually exclusive with `--down`).
-- **`-d` / `--down`** — Tree of *dependencies* of the given parameters. If neither `--up` nor `--down` is set, behavior matches `--down`.
-- **`-r` / `--recursive`** — Include submodel values in the tree, not only the top model.
-- **`--depth <DEPTH>`** — Limit tree depth (default is full depth).
-- **`-D` / `--debug`** — After errors, still show partial trees.
-- **`--sig-figs`**, **`--no-colors`**, **`--venv-path`** — Same as other commands (see `oneil tree --help`).
+* **`-u` / `--up`** — Tree of parameters that *reference* the given parameters (mutually exclusive with `--down`).
+* **`-d` / `--down`** — Tree of *dependencies* of the given parameters. If neither `--up` nor `--down` is set, behavior matches `--down`.
+* **`-r` / `--recursive`** — Include submodel values in the tree, not only the top model.
+* **`--depth <DEPTH>`** — Limit tree depth (default is full depth).
+* **`-D` / `--debug`** — After errors, still show partial trees.
+* **`--sig-figs`**, **`--no-colors`**, **`--venv-path`** — Same as other commands (see `oneil tree --help`).
 
 ### `independent`
 
@@ -687,9 +683,9 @@ Prints a tree for each named parameter. `<PARAM>...` is one or more parameter na
 
 Lists parameters that are independent (assigned directly rather than by equation) in the model at `<FILE>`.
 
-- **`-r` / `--recursive`** — Include independents from submodels as well as the top model.
-- **`-D` / `--debug`** — After errors, still show partial results.
-- **`--sig-figs`**, **`--no-colors`**, **`--venv-path`** — See `oneil independent --help`.
+* **`-r` / `--recursive`** — Include independents from submodels as well as the top model.
+* **`-D` / `--debug`** — After errors, still show partial results.
+* **`--sig-figs`**, **`--no-colors`**, **`--venv-path`** — See `oneil independent --help`.
 
 ### `builtins`
 
@@ -697,13 +693,13 @@ Lists parameters that are independent (assigned directly rather than by equation
 
 Without a subcommand, run `oneil builtins --help` for the command list. Subcommands:
 
-| Subcommand | Arguments | Purpose |
-|------------|-----------|---------|
-| `all` | — | Print all builtins. |
-| `unit` | optional `[UNIT]` | List units, or search for a specific unit name. |
-| `func` | optional `[FUNCTION]` | List builtin functions, or search for one. |
-| `value` | optional `[VALUE]` | List builtin values, or search for one. |
-| `prefix` | optional `[PREFIX]` | List unit prefixes, or search for one. |
+| Subcommand | Arguments             | Purpose                                         |
+|------------|-----------------------|-------------------------------------------------|
+| `all`      | —                     | Print all builtins.                             |
+| `unit`     | optional `[UNIT]`     | List units, or search for a specific unit name. |
+| `func`     | optional `[FUNCTION]` | List builtin functions, or search for one.      |
+| `value`    | optional `[VALUE]`    | List builtin values, or search for one.         |
+| `prefix`   | optional `[PREFIX]`   | List unit prefixes, or search for one.          |
 
 Each subcommand accepts **`--sig-figs`**, **`--no-colors`**, and **`--venv-path`** where applicable; see `oneil builtins <COMMAND> --help`.
 
