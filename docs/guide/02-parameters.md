@@ -18,7 +18,7 @@ oneil eval hello.on --params x
 
 The `--params x` option prints the parameter `x`. This option can also be shortened to `-p x`. You should see something like:
 
-```
+```text
 ────────────────────────────────────────────────────────────────────────────────
 Model: hello.on
 Tests: 0/0 (PASS)
@@ -27,7 +27,6 @@ x = 1  # Hello
 ```
 
 `oneil eval <model>.on` is how you run an Oneil file. The output shows the model path, test summary, and each parameter’s identifier, value, and label (after `#`). In addition, both `oneil e <model>.on` and `oneil <model>.on` can be used as an equivalent to `oneil eval <model>.on`.
-
 
 ## Required parts of a parameter
 
@@ -69,7 +68,7 @@ oneil eval hello.on
 
 Output:
 
-```
+```text
 ────────────────────────────────────────────────────────────────────────────────
 Model: /tmp/hello.on
 Tests: 0/0 (PASS)
@@ -85,7 +84,7 @@ oneil eval hello.on --print all
 
 Output:
 
-```
+```text
 ────────────────────────────────────────────────────────────────────────────────
 Model: /tmp/hello.on
 Tests: 0/0 (PASS)
@@ -113,7 +112,7 @@ oneil eval multi.on --print all
 
 Output:
 
-```
+```text
 ────────────────────────────────────────────────────────────────────────────────
 Model: /tmp/multi.on
 Tests: 0/0 (PASS)
@@ -141,7 +140,7 @@ oneil eval multi.on -p b,a
 
 Output:
 
-```
+```text
 ────────────────────────────────────────────────────────────────────────────────
 Model: /tmp/multi.on
 Tests: 0/0 (PASS)
@@ -156,11 +155,11 @@ The order in the comma-separated list is the order they appear in the output. Yo
 
 Parameters can be marked with optional annotations that control whether they are printed by default and how they are used:
 
-| Annotation | Symbol | Meaning |
-|------------|--------|--------|
-| Trace     | `*`    | Included when printing “trace” parameters (default). |
-| Debug     | `**`   | Same as trace, and with `--debug` / `-D`, extra debug info is printed for variables used to evaluate this parameter. |
-| Performance | `$`  | Marked for performance/optimization; can be printed in “perf” mode. |
+| Annotation  | Symbol | Meaning                                                                                                              |
+|-------------|--------|----------------------------------------------------------------------------------------------------------------------|
+| Trace       | `*`    | Included when printing “trace” parameters (default).                                                                 |
+| Debug       | `**`   | Same as trace, and with `--debug` / `-D`, extra debug info is printed for variables used to evaluate this parameter. |
+| Performance | `$`    | Marked for performance/optimization; can be printed in “perf” mode.                                                  |
 
 TODO: mention debug variables and `--debug` seperately
 
@@ -180,7 +179,7 @@ oneil eval /tmp/annot.on
 
 Output:
 
-```
+```text
 ────────────────────────────────────────────────────────────────────────────────
 Model: /tmp/annot.on
 Tests: 0/0 (PASS)
@@ -205,7 +204,7 @@ p = 3  # Perf param
 
   Output:
 
-  ```
+  ```text
   ...
   p = 3  # Perf param
   ```
