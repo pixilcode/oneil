@@ -108,7 +108,7 @@ EOF
 		exit 1
 	fi
 
-	if ! "$PYTHON_CMD" -c 'import os, sysconfig; inc=sysconfig.get_path("include"); sys.exit(0 if os.path.isfile(os.path.join(inc, "Python.h")) else 1)' 2>/dev/null; then
+	if ! "$PYTHON_CMD" -c 'import os, sys, sysconfig; inc=sysconfig.get_path("include"); sys.exit(0 if os.path.isfile(os.path.join(inc, "Python.h")) else 1)' 2>/dev/null; then
 		cat >&2 <<'EOF'
 Error: Python development headers were not found (Python.h is missing).
 
