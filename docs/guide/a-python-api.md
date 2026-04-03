@@ -23,14 +23,14 @@ Requires **Python 3.10+**.
 
 The package is named `oneil`. It exposes:
 
-| Submodule / class   | Description |
-|---------------------|-------------|
-| `oneil.values`      | Builtin constants (e.g. `pi`, `e`) as Python objects |
-| `oneil.functions`   | Builtin functions (e.g. `min`, `max`, `sqrt`, `sin`) as callables |
-| `oneil.units`       | Builtin units (e.g. `m`, `kg`, `s`) as `Unit` instances, including SI-prefixed variants |
-| `oneil.Interval`    | Class for closed numeric intervals |
-| `oneil.MeasuredNumber` | Class for a number (scalar or interval) with a unit |
-| `oneil.Unit`        | Class for dimensional units |
+| Submodule / class      | Description                                                                             |
+|------------------------|-----------------------------------------------------------------------------------------|
+| `oneil.values`         | Builtin constants (e.g. `pi`, `e`) as Python objects                                    |
+| `oneil.functions`      | Builtin functions (e.g. `min`, `max`, `sqrt`, `sin`) as callables                       |
+| `oneil.units`          | Builtin units (e.g. `m`, `kg`, `s`) as `Unit` instances, including SI-prefixed variants |
+| `oneil.Interval`       | Class for closed numeric intervals                                                      |
+| `oneil.MeasuredNumber` | Class for a number (scalar or interval) with a unit                                     |
+| `oneil.Unit`           | Class for dimensional units                                                             |
 
 ---
 
@@ -118,16 +118,16 @@ from oneil.units import km, mm, kg, mg
 
 Closed interval of real numbers with a minimum and maximum. Wraps Oneil’s interval type; supports arithmetic and comparison with other `Interval` instances or with Python scalars (a scalar is treated as a point interval).
 
-### Constructor
+### `oneil.Interval` constructor
 
 - **`Interval(min, max)`** — `min` and `max` must not be NaN, and `min` ≤ `max`; otherwise `ValueError` is raised.
 
-### Class methods
+### `oneil.Interval` class methods
 
 - **`Interval.empty()`** — empty interval.
 - **`Interval.zero()`** — [0, 0].
 
-### Instance methods and properties
+### `oneil.Interval` instance methods and properties
 
 - **`min`**, **`max`** — bounds (read-only).
 - **`is_empty()`**, **`is_valid()`** — emptiness and validity checks.
@@ -150,11 +150,11 @@ Specialized (interval) operations:
 
 A number (scalar or interval) with a unit. Wraps Oneil’s measured number type; arithmetic and comparison enforce dimensional consistency where required.
 
-### Constructor
+### `oneil.MeasuredNumber` constructor
 
 - **`MeasuredNumber(value, unit)`** — `value` is a `float`, an `Interval`, or a `MeasuredNumber`; `unit` is a `Unit`. Builds a measured number from that value and unit.
 
-### Instance methods
+### `oneil.MeasuredNumber` instance methods
 
 - **`unit()`** — returns the `Unit` of this measured number.
 - **`into_number_and_unit()`** — returns a tuple `(number, unit)` where `number` is the numeric part (float or `Interval`) in this object’s unit.
@@ -180,7 +180,7 @@ Other:
 
 Represents a dimensional unit (dimensions, magnitude, optional decibel flag, and display info).
 
-### Constructor
+### `oneil.Unit` constructor
 
 - **`Unit(*, dimensions=None, magnitude=None, is_db=None, display_unit)`**  
   - **`dimensions`** — optional dict mapping dimension keys to exponents (e.g. `{"m": 1, "s": -1}`). Valid keys: `"kg"`, `"m"`, `"s"`, `"K"`, `"A"`, `"b"`, `"$"`, `"mol"`, `"cd"`.
@@ -188,11 +188,11 @@ Represents a dimensional unit (dimensions, magnitude, optional decibel flag, and
   - **`is_db`** — optional decibel flag (default `False`).
   - **`display_unit`** — required string used as the display name (single unit, exponent 1).
 
-### Class methods
+### `oneil.Unit` class methods
 
 - **`Unit.one()`** — dimensionless unit 1.
 
-### Properties and methods
+### `oneil.Unit` properties and methods
 
 - **`magnitude`**, **`is_db`**, **`display_string`** — magnitude, decibel flag, and display string.
 - **`get_dimensions()`** — dict of dimension key → exponent.
