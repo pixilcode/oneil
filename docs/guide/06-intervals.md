@@ -37,7 +37,7 @@ test: max(2 | 1) == 2
 The same operators that apply to scalar values apply to interval values: `+`,
 `-`, `*`, `/`, `%`, and `^`.
 
-Because an interval is a *range* of possible values, not a single number,
+Because an interval is a _range_ of possible values, not a single number,
 results can differ from the naive idea of "min with min, max with max." For
 subtraction, that naive rule would be wrong. For example:
 
@@ -69,14 +69,14 @@ or the implementation in the codebase.
 
 ### Escaping and relationships
 
-Oneil’s interval arithmetic aims to satisfy the *inclusion property*: if every
+Oneil’s interval arithmetic aims to satisfy the _inclusion property_: if every
 interval in an expression is replaced by some scalar inside that interval and the
 expression is evaluated as scalars, the scalar result lies inside the interval
 you get by evaluating the expression on intervals. See
 [Inclusion property](../../research/2025-11-13-interval-arithmetic-paper-review.md#inclusion-property)
 in the paper review.
 
-Bounds can still be *wider* than necessary. For example, you would expect `a -
+Bounds can still be _wider_ than necessary. For example, you would expect `a -
 a` to be `0` for any `a`. If `a` is `0 | 1`, interval subtraction yields `-1 |
 1`. That interval still contains the true result `0`, but it is looser than
 `0 | 0`. This know as the

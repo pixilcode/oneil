@@ -38,7 +38,7 @@ defining a parameter with a measured value with the units `m/s`.
 
 Printing out `v` with `oneil eval calc.on --params v` produces
 
-```
+```text
 v: v = 5.0000 : m/s  # Velocity
 ```
 
@@ -50,7 +50,7 @@ Velocity: v = d/t : km/hr
 
 which would produce
 
-```
+```text
 v: v = 18.0000 : km/hr  # Velocity
 ```
 
@@ -62,7 +62,7 @@ Velocity: v = d/t : kg/hr
 #                   ^^ `kg` instead of `km`
 ```
 
-```
+```text
 error: parameter value unit `meters/seconds` does not match expected unit `kg/hr`
  --> /tmp/test.on:6:15
   | 
@@ -72,14 +72,14 @@ error: parameter value unit `meters/seconds` does not match expected unit `kg/hr
 
 In addition, Oneil requires units on _any parameters with measured values_. If
 we leave out the unit, we get an error. (For the exception to this, see the
-later section on [dimensionless values](#dimensionless-values))
+later section on [dimensionless values](#dimensionless-units))
 
 ```oneil
 Velocity: v = d/t
 #                 ^ No unit
 ```
 
-```
+```text
 error: parameter is missing a unit
  --> /tmp/test.on:6:15
   | 
@@ -88,7 +88,6 @@ error: parameter is missing a unit
   = note: parameter value has unit `meters/seconds`
   = help: add a unit annotation `: meters/seconds` to the parameter
 ```
-
 
 ## Units, dimensions, and magnitude
 
@@ -118,6 +117,7 @@ the dimension of _mass_.
 ### Supported dimensions
 
 Oneil supports the following dimensions, with their associated base unit.
+
 - mass: `kilogram`
 - distance: `meter`
 - time: `second`
@@ -133,7 +133,7 @@ as having a dimension of `distance`, while a `Joule` would have the dimensions
 of `mass`, `distance^2`, and `time^-2`.
 
 There are also dimensionless units such `%`. These are discussed
-[later in this chapter](#unitless-and-dimensionless-values).
+[later in this chapter](#dimensionless-units).
 
 If you haven't quite wrapped your head around dimensions yet, don't worry. You
 don't need to fully understand it to use Oneil.
@@ -142,7 +142,6 @@ don't need to fully understand it to use Oneil.
              to have reference when we use "dimensionless" rather than "unitless"
              later. Although maybe we just use "unitless" later and move this
              to an "advanced" section of the guide? -->
-
 
 ## Composing units in a unit expression
 
@@ -158,7 +157,6 @@ Each **term** is one of:
 
 A unit can be a base unit (such as `km` or `grams`), but base units can
 also be combined with other operators.
-
 
 ## Arithmetic and comparison operators
 
@@ -202,7 +200,6 @@ test: (1:kg) == (1000:g)
 test: (1:kg) != (1:g)
 ```
 
-
 ## Unit casting
 
 Imagine that you have a test that takes time to start up before it runs. The full time
@@ -218,7 +215,7 @@ However, this will produce an error:
 
 <!-- TODO: make this error more user friendly -->
 
-```
+```text
 error: expected scalar with unit `min` but found scalar
  --> /tmp/test.on:4:23
   | 
@@ -270,7 +267,7 @@ To verify that you are getting the expected units, you could wrap `v_end` and
 `v_start` in unit casts to find out where the error is.
 
 ```oneil
-$ Acceleration: a = ((v_end : m/s) - (v_start : m/s)) / t : m/s^2
+Acceleration: a = ((v_end : m/s) - (v_start : m/s)) / t : m/s^2
 ```
 
 This would then reveal that `v_start` is in `m` rather than `m/s`, allowing you
@@ -278,7 +275,6 @@ to fix the error, then remove the casts.
 
 This situation is obviously contrived, but using unit casting in this way may
 come in handy with more complex operations.
-
 
 ## `strip`
 
@@ -316,7 +312,6 @@ the value to the unit that you expect it to be.
 # convert both values to meters before comparing them
 test: strip((x_m : m)) == strip((x_km : m))
 ```
-
 
 ## Dimensionless units
 
@@ -406,7 +401,6 @@ Wavelength: lambda_convert2 = 2*pi*c/f : cm
 
 In the future, we may add a rotation dimension, but for now, this is what is
 required to get around the inconsistency.
-
 
 ### Display
 

@@ -20,34 +20,34 @@ Scientific: e_val = 1.5e3
 Infinity: inf_val = inf
 ```
 
-### Operations
+### Number Operations
 
 Precedence matches the language grammar (exponentiation before multiplication/division, then addition/subtraction; comparisons and logical operators are lower).
 
 **Arithmetic** (for ordinary scalar values):
 
-| Operator | Meaning |
-|----------|---------|
-| `-` (prefix) | Unary negation |
-| `^` | Exponentiation (right-associative) |
-| `*` | Multiplication |
-| `/` | Division |
-| `%` | Modulo |
-| `+` | Addition |
-| `-` | Subtraction |
+| Operator     | Meaning                            |
+|--------------|------------------------------------|
+| `-` (prefix) | Unary negation                     |
+| `^`          | Exponentiation (right-associative) |
+| `*`          | Multiplication                     |
+| `/`          | Division                           |
+| `%`          | Modulo                             |
+| `+`          | Addition                           |
+| `-`          | Subtraction                        |
 
 **Comparisons** (produce booleans; can be **chained**, e.g. `1 < 2 < 3`):
 
-| Operator | Meaning |
-|----------|---------|
-| `<` | Less than |
-| `>` | Greater than |
-| `<=` | Less than or equal |
-| `>=` | Greater than or equal |
-| `==` | Equal |
-| `!=` | Not equal |
+| Operator | Meaning               |
+|----------|-----------------------|
+| `<`      | Less than             |
+| `>`      | Greater than          |
+| `<=`     | Less than or equal    |
+| `>=`     | Greater than or equal |
+| `==`     | Equal                 |
+| `!=`     | Not equal             |
 
-### Example
+### Number Examples
 
 ```oneil
 Add: a = 2 + 3
@@ -75,14 +75,14 @@ Strings behave like **labels**, not like growable text in many other languages. 
 
 A string is written in **single quotes** `'...'`. Double quotes are not used for strings.
 
-### Operations
+### String Operations
 
 There is no concatenation or mutation. Strings can only be compared for equality:
 
 - `==` — equal
 - `!=` — not equal
 
-### Example
+### String Examples
 
 ```oneil
 Mode: mode = 'track'
@@ -96,17 +96,17 @@ String values work well with **discrete limits** and **piecewise** parameters; t
 
 Boolean literals are the keywords **`true`** and **`false`**.
 
-### Operations
+### Boolean Operations
 
-| Syntax | Meaning |
-|--------|---------|
-| `not` | Logical NOT (unary) |
-| `and` | Logical AND |
-| `or` | Logical OR |
+| Syntax | Meaning             |
+|--------|---------------------|
+| `not`  | Logical NOT (unary) |
+| `and`  | Logical AND         |
+| `or`   | Logical OR          |
 
 `not` binds tightly; `and` binds more tightly than `or`.
 
-### Example
+### Boolean Examples
 
 ```oneil
 True value: t = true
