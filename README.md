@@ -498,6 +498,23 @@ In the Oneil file, give the python function on the right hand of the equation, i
 Temperature: T = temperature(D) :K
 ```
 
+##### Fallback Calculations
+
+Python functions may have dependencies that aren't always available, or may take a long time to run. You can specify a fallback calculation using the `?` operator. If the Python function fails (e.g., missing dependencies, runtime errors), Oneil will use the fallback and warn the user:
+
+```oneil
+Temperature: T = expensive_simulation(D) ? D * 0.5 + 273 :K
+```
+
+In this example, if `expensive_simulation` fails, Oneil will calculate `D * 0.5 + 273` instead and display a warning that the Python function should be run for greater accuracy.
+
+This is particularly useful for:
+
+- Sharing models with users who may not have all Python dependencies installed
+- Providing quick approximations during iterative design
+- Graceful degradation when simulations fail
+
+
 ### References and Submodels
 
 One of the purposes of Oneil's models is to be able to represent **collections of systems and subsystems**. To this end, Oneil provides two different ways to import a model.
