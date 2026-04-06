@@ -21,7 +21,6 @@ pub const TEST_FAIL_EXPR_LABEL: Style = Style::new().red().bold();
 pub const TEST_FAIL_EXPR_STR: Style = Style::new().red();
 pub const NO_PARAMETERS_MESSAGE: Style = Style::new().italic().dimmed();
 pub const MODEL_PATH_HEADER: Style = Style::new().blue().bold();
-pub const PARAMETERS_NAME_LABEL: Style = Style::new().blue().bold();
 pub const PARAMETER_IDENTIFIER: Style = Style::new().green();
 pub const PARAMETER_LABEL: Style = Style::new().dimmed();
 pub const PARAMETER_UNIT: Style = Style::new().blue();
