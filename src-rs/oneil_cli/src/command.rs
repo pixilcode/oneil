@@ -639,8 +639,8 @@ impl str::FromStr for ModelResultIncludeSection {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PrintMode {
-    #[default]
     Trace,
+    #[default]
     Performance,
     All,
 }
