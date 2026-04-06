@@ -475,9 +475,8 @@ impl Value {
                 Ok(Self::MeasuredNumber(lhs.checked_pow(&rhs)?))
             }
             (Self::Number(base), Self::MeasuredNumber(rhs)) if rhs.is_dimensionless() => {
-                let base_mn = MeasuredNumber::from_number_and_unit(base, Unit::one());
                 let rhs_num = rhs.into_number_using_unit(&Unit::one());
-                base_mn.checked_pow(&rhs_num).map(Self::MeasuredNumber)
+                Ok(Self::Number(base.pow(rhs_num)))
             }
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) if rhs.is_dimensionless() => {
                 let rhs_num = rhs.into_number_using_unit(&Unit::one());
