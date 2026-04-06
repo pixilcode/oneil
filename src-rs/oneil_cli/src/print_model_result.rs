@@ -251,9 +251,7 @@ fn print_parameters_by_list(
     }
 
     for (parameter_name, parameter) in parameters_to_print {
-        let styled_parameter_name = stylesheet::PARAMETERS_NAME_LABEL.style(parameter_name);
-        print!("{styled_parameter_name}: ");
-        print_parameter(parameter, model_config);
+        print_parameter(parameter, Some(parameter_name.as_str()), model_config);
     }
 }
 
@@ -357,7 +355,7 @@ fn print_parameters_by_filter(model_ref: ModelReference<'_>, model_config: &Mode
         }
 
         for parameter in parameters {
-            print_parameter(parameter, model_config);
+            print_parameter(parameter, None, model_config);
         }
 
         if index < parameters_to_print.len() - 1 {
@@ -420,8 +418,13 @@ fn get_model_parameters_by_filter(
     }
 }
 
-fn print_parameter(parameter: &Parameter, model_config: &ModelPrintConfig) {
-    let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(parameter.ident.as_str());
+fn print_parameter(
+    parameter: &Parameter,
+    parameter_name: Option<&str>, // if None, use the parameter identifier as the name
+    model_config: &ModelPrintConfig,
+) {
+    let parameter_name = parameter_name.unwrap_or(parameter.ident.as_str());
+    let styled_ident = stylesheet::PARAMETER_IDENTIFIER.style(parameter_name);
     print!("{styled_ident} = ");
 
     print_utils::print_value(&parameter.value, model_config.print_utils_config);
