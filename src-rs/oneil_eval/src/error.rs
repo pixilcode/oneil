@@ -1178,13 +1178,13 @@ impl AsOneilError for EvalError {
                 let mut context = vec![
                     ErrorContext::Note(format!("parameter value has unit `{param_value_unit}`")),
                     ErrorContext::Help(format!(
-                        "add a unit annotation `: {param_value_unit}` to the parameter"
+                        "add a unit annotation `:{param_value_unit}` to the parameter"
                     )),
                 ];
 
                 if *is_dimensionless {
                     context.push(ErrorContext::Help(
-                        "or add `: 1` if you intend for the parameter value to be dimensionless (such as a ratio)"
+                        "or add `:1` if you intend for the parameter value to be dimensionless (such as a ratio)"
                             .to_string(),
                     ));
                 }
