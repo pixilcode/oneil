@@ -680,13 +680,10 @@ impl fmt::Display for EvalError {
             } => write!(f, "parameter is missing a unit"),
             Self::ParameterUnitMismatch {
                 param_expr_span: _,
-                param_value_unit,
+                param_value_unit: _,
                 param_unit_span: _,
-                param_unit,
-            } => write!(
-                f,
-                "parameter value unit `{param_value_unit}` does not match expected unit `{param_unit}`"
-            ),
+                param_unit: _,
+            } => write!(f, "calculated unit does not match expected unit"),
             Self::InvalidIfExpressionType {
                 expr_span: _,
                 found_value,
@@ -1196,10 +1193,12 @@ impl AsOneilError for EvalError {
             }
             Self::ParameterUnitMismatch {
                 param_expr_span: _,
-                param_value_unit: _,
+                param_value_unit,
                 param_unit_span: _,
-                param_unit: _,
-            } => Vec::new(),
+                param_unit,
+            } => vec![ErrorContext::Note(format!(
+                "calculated unit is `{param_value_unit}` but expected unit is `{param_unit}`"
+            ))],
             Self::InvalidIfExpressionType {
                 expr_span: _,
                 found_value: _,
@@ -1488,7 +1487,7 @@ impl AsOneilError for EvalError {
                 param_unit_span,
                 param_unit: _,
             } => vec![(
-                ErrorContext::Note("parameter unit defined here".to_string()),
+                ErrorContext::Note("expected unit defined here".to_string()),
                 Some(ErrorLocation::from_source_and_span(
                     source,
                     *param_unit_span,
