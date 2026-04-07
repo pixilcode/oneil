@@ -429,43 +429,55 @@ test: (360:deg) == 2*pi
 test: (360:deg) + 2*pi == (720:deg)
 ```
 
-#### Using `rad/s` and `Hz`
+## `Hz` and `rad/s`
 
-In terms of SI units, there is a problem with `rad/s` and `Hz`. It is that
-[`rad/s != Hz` even though `rad/s == 1/s` and `Hz == 1/s`](https://iopscience.iop.org/article/10.1088/1681-7575/ac0240).
-In order to get around this problem, Oneil specifies that `1 Hz == 2*pi rad/s`.
-This solution helps us to avoid this inconsistency, but it can also lead to
-some problems of its own.
+There is one place where Oneil's automatic conversions might cause confusion.
+That is with the `Hz` unit. In order to solve the problem described
+[in this article](https://iopscience.iop.org/article/10.1088/1681-7575/ac0240)
+and make `Hz` compatible with `rad/s`, Oneil defines `Hz` as
+
+```text
+1 Hz == 1 cycle/s == 2*pi rad/s.
+```
+
+Note that both `cycles` and `radians` are both dimensionless values, but
+`1 cycle == 2*pi radians`.
 
 ```oneil
+# freq.on
 Frequency: f = 1 :Hz
-Cycles in 2 seconds: cycles = f * (2:s)
-# we would expect `2`, since 1 Hz = 1 cycle/s
-# however, we get `12.57` instead
 ```
 
-The `cycle` unit is defined as `2*pi radians`, so if you simply want to view the
-unit in cycles, add the `cycle` unit.
-
-```oneil
-Cycles in 2 seconds: cycles = f * (2:s) :cycles
-# prints out `2 cycles`
+```bash
+oneil eval freq.on \
+  -x "f" \
+  -x "(f :cycle/s)" \
+  -x "(f :rad/s)" \
 ```
 
-However, using the `cycle` unit on an intermediate value will cause `cycle` units
-to propagate throughout the model. In order to avoid this, divide the value in
-`Hertz` by `2*pi` to go from radians to cycles.
+```text
+f = 1 :Hz
+(f :cycle/s) = 1 :cycle/s
+(f :rad/s) = 6.283 :rad/s
+```
+
+By default, Oneil treats dimensionless values as if they are in `radians`.
+Because of this, anytime you would like dimensionless values to be in `cycles`,
+you need to manually convert from `radians` to `cycles` by dividing by `2*pi`.
 
 ```oneil
+# freq2.on
 Frequency: f = 5 :GHz
 Speed of light: c = 299792458 :m/s
 
-Wavelength: lambda_cycles = c/f :cm/cycle
-# convert from Hz in rad/s to Hz in cycle/s
-Wavelength: lambda_convert = c/(f/2*pi) :cm
-# or, simplified
-Wavelength: lambda_convert2 = 2*pi*c/f :cm
+$ Wavelength: lambda = c/(f/2*pi) :cm
+#                          ^^^^^ Need to divide by 2*pi to convert radians to cycles
 ```
 
-In the future, we may add a rotation dimension, but for now, this is what is
-required to get around the inconsistency.
+```bash
+oneil eval freq2.on
+```
+
+```text
+lambda = 0.6075 :cm  # Wavelength
+```
