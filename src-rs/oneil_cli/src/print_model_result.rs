@@ -21,9 +21,8 @@ pub struct ModelPrintConfig {
     pub print_debug_info: bool,
     pub variables: Option<VariableList>,
     pub recursive: bool,
-    pub no_header: bool,
-    pub no_test_report: bool,
-    pub no_parameters: bool,
+    pub with_header: bool,
+    pub with_test_report: bool,
     pub print_utils_config: PrintUtilsConfig,
 }
 
@@ -35,25 +34,31 @@ pub fn print_eval_result(
     let test_info = get_model_tests(model_result, model_config.recursive, TestInfo::default());
 
     let divider_line = divider_line();
-    println!("{divider_line}");
 
-    if !model_config.no_header {
+    if model_config.with_header {
+        println!("{divider_line}");
         print_model_header(model_result.path(), &test_info);
     }
 
-    if !model_config.no_test_report {
-        print_failing_tests(&test_info, model_config.print_utils_config);
+    if test_info.passed_count != test_info.test_count {
+        if model_config.with_test_report {
+            println!("{divider_line}");
+            print_failing_tests(&test_info, model_config.print_utils_config);
+            println!("{divider_line}");
+        } else {
+            println!("{divider_line}");
+            print_test_failure_hint(model_result.path(), &test_info);
+            println!("{divider_line}");
+        }
     }
 
-    if !model_config.no_parameters {
-        if let Some(variables) = &model_config.variables {
-            print_parameters_by_list(model_result, model_config, variables);
-            print_expr_results(expr_results, model_config.print_utils_config);
-        } else if !expr_results.is_empty() {
-            print_expr_results(expr_results, model_config.print_utils_config);
-        } else {
-            print_parameters_by_filter(model_result, model_config);
-        }
+    if let Some(variables) = &model_config.variables {
+        print_parameters_by_list(model_result, model_config, variables);
+        print_expr_results(expr_results, model_config.print_utils_config);
+    } else if !expr_results.is_empty() {
+        print_expr_results(expr_results, model_config.print_utils_config);
+    } else {
+        print_parameters_by_filter(model_result, model_config);
     }
 }
 
@@ -68,8 +73,7 @@ fn print_expr_results(expr_results: &IndexMap<&str, Value>, print_utils_config: 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestPrintConfig {
-    pub no_header: bool,
-    pub no_test_report: bool,
+    pub with_header: bool,
     pub recursive: bool,
     pub print_utils_config: PrintUtilsConfig,
 }
@@ -80,15 +84,13 @@ pub fn print_test_results(eval_result: ModelReference<'_>, test_config: &TestPri
     let divider_line = divider_line();
     println!("{divider_line}");
 
-    if !test_config.no_header {
+    if test_config.with_header {
         print_model_header(eval_result.path(), &test_info);
     }
 
     let mut visited = IndexSet::new();
 
-    if !test_config.no_test_report {
-        print_all_tests(eval_result, test_config, &mut visited);
-    }
+    print_all_tests(eval_result, test_config, &mut visited);
 }
 
 #[derive(Default)]
@@ -134,12 +136,24 @@ fn get_model_tests<'runtime>(
     }
 }
 
+/// When the detailed test report is omitted, prints a short hint if any tests failed.
+fn print_test_failure_hint(model_path: &ModelPath, test_info: &TestInfo<'_>) {
+    let failed = test_info.test_count.saturating_sub(test_info.passed_count);
+
+    let failed_message = format!(
+        "{failed}/{} tests failed. Run `oneil test {}` to see results.",
+        test_info.test_count,
+        model_path.as_path().display()
+    );
+    let styled_failed_message = stylesheet::TESTS_FAIL_COLOR.style(failed_message);
+
+    println!("{styled_failed_message}");
+}
+
 fn print_failing_tests(test_info: &TestInfo<'_>, print_utils_config: PrintUtilsConfig) {
     if test_info.failed_tests.is_empty() {
         return;
     }
-
-    let divider_line = divider_line();
 
     let tests_label = stylesheet::TESTS_FAIL_COLOR.style("FAILING TESTS");
     println!("{tests_label}");
@@ -151,8 +165,6 @@ fn print_failing_tests(test_info: &TestInfo<'_>, print_utils_config: PrintUtilsC
             println!();
         }
     }
-
-    println!("{divider_line}");
 }
 
 fn print_model_failing_tests(
@@ -204,7 +216,6 @@ fn print_model_failing_tests(
 }
 
 fn print_model_header(model_path: &ModelPath, test_info: &TestInfo<'_>) {
-    let divider_line = divider_line();
     let model_label = stylesheet::MODEL_LABEL.style("Model");
     let tests_label = stylesheet::TESTS_LABEL.style("Tests");
 
@@ -219,7 +230,6 @@ fn print_model_header(model_path: &ModelPath, test_info: &TestInfo<'_>) {
 
     println!("{model_label}: {}", model_path.as_path().display());
     println!("{tests_label}: {passed_count}/{test_count} ({test_result_string})");
-    println!("{divider_line}");
 }
 
 fn print_model_path_header(model_path: &ModelPath) {

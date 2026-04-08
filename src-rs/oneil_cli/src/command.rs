@@ -199,28 +199,18 @@ pub struct EvalArgs {
     #[arg(long, short = 'r')]
     pub recursive: bool,
 
-    /// Don't print the results header
+    /// Print the results header (model path and test summary)
     #[arg(long)]
-    pub no_header: bool,
+    pub with_header: bool,
 
-    /// Don't print the test report
+    /// Print the test report (failing tests with details)
     #[arg(long)]
-    pub no_test_report: bool,
-
-    /// Don't print the parameters
-    ///
-    /// Note that this overrides the `--params` and `--print-mode` options.
-    #[arg(long)]
-    pub no_parameters: bool,
+    pub with_test_report: bool,
 
     #[command(flatten)]
     pub common: CommonArgs,
 }
 
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "this is a configuration struct for running tests in a model"
-)]
 #[derive(Args, Clone)]
 pub struct TestArgs {
     /// Path to the Oneil model file to run tests in
@@ -241,13 +231,9 @@ pub struct TestArgs {
     #[arg(long, short = 'D')]
     pub debug: bool,
 
-    /// Don't print the results header
+    /// Print the results header (model path and test summary)
     #[arg(long)]
-    pub no_header: bool,
-
-    /// Don't print the test report
-    #[arg(long)]
-    pub no_test_report: bool,
+    pub with_header: bool,
 
     #[command(flatten)]
     pub common: CommonArgs,
