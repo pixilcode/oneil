@@ -373,9 +373,8 @@ fn handle_eval_command(args: EvalArgs) {
         watch,
         expr: eval_expressions,
         recursive,
-        no_header,
-        no_test_report,
-        no_parameters,
+        with_header,
+        with_test_report,
         common,
     } = args;
 
@@ -390,9 +389,8 @@ fn handle_eval_command(args: EvalArgs) {
         print_debug_info: display_partial_results, // for now, we use the same flag for both
         variables,
         recursive,
-        no_header,
-        no_test_report,
-        no_parameters,
+        with_header,
+        with_test_report,
         print_utils_config,
     };
 
@@ -596,8 +594,7 @@ fn handle_test_command(args: TestArgs) {
         file,
         recursive,
         debug: display_partial_results,
-        no_header,
-        no_test_report,
+        with_header,
         common,
     } = args;
 
@@ -606,8 +603,7 @@ fn handle_test_command(args: TestArgs) {
     };
 
     let test_print_config = TestPrintConfig {
-        no_header,
-        no_test_report,
+        with_header,
         recursive,
         print_utils_config,
     };
