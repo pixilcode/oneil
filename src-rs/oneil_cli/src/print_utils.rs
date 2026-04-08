@@ -19,8 +19,12 @@ pub fn print_value(value: &Value, config: PrintUtilsConfig) {
         Value::Number(number) => print_number_value(number, config),
         Value::MeasuredNumber(number) => {
             let (number, unit) = number.clone().into_number_and_unit();
+
             print_number_value(&number, config);
-            print_number_unit(&unit);
+
+            if !unit.is_effectively_unitless() {
+                print_number_unit(&unit);
+            }
         }
     }
 }

@@ -94,7 +94,7 @@ pub fn eval_parameter_from_resolved_value<E: ExternalEvaluationContext>(
             Value::MeasuredNumber(number)
         }
         (Value::MeasuredNumber(number), None) if number.is_dimensionless() => {
-            Value::MeasuredNumber(number)
+            Value::MeasuredNumber(number.with_unit(Unit::one()))
         }
         (Value::MeasuredNumber(number), None) => {
             return Err(vec![EvalError::ParameterMissingUnitAnnotation {
