@@ -207,8 +207,8 @@ of the test is 5 minutes and start-up time is 10 seconds. To calculate what the 
 run time of the test is, you might write the following model.
 
 ```oneil
-Full time: t_full = 5 : min
-$ Run time: t_run = t_full - 10 : min
+Full time: t_full = 5 :min
+$ Run time: t_run = t_full - 10 :min
 ```
 
 However, this will produce an error:
@@ -219,7 +219,7 @@ However, this will produce an error:
 error: expected scalar with unit `min` but found scalar
  --> /tmp/test.on:4:23
   | 
-4 | Run time: t_r = t_f - 10 : min
+4 | Run time: t_r = t_f - 10 :min
   |                       ^-
 ```
 
@@ -230,9 +230,9 @@ The first recommended solution is to create another parameter to hold this "magi
 number". You can then define a unit on that parameter.
 
 ```oneil
-Full time: t_full = 5 : min
-Startup time: t_start = 10 : s
-$ Run time: t_run = t_full - t_start : min
+Full time: t_full = 5 :min
+Startup time: t_start = 10 :s
+$ Run time: t_run = t_full - t_start :min
 ```
 
 However, there are some situations where you may just want to label a unitless
@@ -244,8 +244,8 @@ To do so, you can use _unit casting_. Unit casting takes the form of
 Using this, the model could be rewritten as
 
 ```oneil
-Full time: t_full = 5 : min
-$ Run time: t_run = t_full - (10 : s) : min
+Full time: t_full = 5 :min
+$ Run time: t_run = t_full - (10:s) :min
 ```
 
 ## Arithmetic and comparison operators
@@ -337,8 +337,8 @@ In addition, it is important to realize that `strip` strips the unit that is
 _currently associated with a value_.
 
 ```oneil
-X in meters: x_m = 1000 : m
-X in kilometers: x_km = 1 : km
+X in meters: x_m = 1000 :m
+X in kilometers: x_km = 1 :km
 
 # 1000 meters == 1 km
 test: x_m == x_km
@@ -352,7 +352,9 @@ the value to the unit that you expect it to be.
 
 ```oneil
 # convert both values to meters before comparing them
-test: strip((x_m : m)) == strip((x_km : m))
+test: strip((x_m :m)) == strip((x_km :m))
+```
+
 ## Non-linear units
 
 On top of linear units, Oneil supports _decibel_ (**dB**) units. You form a
@@ -436,8 +438,8 @@ This solution helps us to avoid this inconsistency, but it can also lead to
 some problems of its own.
 
 ```oneil
-Frequency: f = 1 : Hz
-Cycles in 2 seconds: cycles = f * (2:s) : 1
+Frequency: f = 1 :Hz
+Cycles in 2 seconds: cycles = f * (2:s)
 # we would expect `2`, since 1 Hz = 1 cycle/s
 # however, we get `12.57` instead
 ```
@@ -446,7 +448,7 @@ The `cycle` unit is defined as `2*pi radians`, so if you simply want to view the
 unit in cycles, add the `cycle` unit.
 
 ```oneil
-Cycles in 2 seconds: cycles = f * (2:s) : cycles
+Cycles in 2 seconds: cycles = f * (2:s) :cycles
 # prints out `2 cycles`
 ```
 
@@ -455,14 +457,14 @@ to propagate throughout the model. In order to avoid this, divide the value in
 `Hertz` by `2*pi` to go from radians to cycles.
 
 ```oneil
-Frequency: f = 5 : GHz
-Speed of light: c = 299792458 : m/s
+Frequency: f = 5 :GHz
+Speed of light: c = 299792458 :m/s
 
-Wavelength: lambda_cycles = c/f : cm/cycle
+Wavelength: lambda_cycles = c/f :cm/cycle
 # convert from Hz in rad/s to Hz in cycle/s
-Wavelength: lambda_convert = c/(f/2*pi) : cm
+Wavelength: lambda_convert = c/(f/2*pi) :cm
 # or, simplified
-Wavelength: lambda_convert2 = 2*pi*c/f : cm
+Wavelength: lambda_convert2 = 2*pi*c/f :cm
 ```
 
 In the future, we may add a rotation dimension, but for now, this is what is
