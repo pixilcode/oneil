@@ -19,10 +19,6 @@ oneil eval hello.on --params x
 The `--params x` option prints the parameter `x`. This option can also be shortened to `-p x`. You should see something like:
 
 ```text
-────────────────────────────────────────────────────────────────────────────────
-Model: hello.on
-Tests: 0/0 (PASS)
-────────────────────────────────────────────────────────────────────────────────
 x = 1  # Hello
 ```
 
@@ -79,10 +75,7 @@ oneil eval hello.on
 Output:
 
 ```text
-────────────────────────────────────────────────────────────────────────────────
-Model: /tmp/hello.on
-Tests: 0/0 (PASS)
-────────────────────────────────────────────────────────────────────────────────
+(No performance parameters found)
 ```
 
 Note that there are no parameters printed out. The reason for this is discussed in [_Annotations_](#annotations).
@@ -95,10 +88,6 @@ oneil eval hello.on --print all
 Output:
 
 ```text
-────────────────────────────────────────────────────────────────────────────────
-Model: /tmp/hello.on
-Tests: 0/0 (PASS)
-────────────────────────────────────────────────────────────────────────────────
 x = 1  # Hello
 ```
 
@@ -123,10 +112,6 @@ oneil eval multi.on --print all
 Output:
 
 ```text
-────────────────────────────────────────────────────────────────────────────────
-Model: /tmp/multi.on
-Tests: 0/0 (PASS)
-────────────────────────────────────────────────────────────────────────────────
 a = 1  # First
 c = 2  # Third
 b = 3  # Second
@@ -151,12 +136,8 @@ oneil eval multi.on -p b,a
 Output:
 
 ```text
-────────────────────────────────────────────────────────────────────────────────
-Model: /tmp/multi.on
-Tests: 0/0 (PASS)
-────────────────────────────────────────────────────────────────────────────────
-b: b = 3  # Second
-a: a = 1  # First
+b = 3  # Second
+a = 1  # First
 ```
 
 The order in the comma-separated list is the order they appear in the output. You can select one or more parameters; only those are printed.
