@@ -95,6 +95,7 @@ the practical application. For parameters with a literal value, units can be
 assigned with the `:<unit>` syntax:
 
 ```oneil
+# velocity.on
 Distance: d = 100 :meters
 Travel time: t = 20 :seconds
 ```
@@ -124,42 +125,50 @@ For example, using `d` and `t` from the previous section, we can then define
 velocity as
 
 ```oneil
-Velocity: v = d/t :m/s
+# velocity.on (continued)
+$ Velocity: v = d/t :m/s
 ```
 
 defining a parameter with a measured value with the units `m/s`.
 
-Printing out `v` with `oneil eval calc.on --params v` produces
+Running the model with `oneil eval velocity.on` produces
 
 ```text
-v: v = 5 :m/s  # Velocity
+v = 5 :m/s  # Velocity
 ```
 
-If we wanted to, we could just as easily define velocity in kilometers per hour
+If we wanted to, we could just as easily define velocity in kilometers per hour.
 
 ```oneil
-Velocity: v = d/t :km/hr
+$ Velocity: v = d/t :km/hr
+#                    ^^^^^ `km/hr` instead of `m/s`
 ```
 
-which would output
+```bash
+oneil eval velocity.on
+```
 
 ```text
-v: v = 18 :km/hr  # Velocity
+v = 18 :km/hr  # Velocity
 ```
 
 Note that we did not have to do any conversions. Oneil handles that for us.
 However, if we try to use incorrect units, Oneil will produce an error.
 
 ```oneil
-Velocity: v = d/t :kg/hr
-#                  ^^ `kg` instead of `km`
+$ Velocity: v = d/t :kg/hr
+#                    ^^ `kg` instead of `km`
+```
+
+```bash
+oneil eval velocity.on
 ```
 
 ```text
 error: calculated unit does not match expected unit
- --> /tmp/test.on:3:15
+ --> velocity.on:3:17
   | 
-3 | Velocity: v = d/t :kg/hr
+3 | $ Velocity: v = d/t :kg/hr
   |               ^--
   = note: calculated unit is `meters/seconds` but expected unit is `kg/hr`
 ```
@@ -172,18 +181,22 @@ result. In that case, we do leave the units out (see
 [dimensionless values](#dimensionless-units)).
 
 ```oneil
-Velocity: v = d/t
-#                 ^ No unit
+$ Velocity: v = d/t
+#                   ^ No unit
+```
+
+```bash
+oneil eval velocity.on
 ```
 
 ```text
 error: parameter is missing a unit
- --> /tmp/test.on:6:15
+ --> velocity.on:3:17
   | 
-6 | Velocity: v = d/t 
-  |               ^--
+3 | $ Velocity: v = d/t
+  |                 ^--
   = note: parameter value has unit `meters/seconds`
-  = help: add a unit annotation `: meters/seconds` to the parameter
+  = help: add a unit annotation `:meters/seconds` to the parameter
 ```
 
 ## Composing units in a unit expression
@@ -207,17 +220,22 @@ of the test is 5 minutes and start-up time is 10 seconds. To calculate what the 
 run time of the test is, you might write the following model.
 
 ```oneil
+# testing.on
 Full time: t_full = 5 :min
 $ Run time: t_run = t_full - 10 :min
 ```
 
-However, this will produce an error:
+However, this will produce an error.
+
+```bash
+oneil eval testing.on
+```
 
 <!-- TODO: make this error more user friendly -->
 
 ```text
 error: expected scalar with unit `min` but found scalar
- --> /tmp/test.on:4:23
+ --> testing.on:2:30
   | 
 4 | Run time: t_r = t_f - 10 :min
   |                       ^-
@@ -230,9 +248,18 @@ The first recommended solution is to create another parameter to hold this "magi
 number". You can then define a unit on that parameter.
 
 ```oneil
+# testing.on
 Full time: t_full = 5 :min
 Startup time: t_start = 10 :s
 $ Run time: t_run = t_full - t_start :min
+```
+
+```bash
+oneil eval testing.on
+```
+
+```text
+t_run = 4.833 :min  # Run time
 ```
 
 However, there are some situations where you may just want to label a unitless
@@ -244,8 +271,17 @@ To do so, you can use _unit casting_. Unit casting takes the form of
 Using this, the model could be rewritten as
 
 ```oneil
+# testing.on
 Full time: t_full = 5 :min
 $ Run time: t_run = t_full - (10:s) :min
+```
+
+```bash
+oneil eval testing.on
+```
+
+```text
+t_run = 4.833 :min  # Run time
 ```
 
 ## Arithmetic and comparison operators
@@ -263,9 +299,13 @@ following table. The unit of a given value `x` is indicated by `x_unit`.
 
 ### Examples
 
+> [!NOTE]
+> `empty.on` is just an empty model, since we don't reference any model
+> parameters.
+
 ```bash
 # addition, subtraction, modulo
-oneil eval my_model.on \
+oneil eval empty.on \
   -x "(1000:m) + (1:km)" \
   -x "(1:km) + (1000:m)" \
   -x "(5:min) - (30:s)" \
@@ -281,7 +321,7 @@ oneil eval my_model.on \
 
 ```bash
 # multiplication, division, exponentiation
-oneil eval my_model.on \
+oneil eval empty.on \
   -x "(1:m) * (1:s)" \
   -x "(1:m) * (1:m)" \
   -x "(1:m) * 1" \
@@ -301,7 +341,7 @@ oneil eval my_model.on \
 
 ```bash
 # comparison
-oneil eval my_model.on \
+oneil eval empty.on \
   -x "(1:kg) < (2000:g)" \
   -x "(1:kg) > (1:g)" \
   -x "(1:kg) <= (1000:g)" \
@@ -326,8 +366,17 @@ provides the `strip` function. The strip function removes any units from a
 value.
 
 ```oneil
+# adc.on
 ADC bit resolution: S_adc = 10 :b
 $ ADC step count: n_adc = 2^(strip(S_adc)-1)
+```
+
+```bash
+oneil eval adc.on
+```
+
+```text
+n_adc = 512  # ADC step count
 ```
 
 The places where this should be used are rare and should be treated cautiously
@@ -337,22 +386,34 @@ In addition, it is important to realize that `strip` strips the unit that is
 _currently associated with a value_.
 
 ```oneil
-X in meters: x_m = 1000 :m
-X in kilometers: x_km = 1 :km
+# length.on
+Length in meters: l_m = 1000 :m
+Length in kilometers: l_km = 1 :km
+```
 
-# 1000 meters == 1 km
-test: x_m == x_km
+```bash
+oneil eval length.on \
+  -x "strip(l_m)" \
+  -x "strip(l_km)"
+```
 
-# 1000 != 1
-test: strip(x_m) != strip(x_km)
+```text
+strip(l_m) = 1e3
+strip(l_km) = 1
 ```
 
 For this reason, when using `strip`, it is recommended that you first cast
 the value to the unit that you expect it to be.
 
-```oneil
-# convert both values to meters before comparing them
-test: strip((x_m :m)) == strip((x_km :m))
+```bash
+oneil eval length.on \
+  -x "strip((l_m :m))" \
+  -x "strip((l_km :m))"
+```
+
+```text
+strip((l_m :m)) = 1e3
+strip((l_km :m)) = 1e3
 ```
 
 ## Non-linear units
@@ -372,10 +433,19 @@ that contain parameters with `dB` units should use linear math. For example,
 when calculating the signal to noise ratio by hand, you might subtract the noise
 (`dB`) from the signal (`dB`), but in Oneil, you divide the signal by the noise:
 
-``` { .on }
+```oneil
+# power.on
 Noise power: P_n = -100 :dBmW
 Signal power: P_s = -90 :dBmW
-Signal-to-noise ratio: S_N = P_s/P_n
+$ Signal-to-noise ratio: S_N = P_s/P_n
+```
+
+```bash
+oneil eval power.on
+```
+
+```text
+S_N = 10  # Signal-to-noise ratio
 ```
 
 ## Dimensionless units
@@ -389,9 +459,13 @@ with dimensionless units are referred to as _dimensionless values_.
 Dimensionless values can be treated as if they have no unit. The following
 demonstrates this with the `%` unit.
 
+> [!NOTE]
+> `empty.on` is just an empty model, since we don't reference any model
+> parameters.
+
 ```bash
 # `100%` is treated as equal to `1`
-oneil eval my_model.on \
+oneil eval empty.on \
   -x "(100:%) == 1" \
 ```
 
@@ -401,7 +475,7 @@ oneil eval my_model.on \
 
 ```bash
 # the `1` is equal to `100%`, not `1%`
-oneil eval my_model.on \
+oneil eval empty.on \
   -x "(100:%) + 1"
 ```
 
@@ -419,14 +493,19 @@ opted to follow this convention. Therefore, all angular units (such as
 when adding a unitless number to an angular value, the unitless number is
 treated as if it is specified in `radians`.
 
-```oneil
-test: (1:rad) == 1
+```bash
+oneil eval empty.on \
+  -x "(1:rad) == 1" \
+  -x "(360:deg) == 2*pi" \
+  -x "(1:rad) + 1" \
+  -x "(360:deg) + 2*pi"
+```
 
-test: (1:rad) + 1 == (2:rad)
-
-test: (360:deg) == 2*pi
-
-test: (360:deg) + 2*pi == (720:deg)
+```text
+(1:rad) == 1 = true
+(360:deg) == 2*pi = true
+(1:rad) + 1 = 2
+(360:deg) + 2*pi = 720 :deg
 ```
 
 ## `Hz` and `rad/s`
