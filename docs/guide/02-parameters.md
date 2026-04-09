@@ -183,4 +183,44 @@ c = 2  # Third
 b = 3  # Second
 ```
 
+## Evaluating expressions
+
+While it is usually best to include all equations in the model itself, there may
+be some times when you need to do a quick evaluation of an expression. For that,
+Oneil provides the `--expr`/`-x` argument. This argument prints out the result
+of evaluating the provided expression.
+
+For example, assuming the previous model is in `my_model.on`, you can run the
+following:
+
+```bash
+oneil eval my_model.on --expr "1 + 1"
+```
+
+```text
+1 + 1 = 2
+```
+
+It's great that you can evaluate simple expressions, but the real power of
+`--expr` comes when you refer to variables in the model.
+
+```bash
+oneil eval my_model.on --expr "b - a"
+```
+
+```text
+b - a = 2
+```
+
+In addition, you can provide multiple expressions at the same time.
+
+```bash
+oneil eval my_model.on --expr "b - a" --expr "b - c"
+# or, using the shorter name
+oneil eval my_model.on -x "b - a" --expr "b - c"
+```
+
+```text
+b - a = 2
+b - c = 1
 ```
