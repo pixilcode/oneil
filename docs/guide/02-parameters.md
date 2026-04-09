@@ -174,27 +174,32 @@ Parameters can be marked with optional annotations that control whether they are
 Annotations appear before the label. Example:
 
 ```oneil
-* Trace param: t = 1
-** Debug param: d = 2
-$ Perf param: p = 3
+# Trace marker:
+* First: a = 1
+
+# Debug marker:
+** Second: b = a + c
+
+# Performance marker:
+$ Third: c = 2
 ```
 
-Save as `annot.on`. With the default print mode (trace), all three are printed because trace mode includes `*`, `**`, and `$`:
-
-```sh
-oneil eval /tmp/annot.on
-```
-
-Output:
+With the default print mode (perf), only the performance variables are displayed.
 
 ```text
-────────────────────────────────────────────────────────────────────────────────
-Model: /tmp/annot.on
-Tests: 0/0 (PASS)
-────────────────────────────────────────────────────────────────────────────────
-t = 1  # Trace param
-d = 2  # Debug param
-p = 3  # Perf param
+c = 2  # Third
+```
+
+To display the other variables, use the `--print`/`-P` argument with the `trace` argument.
+
+```sh
+oneil eval <model>.on --print trace
+```
+
+```text
+a = 1  # First
+c = 2  # Third
+b = 3  # Second
 ```
 
 ```
