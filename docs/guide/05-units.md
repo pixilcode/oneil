@@ -258,33 +258,6 @@ Full time: t_full = 5 : min
 $ Run time: t_run = t_full - (10 : s) : min
 ```
 
-### Verifying units
-
-The most common use case for unit casting is to cast a unitless value into a
-measured value. However, unit casting can also be used to verify that a unit
-matches the expected unit. For example, you might be trying to debug the
-following model, which has a unit error.
-
-```oneil
-Start velocity: v_start = 10 : m
-#                             ^ should be m/s
-End velocity: v_end = 20 : m/s
-Time: t = 5 :s
-$ Acceleration: a = (v_end - v_start) / t : m/s^2
-```
-
-To verify that you are getting the expected units, you could wrap `v_end` and
-`v_start` in unit casts to find out where the error is.
-
-```oneil
-Acceleration: a = ((v_end : m/s) - (v_start : m/s)) / t : m/s^2
-```
-
-This would then reveal that `v_start` is in `m` rather than `m/s`, allowing you
-to fix the error, then remove the casts.
-
-This situation is obviously contrived, but using unit casting in this way may
-come in handy with more complex operations.
 
 ## `strip`
 
