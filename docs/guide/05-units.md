@@ -68,6 +68,26 @@ There are also dimensionless units such `%`. These are discussed
 If you haven't quite wrapped your head around dimensions yet, don't worry. You
 don't need to fully understand it to use Oneil.
 
+### Magnitudes
+
+So if `kilometers` and `millimeters` are the same _dimensions_, then what makes
+them different? The difference is in the _magnitudes_.
+
+A magnitude is the relative size of a unit compared to the base unit. Relative
+to the base unit of `meters`, `kilometers` has a magnitude of `1000` since
+`1 km == 1000 m`. Meanwhile, `millimeters` has a magnitude of `0.001` because
+`1 mm == 0.001 m`.
+
+Oneil tracks magnitudes and performs automatic conversions to handle units with
+different magnitudes. So when Oneil sees `1 m + 1 km`, it knows that it needs
+to convert `1 km` to `1000 m` before adding. The result would therefore end up
+being `1001 m`.
+
+This automatic conversion also applies to units such as `feet` and `meters`, as
+well as more complex units like `ft*lb/s^2` and `Newtons`, which could save your
+climate orbiter from
+[a devastating crash](https://en.wikipedia.org/wiki/Mars_Climate_Orbiter).
+
 ## Assigning units
 
 Now that we've reviewed the motivation behind tracking units, let's get into
