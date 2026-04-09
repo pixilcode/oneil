@@ -86,7 +86,7 @@ pub fn float_to_string(value: f64, sig_figs: usize) -> String {
     let standard_float = trim_trailing_zeros(format!("{value:.standard_precision$}"));
     let scientific_float = trim_trailing_zeros(format!("{value:.scientific_precision$e}"));
 
-    if standard_float.len() < scientific_float.len() {
+    if standard_float.len() <= scientific_float.len() {
         standard_float
     } else {
         scientific_float
