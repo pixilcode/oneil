@@ -1,89 +1,5 @@
 # Units
 
-
-To assign a unit to a parameter, use the `: <unit>` syntax:
-
-```oneil
-Distance: d = 100 : meters
-Travel time: t = 20 : seconds
-```
-
-This will assign `d` to a value of `100 : meters` and `t` to a value of `20 :
-seconds`. These values are now _measured numbers_, or numbers with units.
-
-> ![NOTE]
-> There are often multiple synonyms for a given unit. For example, the above
-> model could also be written as
->
-> ```oneil
-> Distance: d = 100 : m
-> Travel time: t = 20 : s
-> ```
->
-> To see a list of all builtin units and their synonyms, run
-> `oneil builtins unit`. Also, if you would like to search for a given unit, run
-> `oneil builtins unit <unit>`.
-
-We can then define velocity as
-
-```oneil
-Velocity: v = d/t : m/s
-```
-
-defining a parameter with a measured value with the units `m/s`.
-
-Printing out `v` with `oneil eval calc.on --params v` produces
-
-```text
-v: v = 5.0000 : m/s  # Velocity
-```
-
-If we wanted to, we could just as easily define velocity in kilometers per hour
-
-```oneil
-Velocity: v = d/t : km/hr
-```
-
-which would produce
-
-```text
-v: v = 18.0000 : km/hr  # Velocity
-```
-
-Note that we did not have to do any conversions. Oneil handles that for us.
-However, if we try to use incorrect units, Oneil will produce an error.
-
-```oneil
-Velocity: v = d/t : kg/hr
-#                   ^^ `kg` instead of `km`
-```
-
-```text
-error: parameter value unit `meters/seconds` does not match expected unit `kg/hr`
- --> /tmp/test.on:6:15
-  | 
-6 | Velocity: v = d/t : kg/hr
-  |               ^--
-```
-
-In addition, Oneil requires units on _any parameters with measured values_. If
-we leave out the unit, we get an error. (For the exception to this, see the
-later section on [dimensionless values](#dimensionless-units))
-
-```oneil
-Velocity: v = d/t
-#                 ^ No unit
-```
-
-```text
-error: parameter is missing a unit
- --> /tmp/test.on:6:15
-  | 
-6 | Velocity: v = d/t 
-  |               ^--
-  = note: parameter value has unit `meters/seconds`
-  = help: add a unit annotation `: meters/seconds` to the parameter
-```
 One of Oneil's defining features is its unit-based type system. Oneil tracks
 units, disallows invalid operations between different physical properties, and
 automatically converts between differing units of the same physical property.
@@ -152,6 +68,103 @@ There are also dimensionless units such `%`. These are discussed
 If you haven't quite wrapped your head around dimensions yet, don't worry. You
 don't need to fully understand it to use Oneil.
 
+## Assigning units
+
+Now that we've reviewed the motivation behind tracking units, let's get into
+the practical application. For parameters with a literal value, units can be
+assigned with the `:<unit>` syntax:
+
+```oneil
+Distance: d = 100 :meters
+Travel time: t = 20 :seconds
+```
+
+This will assign `d` to a value of `100 :meters` and `t` to a value of
+`20 :seconds`. These values are now _measured numbers_, or numbers with units.
+
+> [!NOTE]
+> There are often multiple synonyms for a given unit. For example, the above
+> model could also be written as
+>
+> ```oneil
+> Distance: d = 100 :m
+> Travel time: t = 20 :s
+> ```
+>
+> To see a list of all builtin units and their synonyms, run
+> `oneil builtins unit`. Also, if you would like to search for a given unit, run
+> `oneil builtins unit <unit>`.
+
+## Annotating expected units
+
+For calculated parameters, the `:<unit>` syntax declares the _expected_ units of
+a calculation, which Oneil checks.
+
+For example, using `d` and `t` from the previous section, we can then define
+velocity as
+
+```oneil
+Velocity: v = d/t :m/s
+```
+
+defining a parameter with a measured value with the units `m/s`.
+
+Printing out `v` with `oneil eval calc.on --params v` produces
+
+```text
+v: v = 5 :m/s  # Velocity
+```
+
+If we wanted to, we could just as easily define velocity in kilometers per hour
+
+```oneil
+Velocity: v = d/t :km/hr
+```
+
+which would output
+
+```text
+v: v = 18 :km/hr  # Velocity
+```
+
+Note that we did not have to do any conversions. Oneil handles that for us.
+However, if we try to use incorrect units, Oneil will produce an error.
+
+```oneil
+Velocity: v = d/t :kg/hr
+#                  ^^ `kg` instead of `km`
+```
+
+```text
+error: calculated unit does not match expected unit
+ --> /tmp/test.on:3:15
+  | 
+3 | Velocity: v = d/t :kg/hr
+  |               ^--
+  = note: calculated unit is `meters/seconds` but expected unit is `kg/hr`
+```
+
+In addition, Oneil requires units on any parameters whose calculations are
+expected to produce a measured value. If we leave out the unit, we get an error.
+
+Likewise, the calculation for a unitless parameter should not have a measured
+result. In that case, we do leave the units out (see
+[dimensionless values](#dimensionless-units)).
+
+```oneil
+Velocity: v = d/t
+#                 ^ No unit
+```
+
+```text
+error: parameter is missing a unit
+ --> /tmp/test.on:6:15
+  | 
+6 | Velocity: v = d/t 
+  |               ^--
+  = note: parameter value has unit `meters/seconds`
+  = help: add a unit annotation `: meters/seconds` to the parameter
+```
 
 ## Composing units in a unit expression
 
