@@ -1,51 +1,39 @@
 # Value Types
 
-Parameter values are expressions. The main literal types are **numbers**, **strings**, and **booleans**.
+Parameter values can include literals, equations, and imported functions. The main literal types are **numbers**, **strings**, and **booleans**.
 
 ## Numbers
 
-Numeric values are IEEE-754 double-precision floating-point numbers, written with decimal syntax similar to that of Python. The grammar allows:
+Numbers use familiar decimal notation: whole numbers, values with a decimal point, and **scientific notation** (`e` or `E`) when a value is very large or very small. **`inf`** can be used for infinity.
 
-- Optional leading sign (`+` or `-`) on a numeric literal.
-- Integer and fractional parts (e.g. `42`, `3.14`, `.5`).
-- Scientific notation with `e` or `E` (e.g. `1.5e3`, `2E-4`).
-- The literal `inf` for infinity.
-
-Examples:
+For example,
 
 ```oneil
 Integer: n = 42
-Fraction: f = 3.14
+Decimal: d = 3.14
 Scientific: e_val = 1.5e3
 Infinity: inf_val = inf
 ```
 
-### Number Operations
-
-Precedence matches the language grammar (exponentiation before multiplication/division, then addition/subtraction; comparisons and logical operators are lower).
+### Number Operators
 
 **Arithmetic** (for ordinary scalar values):
 
-| Operator     | Meaning                            |
-|--------------|------------------------------------|
-| `-` (prefix) | Unary negation                     |
-| `^`          | Exponentiation (right-associative) |
-| `*`          | Multiplication                     |
-| `/`          | Division                           |
-| `%`          | Modulo                             |
-| `+`          | Addition                           |
-| `-`          | Subtraction                        |
+- `^` - exponentiation
+- `*` - multiplication
+- `/` - division
+- `%` - modulo
+- `+` - addition
+- `-` - subtraction
 
 **Comparisons** (produce booleans; can be **chained**, e.g. `1 < 2 < 3`):
 
-| Operator | Meaning               |
-|----------|-----------------------|
-| `<`      | Less than             |
-| `>`      | Greater than          |
-| `<=`     | Less than or equal    |
-| `>=`     | Greater than or equal |
-| `==`     | Equal                 |
-| `!=`     | Not equal             |
+- `<` - less than
+- `>` - greater than
+- `<=` - less than or equal
+- `>=` - greater than or equal
+- `==` - equal
+- `!=` - not equal
 
 ### Number Examples
 
@@ -71,11 +59,11 @@ Euler's number: euler = e
 
 ## Strings
 
-Strings behave like **labels**, not like growable text in many other languages. Typical uses include modes or categories. For example, a resolution mode might be `'polar'`, `'track'`, or `'footprint'`.
+Strings behave like **fixed strings**, not like growable text in many other languages. Typical uses include modes or categories. For example, a battery's array configuration could be either `'series'` or `'parallel'`. As another example, a remote sensing resolution mode might be `'polar'`, `'track'`, or `'footprint'`.
 
 A string is written in **single quotes** `'...'`. Double quotes are not used for strings.
 
-### String Operations
+### String Operators
 
 There is no concatenation or mutation. Strings can only be compared for equality:
 
@@ -96,15 +84,11 @@ String values work well with **discrete limits** and **piecewise** parameters; t
 
 Boolean literals are the keywords **`true`** and **`false`**.
 
-### Boolean Operations
+### Boolean Operators
 
-| Syntax | Meaning             |
-|--------|---------------------|
-| `not`  | Logical NOT (unary) |
-| `and`  | Logical AND         |
-| `or`   | Logical OR          |
-
-`not` binds tightly; `and` binds more tightly than `or`.
+- `not` - logical NOT (unary)
+- `and` - logical AND
+- `or` - logical OR
 
 ### Boolean Examples
 
