@@ -1,6 +1,6 @@
 # Parameters
 
-Parameters are the main way to define values in an Oneil model. This section covers the basics: defining parameters, running a model, and selecting what gets printed.
+Parameters are the main way to define values in an Oneil model. Parameters are variables with extra metadata for system modeling and review. They define a long name, limits, a math symbol for rendering and review, units, a derivation, and either a value assignment or an equation relating this parameter to others. This section covers the basics: defining parameters, running a model, and selecting what gets printed.
 
 ## Hello world
 
@@ -32,16 +32,16 @@ x = 1  # Hello
 
 Each parameter declaration has three required pieces:
 
-1. **Label** - A human-readable name (can include spaces). This can contain any character except the following: `(`, `)`, `[`, `]`, `{`, `}`, `#`, `~`, `:`, `=`, `\n`, `*`, and `$`.
+1. **Name** - A human-readable name (can include spaces). This can contain any character except the following: `(`, `)`, `[`, `]`, `{`, `}`, `#`, `~`, `:`, `=`, `\n`, `*`, and `$`.
 
-2. **Name** - The identifier used in expressions (e.g. `x`). It must appear after the colon and before `=`. Other parameters and expressions refer to the parameter by this identifier. A name starts with a letter and may contain letters, digits, and underscores (`_`).
+2. **Identifier** - The identifier used in expressions (e.g. `x`). It must appear after the colon and before `=`. Other parameters and expressions refer to the parameter by this identifier. A name starts with a letter and may contain letters, digits, and underscores (`_`).
 
-3. **Value** - The expression on the right-hand side of `=`. It can be a number, a reference to another parameter, or a more complex expression (with optional unit; see [Value Types](03-value-types.md) and [Units](04-units.md)).
+3. **Expression** - The expression on the right-hand side of `=`. It can be a number, a reference to another parameter, or a more complex expression (with optional unit; see [Value Types](03-value-types.md) and [Units](04-units.md)).
 
 The syntax is:
 
 ```oneil
-Label: name = value
+Name: identifier = expression
 ```
 
 For example,
@@ -134,7 +134,7 @@ b = 3  # Second
 
 ## Selecting parameters to print
 
-By default, only parameters with certain annotations are printed. To print specific parameters by name, use `--params` (or `-p`):
+By default, only parameters with certain [annotations](#annotations) are printed. To print specific parameters by name, use `--params` (or `-p`):
 
 ```sh
 oneil eval <model>.on --params param1,param2
@@ -169,9 +169,7 @@ Parameters can be marked with optional annotations that control whether they are
 |-------------|--------|----------------------------------------------------------------------------------------------------------------------|
 | Trace       | `*`    | Included when printing “trace” parameters (default).                                                                 |
 | Debug       | `**`   | Same as trace, and with `--debug` / `-D`, extra debug info is printed for variables used to evaluate this parameter. |
-| Performance | `$`    | Marked for performance/optimization; can be printed in “perf” mode.                                                  |
-
-TODO: mention debug variables and `--debug` seperately
+| Performance | `$`    | Marked as a performance variable.                                                                                    |
 
 Annotations appear before the label. Example:
 
