@@ -188,18 +188,6 @@ error: parameter is missing a unit
 
 ## Composing units in a unit expression
 
-A **unit expression** is built from **terms** separated by `*` or `/`, which
-group **left-to-right** in the usual way for multiplication and division
-(left-associative).
-
-Each **term** is one of:
-
-- A **unit name**, optionally raised to a numeric power with `^`, for example `m`, `s^2`, `m^0.5`.
-- The literal **`1`**, meaning a dimensionless factor of one. This is common in rates such as `1/s` (per second).
-- A **parenthesized** unit expression, for example `J/(kg*K)`, when you need to override the default left-associative grouping.
-
-A unit can be a base unit (such as `km` or `grams`), but base units can
-also be combined with other operators.
 
 ## Arithmetic and comparison operators
 
@@ -242,6 +230,17 @@ test: (1:kg) >= (900:g)
 test: (1:kg) == (1000:g)
 test: (1:kg) != (1:g)
 ```
+A **unit expression** is built from one or more units separated by `*` or `/`.
+Each unit can be raised to a numeric power with `^`, such as `s^2`.
+
+Unit expressions can also use the literal `1` as a dimensionless unit. This is
+used in rates such as `1/s`.
+
+> [!WARNING]
+> Multiplication and division operate left to right. So `J/kg*K` is treated as
+> `(J/kg)*K` rather than `J/(kg*K)`.
+>
+> To express `J/(kg*K)`, explicit parentheses are required.
 
 ## Unit casting
 
