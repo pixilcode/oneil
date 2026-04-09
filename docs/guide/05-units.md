@@ -188,48 +188,6 @@ error: parameter is missing a unit
 
 ## Composing units in a unit expression
 
-
-## Arithmetic and comparison operators
-
-Arithmetic and comparison operator rules and behavior is defined by the
-following table. The unit of a given value `x` is indicated by `x_unit`.
-
-| Operation | Input Rules | Unit Output | Example |
-| `a + b`, `a - b`, `a % b` | `a_unit` and `b_unit` must have the same dimensions | `a_unit` |
-| `a * b` | None | `a_unit * b_unit`; unitless values have a unit of `1` |
-| `a / b` | None | `a_unit / b_unit`; unitless values have a unit of `1` |
-| `a ^ b` | `b` cannot have a unit | `a_unit ^ b` |
-| comparison (`<`, `>`, `<=`, `>=`, `==`, `!=`) | `a_unit` and `b_unit` must have the same dimensions | N/A (produces `true` or `false`) |
-
-### Examples
-
-```oneil
-# Addition, subctraction, modulo
-test: (1000:m) + (1:km) == (2000:m)
-test: (1:km) + (1000:m) == (2:km)
-test: (5:min) - (30:s) == (4.5:min)
-test: (80:s) % (1:min) == (20:s)
-
-# Multiplication
-test: (1:m) * (1:s) == (1:m*s)
-test: (1:m) * (1:m) == (1:m^2)
-test: (1:m) * 1 == (1:m)
-
-# Division
-test: (1:m) / (1:s) == (1:m/s)
-test: (1:m) / 1 == (1:m)
-
-# Exponentiation
-test: (1:m)^2 == (1:m^2)
-
-# Comparison
-test: (1:kg) < (2000:g)
-test: (1:kg) > (1:g)
-test: (1:kg) <= (1000:g)
-test: (1:kg) >= (900:g)
-test: (1:kg) == (1000:g)
-test: (1:kg) != (1:g)
-```
 A **unit expression** is built from one or more units separated by `*` or `/`.
 Each unit can be raised to a numeric power with `^`, such as `s^2`.
 
@@ -290,6 +248,76 @@ Full time: t_full = 5 : min
 $ Run time: t_run = t_full - (10 : s) : min
 ```
 
+## Arithmetic and comparison operators
+
+Arithmetic and comparison operator rules and behavior are defined by the
+following table. The unit of a given value `x` is indicated by `x_unit`.
+
+| Operation                                     | Input Rules                                         | Unit Output                      |
+|-----------------------------------------------|-----------------------------------------------------|----------------------------------|
+| `a + b`, `a - b`, `a % b`                     | `a_unit` and `b_unit` must have the same dimensions | `a_unit`                         |
+| `a * b`                                       | None                                                | `a_unit * b_unit`                |
+| `a / b`                                       | None                                                | `a_unit / b_unit`                |
+| `a ^ b`                                       | `b` cannot have any dimensions                      | `a_unit ^ b`                     |
+| comparison (`<`, `>`, `<=`, `>=`, `==`, `!=`) | `a_unit` and `b_unit` must have the same dimensions | N/A (produces `true` or `false`) |
+
+### Examples
+
+```bash
+# addition, subtraction, modulo
+oneil eval my_model.on \
+  -x "(1000:m) + (1:km)" \
+  -x "(1:km) + (1000:m)" \
+  -x "(5:min) - (30:s)" \
+  -x "(80:s) % (1:min)"
+```
+
+```text
+(1000:m) + (1:km) = 2e3 :m
+(1:km) + (1000:m) = 2 :km
+(5:min) - (30:s) = 4.5 :min
+(80:s) % (1:min) = 20 :s
+```
+
+```bash
+# multiplication, division, exponentiation
+oneil eval my_model.on \
+  -x "(1:m) * (1:s)" \
+  -x "(1:m) * (1:m)" \
+  -x "(1:m) * 1" \
+  -x "(1:m) / (1:s)" \
+  -x "(1:m) / 1" \
+  -x "(1:m)^2"
+```
+
+```text
+(1:m) * (1:s) = 1 :m*s
+(1:m) * (1:m) = 1 :m*m
+(1:m) * 1 = 1 :m
+(1:m) / (1:s) = 1 :m/s
+(1:m) / 1 = 1 :m
+(1:m)^2 = 1 :m^2
+```
+
+```bash
+# comparison
+oneil eval my_model.on \
+  -x "(1:kg) < (2000:g)" \
+  -x "(1:kg) > (1:g)" \
+  -x "(1:kg) <= (1000:g)" \
+  -x "(1:kg) >= (900:g)" \
+  -x "(1:kg) == (1000:g)" \
+  -x "(1:kg) != (1:g)"
+```
+
+```text
+(1:kg) < (2000:g) = true
+(1:kg) > (1:g) = true
+(1:kg) <= (1000:g) = true
+(1:kg) >= (900:g) = true
+(1:kg) == (1000:g) = true
+(1:kg) != (1:g) = true
+```
 
 ## `strip`
 
