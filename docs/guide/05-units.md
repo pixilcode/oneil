@@ -1,9 +1,5 @@
 # Units
 
-One of Oneil's defining features is its unit-based type system. In other words,
-Oneil tracks units and disallows invalid operations, such as adding kilograms
-and time or comparing meters and radians. It also provides automatic conversion
-for units that have different magnitudes, such as kilometers and meters.
 
 To assign a unit to a parameter, use the `: <unit>` syntax:
 
@@ -88,11 +84,22 @@ error: parameter is missing a unit
   = note: parameter value has unit `meters/seconds`
   = help: add a unit annotation `: meters/seconds` to the parameter
 ```
+One of Oneil's defining features is its unit-based type system. Oneil tracks
+units, disallows invalid operations between different physical properties, and
+automatically converts between differing units of the same physical property.
+
+For example, Oneil will throw an error if you try to add a time and a distance
+or compare a mass and a temperature. But it will automatically convert a length
+in meters and a length in feet to a common base before adding them together.
+
+This simplifies expressions to focus on relationships between physical
+properties while preventing unit conversion errors that might
+[crash your spacecraft](https://en.wikipedia.org/wiki/Mars_Climate_Orbiter).
 
 ## Units, dimensions, and magnitude
 
-Before we get more into how units work in Oneil, we're going to take a quick
-detour to delve into _what_ makes units compatible. Why can you add meters and
+Before we get into how units work in Oneil, we're going to take a quick detour
+to delve into _what_ makes units compatible. Why can you add meters and
 kilometers, but not meters and kilograms? Why is a Joule equivalent to a
 Watt-second?
 
@@ -116,7 +123,8 @@ the dimension of _mass_.
 
 ### Supported dimensions
 
-Oneil supports the following dimensions, with their associated base unit.
+Oneil supports the following dimensions, listed here with their associated base
+unit.
 
 - mass: `kilogram`
 - distance: `meter`
@@ -128,6 +136,12 @@ Oneil supports the following dimensions, with their associated base unit.
 - substance: `mole`
 - luminous intensity: `candela`
 
+_Base units_ convey a single dimension, like the unit `kilometer` with its
+dimension `distance`. Derived units convey 0 to many dimensions, like the unit
+`degree` which is dimensionless or the unit `Joule` with its dimensions of of
+`mass`, `distance^2`, and `time^-2`. Dimensionless units are discussed in more
+detail [later in this chapter](#dimensionless-units).
+
 Each unit has 0 or more dimensions associated with it. The kilometer is defined
 as having a dimension of `distance`, while a `Joule` would have the dimensions
 of `mass`, `distance^2`, and `time^-2`.
@@ -138,10 +152,6 @@ There are also dimensionless units such `%`. These are discussed
 If you haven't quite wrapped your head around dimensions yet, don't worry. You
 don't need to fully understand it to use Oneil.
 
-<!-- PONDER: this isn't essential for them to know, it's just helpful for them
-             to have reference when we use "dimensionless" rather than "unitless"
-             later. Although maybe we just use "unitless" later and move this
-             to an "advanced" section of the guide? -->
 
 ## Composing units in a unit expression
 
@@ -235,8 +245,8 @@ Startup time: t_start = 10 : s
 $ Run time: t_run = t_full - t_start : min
 ```
 
-However, there are some less-contrived situations where you may just want to
-label a unitless number with a unit.
+However, there are some situations where you may just want to label a unitless
+number with a unit.
 
 To do so, you can use _unit casting_. Unit casting takes the form of
 `(<expression> : <unit>)`. This allows a unitless value to be assigned a unit.
