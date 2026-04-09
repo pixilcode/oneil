@@ -7,19 +7,19 @@ Parameters are the main way to define values in an Oneil model. Parameters are v
 A minimal Oneil model is a single parameter. Create a file `hello.on` with:
 
 ```oneil
-Hello: x = 1
+Hello world: hw = 1
 ```
 
 Run it with:
 
 ```sh
-oneil eval hello.on --params x
+oneil eval hello.on --params hw
 ```
 
-The `--params x` option prints the parameter `x`. This option can also be shortened to `-p x`. You should see something like:
+The `--params hw` option prints the parameter `hw`. This option can also be shortened to `-p hw`. You should see something like:
 
 ```text
-x = 1  # Hello
+hw = 1  # Hello world
 ```
 
 `oneil eval <model>.on` is how you run an Oneil file. The output shows the model path, test summary, and each parameter’s identifier, value, and label (after `#`). In addition, both `oneil e <model>.on` and `oneil <model>.on` can be used as an equivalent to `oneil eval <model>.on`.
@@ -43,10 +43,10 @@ Name: identifier = expression
 For example,
 
 ```oneil
-Total length: total_length = 1
+Antenna length: l_a = 10
 ```
 
-Here `Total length` is the label, `total_length` is the name, and `1` is the value.
+Here `Antenna length` is the label, `l_a` is the name, and `10` is the value.
 
 ## Comments
 
@@ -60,19 +60,22 @@ My other param: o = 5  # comments don't have to start at the beginning of a line
 
 ## Running a model and viewing output
 
-To evaluate a model file:
+To evaluate a model file, use:
 
 ```sh
 oneil eval <model>.on
 ```
 
-For example, with a file `hello.on` containing `Hello: x = 1`:
+For example:
 
-```sh
-oneil eval hello.on
+```oneil
+# antenna.on
+Antenna length: a_l = 5
 ```
 
-Output:
+```sh
+oneil eval antenna.on
+```
 
 ```text
 (No performance parameters found)
@@ -82,39 +85,51 @@ Note that there are no parameters printed out. The reason for this is discussed 
 For now, use `--print all` to print out all parameters.
 
 ```sh
-oneil eval hello.on --print all
+oneil eval antenna.on --print all
 ```
-
-Output:
 
 ```text
-x = 1  # Hello
+a_l = 5  # Antenna length
 ```
+
+> [!NOTE]
+> Throughout this guide, we will insert a comment at the top of each model
+> indicating the name of the model.
+>
+> ```oneil
+> # my_model.on
+> ...
+> ```
+>
+> This way, we can reference it when running `oneil eval`.
+>
+> ```bash
+> oneil eval my_model.on
+> ```
 
 ## Multiple parameters and references
 
 You can define multiple parameters in one file. They can reference each other by name, and the order of declarations does not matter - Oneil resolves dependencies automatically.
 
-Example:
+For example,
 
 ```oneil
-First: a = 1
-Second: b = a + c
-Third: c = 2
-```
+# satellite.on
 
-Save as `multi.on` and run:
+Body length: l_body = 25
+Antenna length: l_a = 5
+
+Satellite length: l_sat = l_body + l_a
+```
 
 ```sh
-oneil eval multi.on --print all
+oneil eval satellite.on --print all
 ```
 
-Output:
-
 ```text
-a = 1  # First
-c = 2  # Third
-b = 3  # Second
+l_body = 25  # Body length
+l_a = 5  # Antenna length
+l_sat = 30  # Satellite length
 ```
 
 ## Selecting parameters to print
@@ -127,17 +142,15 @@ oneil eval <model>.on --params param1,param2
 oneil eval <model>.on -p param1,param2
 ```
 
-Example with `multi.on`:
+For example,
 
 ```sh
-oneil eval multi.on -p b,a
+oneil eval satellite.on -p l_body,l_a
 ```
 
-Output:
-
 ```text
-b = 3  # Second
-a = 1  # First
+l_body = 25  # Body length
+l_a = 5  # Antenna length
 ```
 
 The order in the comma-separated list is the order they appear in the output. You can select one or more parameters; only those are printed.
@@ -152,35 +165,57 @@ Parameters can be marked with optional annotations that control whether they are
 | Debug       | `**`   | Same as trace, and with `--debug` / `-D`, extra debug info is printed for variables used to evaluate this parameter. |
 | Performance | `$`    | Marked as a performance variable.                                                                                    |
 
-Annotations appear before the label. Example:
+Annotations appear before the label.
 
 ```oneil
-# Trace marker:
-* First: a = 1
+# satellite2.on
 
-# Debug marker:
-** Second: b = a + c
+# No annotation
+Mass: m = 10
 
-# Performance marker:
-$ Third: c = 2
+# Trace annotation:
+* Body length: l_body = 25
+
+## Debug annotation:
+** Antenna length: l_a = 5
+
+# Performance annotation:
+$ Satellite length: l_sat = l_body + l_a
+```
+
+```bash
+oneil eval satellite2.on
+```
+
+```text
+l_sat = 30  # Satellite length
 ```
 
 With the default print mode (perf), only the performance variables are displayed.
 
-```text
-c = 2  # Third
-```
-
-To display the other variables, use the `--print`/`-P` argument with the `trace` argument.
+To display the other annotated variables, use the `--print`/`-P` argument with the `trace` argument.
 
 ```sh
 oneil eval <model>.on --print trace
 ```
 
 ```text
-a = 1  # First
-c = 2  # Third
-b = 3  # Second
+l_body = 25  # Body length
+l_a = 5  # Antenna length
+l_sat = 30  # Satellite length
+```
+
+To display _all_ variables, including non-annotated variables, use `--print all`.
+
+```sh
+oneil eval <model>.on --print all
+```
+
+```text
+m = 10  # Mass
+l_body = 25  # Body length
+l_a = 5  # Antenna length
+l_sat = 30  # Satellite length
 ```
 
 ## Evaluating expressions
@@ -188,39 +223,33 @@ b = 3  # Second
 While it is usually best to include all equations in the model itself, there may
 be some times when you need to do a quick evaluation of an expression. For that,
 Oneil provides the `--expr`/`-x` argument. This argument prints out the result
-of evaluating the provided expression.
+of evaluating the provided expression. The expression can include parameters
+from the model.
 
-For example, assuming the previous model is in `my_model.on`, you can run the
-following:
+```oneil
+# orbit.on
+Orbit radius: r = 7000
+```
 
 ```bash
-oneil eval my_model.on --expr "1 + 1"
+# determine the orbit circumference
+oneil eval orbit.on --expr "2*pi*r"
 ```
 
 ```text
-1 + 1 = 2
-```
-
-It's great that you can evaluate simple expressions, but the real power of
-`--expr` comes when you refer to variables in the model.
-
-```bash
-oneil eval my_model.on --expr "b - a"
-```
-
-```text
-b - a = 2
+2*pi*r = 43982
 ```
 
 In addition, you can provide multiple expressions at the same time.
 
 ```bash
-oneil eval my_model.on --expr "b - a" --expr "b - c"
-# or, using the shorter name
-oneil eval my_model.on -x "b - a" --expr "b - c"
+# determine the orbit circumference and diameter
+oneil eval orbit.on --expr "2*pi*r" --expr "2*r"
+# or, using the shorter argument name
+oneil eval orbit.on -x "2*pi*r" -x "2*r"
 ```
 
 ```text
-b - a = 2
-b - c = 1
+pi*r^2 = 1.539e8
+2*r = 14000
 ```
