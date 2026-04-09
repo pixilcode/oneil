@@ -8,7 +8,7 @@ will be between 5 and 10 kilometers per hour.
 To enable this, Oneil provides an _interval operator_ in the form of
 `<expr> | <expr>`.
 
-> ![NOTE]
+> [!NOTE]
 > You may also see references to this as the _minmax operator_, since it
 > produces the min and the max values.
 
@@ -62,19 +62,17 @@ Z: z = x - y
 # => 5 | 15
 ```
 
-All arithmetic operators are defined to give correct interval bounds. For more
-detail, see the
+For more detail, see the
 [interval arithmetic paper review](../../research/2025-11-13-interval-arithmetic-paper-review.md)
 or the implementation in the codebase.
 
 ### Escaping and relationships
 
-Oneil’s interval arithmetic aims to satisfy the _inclusion property_: if every
-interval in an expression is replaced by some scalar inside that interval and the
-expression is evaluated as scalars, the scalar result lies inside the interval
-you get by evaluating the expression on intervals. See
-[Inclusion property](../../research/2025-11-13-interval-arithmetic-paper-review.md#inclusion-property)
-in the paper review.
+Oneil’s interval arithmetic aims to satisfy the
+[_inclusion property_](../../research/2025-11-13-interval-arithmetic-paper-review.md#inclusion-property):
+if every interval in an expression is replaced by some scalar inside that
+interval and the expression is evaluated as scalars, the scalar result lies
+inside the interval you get by evaluating the expression on intervals.
 
 Bounds can still be _wider_ than necessary. For example, you would expect `a -
 a` to be `0` for any `a`. If `a` is `0 | 1`, interval subtraction yields `-1 |
