@@ -52,6 +52,16 @@ Total length: total_length = 1
 
 Here `Total length` is the label, `total_length` is the name, and `1` is the value.
 
+## Comments
+
+Comments in Oneil are prefixed by `#` and go until the end of the line.
+
+```oneil
+# this is a comment
+My param: p = 10
+My other param: o = 5  # comments don't have to start at the beginning of a line
+```
+
 ## Running a model and viewing output
 
 To evaluate a model file:
@@ -235,12 +245,4 @@ For a full list of options, run:
 oneil eval --help
 ```
 
-## Comments
-
-Comments in Oneil are prefixed by `#` and go until the end of the line.
-
-```oneil
-# this is a comment
-My param: p = 10
-My other param: o = 5  # comments don't have to start at the beginning of a line
 ```
