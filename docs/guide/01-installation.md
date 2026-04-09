@@ -5,10 +5,16 @@ This section describes how to install the Oneil CLI (Rust implementation) on Lin
 ## Prerequisites
 
 - **Rust** (for building from source): [rustup](https://rustup.rs/) — install and ensure `cargo` is on your `PATH`.
+- **gcc**
+  - Install on Fedora/RHEL: `sudo dnf install gcc`
+  - Install on Debian/Ubuntu: `sudo apt install build-essential`
 
 Optional, for full functionality:
 
-- **Python 3.10+** (for Python functions and optional runtime features). The CLI can run without it; Python is only needed when your models import Python-defined functions.
+- **Python 3.10+ with `pip`** (for Python functions and optional runtime features). The CLI can run without it; Python is only needed when your models import Python-defined functions.
+- **Python development libraries**
+  - Install on Fedora/RHEL: `sudo dnf install python3-devel`
+  - Install on Debian/Ubuntu: `sudo apt install python3-dev`
 
 ## Option 1: Download a release from GitHub (NOT AVAILABLE YET)
 
@@ -62,11 +68,11 @@ cd oneil
 ```
 
 - **Without Python** (CLI only, no bindings and no pip package): `./install.sh --no-python`
-- **Editable Python install** (for working on the bindings): `./install.sh --editable` or `./install.sh -e`
+- **Editable Python install**: `./install.sh --editable` or `./install.sh -e`
 
 On Windows, run `install.bat` from the repository root with the same flags (`--no-python`, `-e`, `--help`).
 
-If Cargo is missing, the script prints how to install Rust via [rustup](https://rustup.rs/). For the default install you also need **Python 3.10+** with pip. Vim syntax highlighting is not part of the script; see the README [Vim support](https://github.com/careweather/oneil#vim-support) section.
+For the default install you also need **Python 3.10+** with pip and the development libraries.
 
 ## Option 3: Install from source with Cargo
 
@@ -118,7 +124,7 @@ Currently, there is no dedicated way to update Oneil. If you installed from sour
 
 ## Editor and tooling (optional)
 
-- **Vim**: See the [Vim support](https://github.com/careweather/oneil#vim-support) section in the main README for syntax highlighting.
+- **Vim (currently unmaintained)**: See the [Vim support](https://github.com/careweather/oneil#vim-support) section in the main README for syntax highlighting.
 
 - **VS Code / Cursor**: Install the [Oneil extension](https://marketplace.visualstudio.com/items?itemName=careweather.oneil) from the Marketplace for LSP and syntax highlighting.
 
@@ -132,15 +138,9 @@ cd oneil
 pip install .
 ```
 
-For an editable install while developing the package:
-
-```sh
-pip install -e .
-```
-
 After installation you can `import oneil` in Python.
 
-> ![NOTE]
+> [!NOTE]
 > `pip install .` alone does not install the CLI. Use **Option 2** (`./install.sh`) or **Option 3** (`cargo install --path src-rs/oneil`) if you want both the CLI and the library.
 
 ## Troubleshooting
