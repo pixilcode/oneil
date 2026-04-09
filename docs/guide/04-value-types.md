@@ -9,9 +9,9 @@ Numbers use familiar decimal notation: whole numbers, values with a decimal poin
 For example,
 
 ```oneil
-Integer: n = 42
-Decimal: d = 3.14
-Scientific: e_val = 1.5e3
+100th prime number: p_100 = 541
+Golden ratio: phi = 1.618
+Avogadro constant = 6.022e23
 Infinity: inf_val = inf
 ```
 
@@ -35,27 +35,9 @@ Infinity: inf_val = inf
 - `==` - equal
 - `!=` - not equal
 
-### Number Examples
-
-```oneil
-Add: a = 2 + 3
-Subtract: s = 10 - 4
-Multiply: m = 6 * 7
-Divide: d = 20 / 4
-Modulo: mo = 17 % 5
-Power: p = 2 ^ 8
-Comparison: c = 1 < 2
-Comparison chain: ch = 1 < 2 < 3
-```
-
 ### Built-in `pi` and `e`
 
-The identifiers **`pi`** and **`e`** are built-in numeric constants (π and Euler’s number). They can be used like any other value in expressions:
-
-```oneil
-Pi: pi_val = pi
-Euler's number: euler = e
-```
+The identifiers **`pi`** and **`e`** are built-in numeric constants (π and Euler’s number). They can be used like any other value in expressions.
 
 ## Strings
 
@@ -67,18 +49,26 @@ A string is written in **single quotes** `'...'`. Double quotes are not used for
 
 There is no concatenation or mutation. Strings can only be compared for equality:
 
-- `==` — equal
-- `!=` — not equal
+- `==` - equal
+- `!=` - not equal
 
 ### String Examples
 
 ```oneil
-Mode: mode = 'track'
-Mode is track: is_track = mode == 'track'
-Mode is not polar: is_polar = mode != 'polar'
+# battery.on
+Battery configuration: config = 'series'
 ```
 
-String values work well with **discrete limits** and **piecewise** parameters; those are covered later in the guide.
+```bash
+oneil eval battery.on \
+  -x "config == 'series'" \
+  -x "config == 'array'"
+```
+
+```text
+config == 'series' = true
+config == 'array' = false
+```
 
 ## Booleans
 
@@ -92,11 +82,4 @@ Boolean literals are the keywords **`true`** and **`false`**.
 
 ### Boolean Examples
 
-```oneil
-True value: t = true
-False value: f = false
-True and not false: t_and_not_f = t and not f
-True or false: t_or_f = t or f
-```
-
-Comparisons on numbers (and string equality) also yield booleans. Booleans are used heavily in **piecewise** parameter conditions and in **`test`** declarations; those topics appear in later chapters.
+Comparisons on numbers (and string equality) also yield booleans. Booleans are used in **piecewise** parameter conditions and in **`test`** declarations; those topics appear in later chapters.
