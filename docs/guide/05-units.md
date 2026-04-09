@@ -282,14 +282,13 @@ In the case that you would like to treat a measured value as unitless, Oneil
 provides the `strip` function. The strip function removes any units from a
 value.
 
+```oneil
+ADC bit resolution: S_adc = 10 :b
+$ ADC step count: n_adc = 2^(strip(S_adc)-1)
+```
+
 The places where this should be used are rare and should be treated cautiously
 since `strip` effectively disables unit checking.
-
-```oneil
-X: x = 10 : m
-
-test: strip(x) == 10
-```
 
 In addition, it is important to realize that `strip` strips the unit that is
 _currently associated with a value_.
