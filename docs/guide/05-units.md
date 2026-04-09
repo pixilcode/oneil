@@ -311,34 +311,58 @@ the value to the unit that you expect it to be.
 ```oneil
 # convert both values to meters before comparing them
 test: strip((x_m : m)) == strip((x_km : m))
+## Non-linear units
+
+On top of linear units, Oneil supports _decibel_ (**dB**) units. You form a
+decibel unit by prefixing `dB` directly to a built-in unit name, for example
+`dBmW` (decibels relative to one milliwatt) or `dBV`. The bare name `dB`
+(with no following unit) is also valid; it behaves as a dimensionless logarithmic
+unit.
+
+Support for other non-linear units is on the roadmap.
+
+When any unit is specified with prefix `dB`, Oneil internally converts the
+parameter to the corresponding linear value, performs all calculations in linear
+terms, and reconverts the value to `dB` for display. This means that equations
+that contain parameters with `dB` units should use linear math. For example,
+when calculating the signal to noise ratio by hand, you might subtract the noise
+(`dB`) from the signal (`dB`), but in Oneil, you divide the signal by the noise:
+
+``` { .on }
+Noise power: P_n = -100 :dBmW
+Signal power: P_s = -90 :dBmW
+Signal-to-noise ratio: S_N = P_s/P_n
 ```
 
 ## Dimensionless units
 
 There are some units that don't have any dimensions, such as `%` or `ppm` (parts
-per million). The plain `dB` unit also does not have any dimensions.  These
-units are referred to as _dimensionless units_, and values with dimensionless
-units are referred to as _dimensionless values_.
+per million). These units are referred to as _dimensionless units_, and values
+with dimensionless units are referred to as _dimensionless values_.
 
 ### Unitless equivalence
 
-Dimensionless values are treated as if they have no unit for all purposes except for
-display. The following model demonstrates this with `%` and `dB` units.
+Dimensionless values can be treated as if they have no unit. The following
+demonstrates this with the `%` unit.
 
-```oneil
+```bash
 # `100%` is treated as equal to `1`
-test: (100:%) == 1
+oneil eval my_model.on \
+  -x "(100:%) == 1" \
+```
 
-# adding does *not* convert `1` to `1%`
-test: (100:%) + 1 == (200:%)
-test: (100:%) + 1 != (101:%)
+```text
+(100:%) == 1 = true
+```
 
-# `0 dB` is treated as equal to `1`
-test: (0:dB) == 1
+```bash
+# the `1` is equal to `100%`, not `1%`
+oneil eval my_model.on \
+  -x "(100:%) + 1"
+```
 
-# adding does *not* convert `1` to `1dB`
-test: (0:dB) + 1 == (3.01:dB)
-test: (0:dB) + 1 != (1:dB)
+```text
+(100:%) + 1 = 200 :%
 ```
 
 ### Angular Units
