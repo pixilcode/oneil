@@ -17,19 +17,18 @@ the range from the minimum of the expressions to the maximum expressions. These
 values can then be retrieved using the `min` and `max` functions.
 
 ```oneil
-Value: x = 1 | 2
-
-test: min(x) == 1
-test: max(x) == 2
+# temperature.on
+$ Ambient temperature: t_amb = 300 | 400 :K
+$ Ambient temperature range: t_amb_range = max(t_amb) - min(t_amb) :K
 ```
 
-The interval operator is associative. In other words, it doesn't matter what
-order the expressions are in.
+```bash
+oneil eval temperature.on
+```
 
-```oneil
-test: (1 | 2) == (2 | 1)
-test: min(2 | 1) == 1
-test: max(2 | 1) == 2
+```text
+t_amb = 300 | 400 :K  # Ambient temperature
+t_amb_range = 100 :K  # Ambient temperature range
 ```
 
 ## Arithmetic Operators
@@ -39,15 +38,16 @@ The same operators that apply to scalar values apply to interval values: `+`,
 
 Because an interval is a _range_ of possible values, not a single number,
 results can differ from the naive idea of "min with min, max with max." For
-subtraction, that naive rule would be wrong. For example:
+example, with subtraction, that naive rule would be wrong:
 
 ```oneil
 X: x = 10 | 15
 Y: y = 0 | 5
+
 Z: z = x - y
-# => (10 | 15) - (0 | 5)
-# => 10 - 0 | 15 - 5   # wrong if done that way
-# => 10 | 10
+#    = (10 | 15) - (0 | 5)
+#    = 10 - 0 | 15 - 5
+#    = 10 | 10  # incorrect
 ```
 
 Oneil implements subtraction so the range is arithmetically correct:
@@ -56,13 +56,14 @@ Oneil implements subtraction so the range is arithmetically correct:
 ```oneil
 X: x = 10 | 15
 Y: y = 0 | 5
+
 Z: z = x - y
-# => (10 | 15) - (0 | 5)
-# => 10 - 5 | 15 - 0
-# => 5 | 15
+#    = (10 | 15) - (0 | 5)
+#    = 10 - 5 | 15 - 0
+#    = 5 | 15
 ```
 
-For more detail, see the
+For more detail on interval operators, see the
 [interval arithmetic paper review](../../research/2025-11-13-interval-arithmetic-paper-review.md)
 or the implementation in the codebase.
 
