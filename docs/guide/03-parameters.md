@@ -43,10 +43,13 @@ Name: identifier = expression
 For example,
 
 ```oneil
-Antenna length: l_a = 10
+Number of batteries: count = 10
 ```
 
-Here `Antenna length` is the label, `l_a` is the name, and `10` is the value.
+Here, `Number of batteries` is the label, `count` is the name, and `10` is the
+value.
+
+![A diagram of the parts of a parameter](./images/parameter-diagram.svg)
 
 ## Comments
 
