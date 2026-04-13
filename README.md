@@ -434,32 +434,30 @@ which are implemented as defined below.
 
 Oneil has the following builtin functions.
 
-**NOTE: currently, only some of these functions are supported, although there are plans to support all of them in the future.**
-
-| Function      | Description                                                                                                      | Supported |
-|---------------|------------------------------------------------------------------------------------------------------------------|-----------|
-| `min(a)`      | If `a` is an interval, return the minimum value of the interval. Otherwise, return the value of `a`              | ✓         |
-| `min(a, ...)` | Find the minimum value of the given values. If a value is an interval, the minimum value of the interval is used | ✓         |
-| `max(a)`      | If `a` is an interval, return the maximum value of the interval. Otherwise, return the value of `a`              | ✓         |
-| `max(a, ...)` | Find the maximum value of the given values. If a value is an interval, the maximum value of the interval is used | ✓         |
-| `mid(a, b)`   | Find the midpoint between the                                                                                    | ×         |
-| `range(a)`    | Return the width of an interval (max−min)                                                                        | ✓         |
-| `sqrt(a)`     | Calculate the square root                                                                                        | ✓         |
-| `sin(a)`      | Calculate the sine                                                                                               | ×         |
-| `cos(a)`      | Calculate the cosine                                                                                             | ×         |
-| `tan(a)`      | Calculate the tangent                                                                                            | ×         |
-| `asin(a)`     | Calculate the arcsine                                                                                            | ×         |
-| `acos(a)`     | Calculate the arccosine                                                                                          | ×         |
-| `atan(a)`     | Calculate the arctangent                                                                                         | ×         |
-| `ln(a)`       | Natural logarithm                                                                                                | ×         |
-| `log(a)`      | Base 10 logarithm                                                                                                | ×         |
-| `log10(a)`    | Base 10 logarithm (alias for `log(a)`)                                                                           | ×         |
-| `floor(a)`    | Round down to nearest integer                                                                                    | ×         |
-| `ceiling(a)`  | Round up to nearest integer                                                                                      | ×         |
-| `abs(a)`      | Absolute value                                                                                                   | ×         |
-| `sign(a)`     | Sign of value (−1, 0, 1)                                                                                         | ×         |
-| `strip(a)`    | Remove units from calculation                                                                                    | ×         |
-| `mnmx(...)`   | Gets the minimum and maximum of the list of values                                                               | ×         |
+| Function      | Description                                                                                                      |
+|---------------|------------------------------------------------------------------------------------------------------------------|
+| `min(a)`      | If `a` is an interval, return the minimum value of the interval. Otherwise, return the value of `a`              |
+| `min(a, ...)` | Find the minimum value of the given values. If a value is an interval, the minimum value of the interval is used |
+| `max(a)`      | If `a` is an interval, return the maximum value of the interval. Otherwise, return the value of `a`              |
+| `max(a, ...)` | Find the maximum value of the given values. If a value is an interval, the maximum value of the interval is used |
+| `mid(a, b)`   | Find the midpoint between the                                                                                    |
+| `range(a)`    | Return the width of an interval (max−min)                                                                        |
+| `sqrt(a)`     | Calculate the square root                                                                                        |
+| `sin(a)`      | Calculate the sine                                                                                               |
+| `cos(a)`      | Calculate the cosine                                                                                             |
+| `tan(a)`      | Calculate the tangent                                                                                            |
+| `asin(a)`     | Calculate the arcsine                                                                                            |
+| `acos(a)`     | Calculate the arccosine                                                                                          |
+| `atan(a)`     | Calculate the arctangent                                                                                         |
+| `ln(a)`       | Natural logarithm                                                                                                |
+| `log(a)`      | Base 10 logarithm                                                                                                |
+| `log10(a)`    | Base 10 logarithm (alias for `log(a)`)                                                                           |
+| `floor(a)`    | Round down to nearest integer                                                                                    |
+| `ceiling(a)`  | Round up to nearest integer                                                                                      |
+| `abs(a)`      | Absolute value                                                                                                   |
+| `sign(a)`     | Sign of value (−1, 0, 1)                                                                                         |
+| `strip(a)`    | Remove units from calculation                                                                                    |
+| `mnmx(...)`   | Gets the minimum and maximum of the list of values                                                               |
 
 ### Piecewise Equations
 
