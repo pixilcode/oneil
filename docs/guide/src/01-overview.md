@@ -22,7 +22,7 @@ flowchart TD
     
     design["`
         **Design**
-        - _Overwrites some input parameters with new values_
+        _Overwrites some input parameters with new values_
     `"]
 
     model["
