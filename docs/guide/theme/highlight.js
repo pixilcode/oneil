@@ -27,6 +27,8 @@ hljs.debugMode();
 hljs.registerLanguage("oneil", function (hljs) {
   "use strict";
   const IDENT_RE = hljs.UNDERSCORE_IDENT_RE;
+  const LABEL_RE = /[^()[\]{#~:= \t\n*$][^()[\]:=\n]*/;
+
   return {
     name: "Oneil",
     aliases: [], // no aliases
@@ -55,6 +57,22 @@ hljs.registerLanguage("oneil", function (hljs) {
         ],
         beginScope: {
           2: "keyword",
+        },
+        end: /$/m,
+      },
+
+      // section declaration
+      {
+        begin: [
+          /^\s*/m,
+          /section/,
+          /\s+/,
+          LABEL_RE,
+          /\s*(?=$)/m,
+        ],
+        beginScope: {
+          2: "keyword",
+          4: "title",
         },
         end: /$/m,
       },
