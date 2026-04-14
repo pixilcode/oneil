@@ -109,6 +109,9 @@ See [mdBook documentation](https://rust-lang.github.io/mdBook/index.html) and
 [`mdbook-mermaid` documentation](https://github.com/badboy/mdbook-mermaid) for
 more details on how to use those tools.
 
+To edit the syntax highlighting, edit the grammar defined in
+[theme/highlight.js](./docs/guide/theme/highlight.js).
+
 ## Resources
 
 - [Crafting Interpreters](https://craftinginterpreters.com/) - If you've never
