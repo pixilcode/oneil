@@ -181,6 +181,70 @@ hljs.registerLanguage("oneil", function (hljs) {
           EXPR_MODE,
         ]
       },
+
+      // parameter definition (covers both model parameters and design overrides)
+      {
+        begin: [
+          IDENT_RE,
+          /\.?/,
+          "(" + IDENT_RE + ")?",
+          /\s*=/,
+        ],
+        beginScope: {
+          1: "variable",
+          3: "title.class",
+        },
+        end: /$/m,
+        keywords: ["if"],
+        contains: [
+          EXPR_MODE,
+        ]
+      },
+
+      // piecewise branch
+      {
+        begin: /\{/,
+        end: /$/m,
+        keywords: ["if"],
+        contains: [
+          EXPR_MODE,
+        ]
+      },
+
+
+      // parameter metadata (annotations, labels, limits)
+      // 
+      // this has to come last so that it doesn't override other modes
+      {
+        begin: [
+          /^\s*(\$|\*\*?)?\s*/m, // includes `$`, `*`, `**` annotations
+          LABEL_RE,
+          /\s*/,
+        ],
+        beginScope: {
+          2: "title",
+        },
+        end: /:\s*/m,
+        contains: [
+          // continuous limits
+          {
+            begin: /\(/,
+            end: /\)\s*/,
+            contains: [
+              EXPR_MODE,
+            ],
+          },
+
+          // discrete limits
+          {
+            begin: /\[/,
+            end: /\]\s*/,
+            contains: [
+              EXPR_MODE,
+            ],
+          },
+        ],
+      },
     ],
   };
 });
