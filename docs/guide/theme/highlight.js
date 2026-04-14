@@ -26,5 +26,19 @@ hljs.registerLanguage("oneil", function (hljs) {
   return {
     name: "Oneil",
     aliases: [], // no aliases
+    contains: [
+      // single-line notes
+      hljs.COMMENT(/^\s*~(?!~~)/m, /$/m, {
+        subLanguage: "tex",
+      }),
+
+      // multi-line notes
+      hljs.COMMENT(/^\s*~~~[~]*\s*$/m, /^\s*~~~[~]*\s*$/m, {
+        subLanguage: "tex",
+      }),
+
+      // hash comments
+      hljs.HASH_COMMENT_MODE,
+    ],
   };
 });
