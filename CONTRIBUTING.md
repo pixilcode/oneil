@@ -15,32 +15,39 @@ project.
 For development, you can use these Cargo commands:
 
 - Run tests:
+
   ```sh
   cargo test
   ```
 
 - Check for compilation errors without producing an executable:
+
   ```sh
   cargo check
   ```
 
 - Format code:
+
   ```sh
   cargo fmt
   ```
 
 - Run linter:
+
   ```sh
   cargo clippy
   ```
 
 You can also run the following developer commands built into Oneil:
+
 - Print the AST that is constructed from an Oneil file:
+
   ```sh
   cargo run -- dev print-ast path/to/model.on
   ```
 
 - Print the IR that is constructed from an Oneil model
+
   ```sh
   cargo run -- dev print-ir path/to/model.on
   ```
@@ -80,20 +87,30 @@ Test Oneil files are found in [the `test` directory](./test). These files are ma
 
 The architecture of the system is described in [`docs/architecture/README.md`](docs/architecture/README.md). The code itself is found in [`src-rs/`](src-rs/).
 
-
 ## Coding Standards
 
 Code should follow the principles laid out in
 [`docs/principles.md`](docs/principles.md).
 
-
 ## Git hooks
 
 Run `git config core.hooksPath .githooks` to set up some automated checks to run before committing and pushing.
+
+## Building the user guide
+
+The user guide, found in [docs/guide](./docs/guide/), is built using `mdbook`.
+It also uses the `mdbook-mermaid` plugin. Both can be installed using
+
+```bash
+cargo install mdbook mdbook-mermaid
+```
+
+See [mdBook documentation](https://rust-lang.github.io/mdBook/index.html) and
+[`mdbook-mermaid` documentation](https://github.com/badboy/mdbook-mermaid) for
+more details on how to use those tools.
 
 ## Resources
 
 - [Crafting Interpreters](https://craftinginterpreters.com/) - If you've never
   worked on a programming language before, this is a great resource for
   understanding how to build a programming language!
-
