@@ -143,6 +143,15 @@ After installation you can `import oneil` in Python.
 > [!NOTE]
 > `pip install .` alone does not install the CLI. Use **Option 2** (`./install.sh`) or **Option 3** (`cargo install --path src-rs/oneil`) if you want both the CLI and the library.
 
+## Uninstalling Oneil
+
+If Oneil was installed as a release binary, delete the release binary.
+
+If Oneil was installed from source, run `cargo uninstall oneil`.
+
+If Oneil's Python library was installed, run `pip uninstall oneil` in the same
+virtual environment that it was installed in.
+
 ## Troubleshooting
 
 - **`oneil: command not found`**  
