@@ -20,9 +20,13 @@ hljs.registerLanguage("shell", function (hljs) { return { name: 'Shell Session',
 hljs.registerLanguage("plaintext", function (hljs) { return { name: 'Plain text', aliases: ['text', 'txt'], disableAutodetect: true }; });
 
 // custom Oneil language (see docs/specs/grammar.ebnf)
+//
+// for highlight.js reference, see
+// <https://highlightjs.readthedocs.io/en/latest/language-guide.html>
 hljs.debugMode();
 hljs.registerLanguage("oneil", function (hljs) {
   "use strict";
+  const IDENT_RE = hljs.UNDERSCORE_IDENT_RE;
   return {
     name: "Oneil",
     aliases: [], // no aliases
@@ -39,6 +43,21 @@ hljs.registerLanguage("oneil", function (hljs) {
 
       // hash comments
       hljs.HASH_COMMENT_MODE,
+
+      // import declaration
+      {
+        begin: [
+          /^\s*/m,
+          /import/,
+          /\s+/,
+          IDENT_RE,
+          /\s*(?=$)/m,
+        ],
+        beginScope: {
+          2: "keyword",
+        },
+        end: /$/m,
+      },
     ],
   };
 });
