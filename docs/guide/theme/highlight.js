@@ -84,6 +84,21 @@ hljs.registerLanguage("oneil", function (hljs) {
         ],
       },
 
+      // ref declaration
+      {
+        begin: [
+          /^\s*/m,
+          /ref/,
+          /\s+/,
+          IDENT_RE,
+        ],
+        beginScope: {
+          2: "keyword",
+        },
+        end: /$/m,
+        keywords: ["as"],
+      },
+
       // section declaration
       {
         begin: [
