@@ -29,6 +29,57 @@ hljs.registerLanguage("oneil", function (hljs) {
   const IDENT_RE = hljs.UNDERSCORE_IDENT_RE;
   const LABEL_RE = /[^()[\]{#~:= \t\n*$][^()[\]:=\n]*/;
 
+  // this is reused for both unit casting and parameter unit definition
+  const UNIT_MODE = {
+    scope: "type",
+    begin: /:/,
+    end: /\)|$/m,
+    excludeBegin: true,
+    excludeEnd: true,
+  };
+
+  const EXPR_MODE = {
+    keywords: {
+      keyword: ["and", "or", "not"],
+      literal: ["true", "false", "inf"],
+    },
+    contains: [
+      // strings
+      hljs.APOS_STRING_MODE,
+
+      // numbers
+      hljs.C_NUMBER_MODE,
+
+      // external parameter references - highlight the reference name
+      {
+        begin: [
+          IDENT_RE,
+          /\./,
+          IDENT_RE,
+        ],
+        beginScope: {
+          3: "title.class",
+        },
+      },
+
+      // operators
+      {
+        scope: "operator",
+        match: /--|\/\/|<=|>=|==|!=|[+\-*/%^?<>|]/,
+      },
+
+      // function calls
+      {
+        scope: "title.function.invoke",
+        match: RegExp(IDENT_RE + "(?=\\s*\\()"),
+      },
+
+      // unit casting
+      UNIT_MODE,
+    ],
+    endsWithParent: true,
+  };
+
   return {
     name: "Oneil",
     aliases: [], // no aliases
