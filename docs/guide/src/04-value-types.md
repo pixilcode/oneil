@@ -65,7 +65,7 @@ oneil eval battery.on \
   -x "config == 'array'"
 ```
 
-```text
+```oneil-eval-output
 config == 'series' = true
 config == 'array' = false
 ```
