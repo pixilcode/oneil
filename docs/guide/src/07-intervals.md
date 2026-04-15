@@ -26,7 +26,7 @@ $ Ambient temperature range: t_amb_range = max(t_amb) - min(t_amb) :K
 oneil eval temperature.on
 ```
 
-```text
+```oneil-eval-output
 t_amb = 300 | 400 :K  # Ambient temperature
 t_amb_range = 100 :K  # Ambient temperature range
 ```
