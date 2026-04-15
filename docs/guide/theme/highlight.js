@@ -165,6 +165,22 @@ hljs.registerLanguage("oneil", function (hljs) {
         },
         end: /$/m,
       },
+
+      // test declaration
+      {
+        begin: [
+          /^\s*/m,
+          /test/,
+          /\s*:/,
+        ],
+        beginScope: {
+          2: "keyword",
+        },
+        end: /$/m,
+        contains: [
+          EXPR_MODE,
+        ]
+      },
     ],
   };
 });
