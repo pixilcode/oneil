@@ -199,7 +199,7 @@ impl Interval {
     ///
     /// Example
     ///
-    /// ```text
+    /// ```oneil-eval-output
     /// |------- a -------|
     ///        |-------- b --------|
     ///        |- result -|

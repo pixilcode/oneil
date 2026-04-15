@@ -18,7 +18,7 @@ oneil eval hello.on --params hw
 
 The `--params hw` option prints the parameter `hw`. This option can also be shortened to `-p hw`. You should see something like:
 
-```text
+```oneil-eval-output
 hw = 1  # Hello world
 ```
 
@@ -80,7 +80,7 @@ Antenna length: a_l = 5
 oneil eval antenna.on
 ```
 
-```text
+```oneil-eval-output
 (No performance parameters found)
 ```
 
@@ -91,7 +91,7 @@ For now, use `--print all` to print out all parameters.
 oneil eval antenna.on --print all
 ```
 
-```text
+```oneil-eval-output
 a_l = 5  # Antenna length
 ```
 
@@ -129,7 +129,7 @@ Satellite length: l_sat = l_body + l_a
 oneil eval satellite.on --print all
 ```
 
-```text
+```oneil-eval-output
 l_body = 25  # Body length
 l_a = 5  # Antenna length
 l_sat = 30  # Satellite length
@@ -151,7 +151,7 @@ For example,
 oneil eval satellite.on -p l_body,l_a
 ```
 
-```text
+```oneil-eval-output
 l_body = 25  # Body length
 l_a = 5  # Antenna length
 ```
@@ -190,7 +190,7 @@ $ Satellite length: l_sat = l_body + l_a
 oneil eval satellite2.on
 ```
 
-```text
+```oneil-eval-output
 l_sat = 30  # Satellite length
 ```
 
@@ -202,7 +202,7 @@ To display the other annotated variables, use the `--print`/`-P` argument with t
 oneil eval <model>.on --print trace
 ```
 
-```text
+```oneil-eval-output
 l_body = 25  # Body length
 l_a = 5  # Antenna length
 l_sat = 30  # Satellite length
@@ -214,7 +214,7 @@ To display _all_ variables, including non-annotated variables, use `--print all`
 oneil eval <model>.on --print all
 ```
 
-```text
+```oneil-eval-output
 m = 10  # Mass
 l_body = 25  # Body length
 l_a = 5  # Antenna length
@@ -239,7 +239,7 @@ Orbit radius: r = 7000
 oneil eval orbit.on --expr "2*pi*r"
 ```
 
-```text
+```oneil-eval-output
 2*pi*r = 43982
 ```
 
@@ -252,7 +252,7 @@ oneil eval orbit.on --expr "2*pi*r" --expr "2*r"
 oneil eval orbit.on -x "2*pi*r" -x "2*r"
 ```
 
-```text
+```oneil-eval-output
 pi*r^2 = 1.539e8
 2*r = 14000
 ```
