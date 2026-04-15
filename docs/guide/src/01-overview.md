@@ -78,7 +78,7 @@ Discrete limits are specified with the syntax `[value1, ..., valueN]`. Only the
 values specified in the limit are valid values.
 
 ```oneil
-Battery array configuration ['series', 'parallel'] = 'series'
+Battery array configuration ['series', 'parallel']: config = 'series'
 ```
 
 ## Notes
