@@ -1,0 +1,59 @@
+name: Deploy mdBook site to GitHub Pages
+
+on:
+    # Runs on pushes targeting the `gh-pages` branch
+    # TODO: once `gh-pages` can be merged into `main`, change this to `main`
+    push:
+        branches: ["gh-pages"]
+
+    # Allows you to run this workflow manually from the Actions tab
+    workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+    contents: read
+    pages: write
+    id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+    group: "pages"
+    cancel-in-progress: false
+
+jobs:
+    # Build job
+    build:
+        runs-on: ubuntu-latest
+        env:
+            MDBOOK_VERSION: 0.5.2
+            MDBOOK_MERMAID_VERSION: 0.17.0
+        steps:
+            - uses: actions/checkout@v4
+            - name: Install mdBook and mdBook Mermaid plugin
+              run: |
+                  curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf -y | sh
+                  rustup update
+                  cargo install --version ${MDBOOK_VERSION} mdbook
+                  cargo install --version ${MDBOOK_MERMAID_VERSION} mdbook-mermaid
+            - name: Setup Pages
+              id: pages
+              uses: actions/configure-pages@v5
+            - name: Build with mdBook
+              run: mdbook build ./docs/guide/
+            - name: Upload artifact
+              uses: actions/upload-pages-artifact@v3
+              with:
+                  path: ./docs/guide/book
+
+    # Deployment job
+    deploy:
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        runs-on: ubuntu-latest
+        needs: build
+        steps:
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v5
