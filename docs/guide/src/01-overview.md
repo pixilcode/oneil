@@ -217,23 +217,31 @@ path to the python file without `.py`. Functions from that file can then be used
 in expressions.
 
 ```oneil
-import temp_calc
+import sphere_math
 
-Boiling point of water: bp_water = F_to_K(212) :K
+Earth radius: r_E = 6371 :km
+
+Earth surface area: A_E = sphere_surface_area(r_E) :km^2
+Earth volume: V_E = sphere_volume(r_E) :km^3
 ```
 
 ```py
-# temp_calc.py
+# sphere_math.py
 
-import oneil
-from oneil import MeasuredNumber
+import math
 
-K = oneil.units.K
+def surface_area(radius):
+    """Return surface area of a sphere."""
+    return 4 * math.pi * radius_km ** 2
 
-def F_to_K(t_F):
-    t_K = (t_F + 459.67) * 5 / 9
-    return MeasuredNumber(t_K, K)
+def volume(radius):
+    """Return volume of a sphere"""
+    return (4/3) * math.pi * radius_km ** 3
 ```
+
+Units are handled automatically by mathematic operators in Python.
+
+## Fallback Operator
 
 When a python function may error, the `<python_call> ? <fallback_value>` can be
 used to provide a fallback value.
