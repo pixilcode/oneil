@@ -28,6 +28,7 @@ hljs.registerLanguage("oneil", function (hljs) {
   "use strict";
   const IDENT_RE = hljs.UNDERSCORE_IDENT_RE;
   const LABEL_RE = /[^()[\]{#~:= \t\n*$][^()[\]:=\n]*/;
+  const END_OF_LINE_RE = /(?=#)|$/m; // the start of a comment is considered "end of line"
 
   // this is reused for both unit casting and parameter unit definition
   const UNIT_MODE = {
@@ -104,12 +105,12 @@ hljs.registerLanguage("oneil", function (hljs) {
           /import/,
           /\s+/,
           IDENT_RE,
-          /\s*(?=$)/m,
+          RegExp(`\\s*(?=${END_OF_LINE_RE.source})`),
         ],
         beginScope: {
           2: "keyword",
         },
-        end: /$/m,
+        end: END_OF_LINE_RE,
       },
 
       // use declaration
@@ -123,7 +124,7 @@ hljs.registerLanguage("oneil", function (hljs) {
         beginScope: {
           2: "keyword",
         },
-        end: /$/m,
+        end: END_OF_LINE_RE,
         keywords: ["as", "with"],
         contains: [
           // use foo with [ ... ]
@@ -146,7 +147,7 @@ hljs.registerLanguage("oneil", function (hljs) {
         beginScope: {
           2: "keyword",
         },
-        end: /$/m,
+        end: END_OF_LINE_RE,
         keywords: ["as"],
       },
 
@@ -157,13 +158,13 @@ hljs.registerLanguage("oneil", function (hljs) {
           /section/,
           /\s+/,
           LABEL_RE,
-          /\s*(?=$)/m,
+          RegExp(`\\s*(?=${END_OF_LINE_RE.source})`),
         ],
         beginScope: {
           2: "keyword",
           4: "title",
         },
-        end: /$/m,
+        end: END_OF_LINE_RE,
       },
 
       // test declaration
@@ -176,7 +177,7 @@ hljs.registerLanguage("oneil", function (hljs) {
         beginScope: {
           2: "keyword",
         },
-        end: /$/m,
+        end: END_OF_LINE_RE,
         contains: [
           EXPR_MODE,
         ]
@@ -194,7 +195,7 @@ hljs.registerLanguage("oneil", function (hljs) {
           1: "variable",
           3: "title.class",
         },
-        end: /$/m,
+        end: END_OF_LINE_RE,
         keywords: ["if"],
         contains: [
           EXPR_MODE,
@@ -204,7 +205,7 @@ hljs.registerLanguage("oneil", function (hljs) {
       // piecewise branch
       {
         begin: /\{/,
-        end: /$/m,
+        end: END_OF_LINE_RE,
         keywords: ["if"],
         contains: [
           EXPR_MODE,
