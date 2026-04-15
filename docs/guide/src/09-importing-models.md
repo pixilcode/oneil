@@ -21,6 +21,7 @@ Mass of box: m_b = 5 :kg
 # reference with alias
 ref constants as c
 Weight of box: w_b = m_b * g.c :N
+```
 
 ```oneil
 # box2.on

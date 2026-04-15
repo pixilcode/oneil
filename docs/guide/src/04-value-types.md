@@ -11,7 +11,7 @@ For example,
 ```oneil
 100th prime number: p_100 = 541
 Golden ratio: phi = 1.618
-Avogadro constant = 6.022e23
+Avogadro constant: N_A = 6.022e23
 Infinity: inf_val = inf
 ```
 
