@@ -19,7 +19,7 @@ Cylinder radius: r = d/2 :km
 You can use three tildes to start and end a multi-line note:
 
 ```oneil
-Artificial gravity: g_a = r*omega**2 :m/s^2
+Artificial gravity: g_a = r*omega^2 :m/s^2
 
     ~~~
     The position of a point on the rim of a rotating cylinder is:
