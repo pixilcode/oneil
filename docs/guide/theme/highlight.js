@@ -249,3 +249,56 @@ hljs.registerLanguage("oneil", function (hljs) {
     ],
   };
 });
+
+hljs.registerLanguage("oneil-eval-output", function (hljs) {
+  // <expression or parameter> = <value> [:<unit>]  # <label>
+  return {
+    name: "oneil-eval-output",
+    contains: [
+      // no parameters message
+      {
+        scope: "comment",
+        begin: /^\(No/m,
+        end: /\)$/m,
+      },
+
+      // expression or parameter
+      {
+        scope: "variable",
+        begin: /^/m,
+        end: /(?= = )/,
+        excludeBegin: true,
+        excludeEnd: true,
+      },
+
+      // value
+      {
+        begin: /=/,
+        end: /(?=[:#])|$/m,
+        keywords: {
+          literal: ["true", "false", "inf"],
+        },
+        contains: [
+          hljs.C_NUMBER_MODE,
+          hljs.APOS_STRING_MODE,
+        ]
+      },
+
+      // unit
+      {
+        scope: "type",
+        begin: /:/,
+        end: /(?=#)|$/m,
+        excludeBegin: true,
+        excludeEnd: true,
+      },
+
+      // label
+      {
+        scope: "comment",
+        begin: /#/,
+        end: /$/m,
+      },
+    ]
+  }
+})

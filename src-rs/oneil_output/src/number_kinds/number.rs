@@ -144,13 +144,13 @@ impl Number {
     ///
     /// For example:
     ///
-    /// ```text
+    /// ```oneil-eval-output
     /// |--- a ---|
     ///        |--- b ---|
     /// |---- result ----|
     /// ```
     ///
-    /// ```text
+    /// ```oneil-eval-output
     ///              |--- a ---|
     /// |--- b ---|
     /// |------- result -------|

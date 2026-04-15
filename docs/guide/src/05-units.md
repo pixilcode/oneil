@@ -133,7 +133,7 @@ defining a parameter with a measured value with the units `m/s`.
 
 Running the model with `oneil eval velocity.on` produces
 
-```text
+```oneil-eval-output
 v = 5 :m/s  # Velocity
 ```
 
@@ -148,7 +148,7 @@ $ Velocity: v = d/t :km/hr
 oneil eval velocity.on
 ```
 
-```text
+```oneil-eval-output
 v = 18 :km/hr  # Velocity
 ```
 
@@ -258,7 +258,7 @@ $ Run time: t_run = t_full - t_start :min
 oneil eval testing.on
 ```
 
-```text
+```oneil-eval-output
 t_run = 4.833 :min  # Run time
 ```
 
@@ -280,7 +280,7 @@ $ Run time: t_run = t_full - (10:s) :min
 oneil eval testing.on
 ```
 
-```text
+```oneil-eval-output
 t_run = 4.833 :min  # Run time
 ```
 
@@ -312,7 +312,7 @@ oneil eval empty.on \
   -x "(80:s) % (1:min)"
 ```
 
-```text
+```oneil-eval-output
 (1000:m) + (1:km) = 2e3 :m
 (1:km) + (1000:m) = 2 :km
 (5:min) - (30:s) = 4.5 :min
@@ -330,7 +330,7 @@ oneil eval empty.on \
   -x "(1:m)^2"
 ```
 
-```text
+```oneil-eval-output
 (1:m) * (1:s) = 1 :m*s
 (1:m) * (1:m) = 1 :m*m
 (1:m) * 1 = 1 :m
@@ -350,7 +350,7 @@ oneil eval empty.on \
   -x "(1:kg) != (1:g)"
 ```
 
-```text
+```oneil-eval-output
 (1:kg) < (2000:g) = true
 (1:kg) > (1:g) = true
 (1:kg) <= (1000:g) = true
@@ -375,7 +375,7 @@ $ ADC step count: n_adc = 2^(strip(S_adc)-1)
 oneil eval adc.on
 ```
 
-```text
+```oneil-eval-output
 n_adc = 512  # ADC step count
 ```
 
@@ -397,7 +397,7 @@ oneil eval length.on \
   -x "strip(l_km)"
 ```
 
-```text
+```oneil-eval-output
 strip(l_m) = 1e3
 strip(l_km) = 1
 ```
@@ -411,7 +411,7 @@ oneil eval length.on \
   -x "strip((l_km :m))"
 ```
 
-```text
+```oneil-eval-output
 strip((l_m :m)) = 1e3
 strip((l_km :m)) = 1e3
 ```
@@ -444,7 +444,7 @@ $ Signal-to-noise ratio: S_N = P_s/P_n
 oneil eval power.on
 ```
 
-```text
+```oneil-eval-output
 S_N = 10  # Signal-to-noise ratio
 ```
 
@@ -469,7 +469,7 @@ oneil eval empty.on \
   -x "(100:%) == 1" \
 ```
 
-```text
+```oneil-eval-output
 (100:%) == 1 = true
 ```
 
@@ -479,7 +479,7 @@ oneil eval empty.on \
   -x "(100:%) + 1"
 ```
 
-```text
+```oneil-eval-output
 (100:%) + 1 = 200 :%
 ```
 
@@ -501,7 +501,7 @@ oneil eval empty.on \
   -x "(360:deg) + 2*pi"
 ```
 
-```text
+```oneil-eval-output
 (1:rad) == 1 = true
 (360:deg) == 2*pi = true
 (1:rad) + 1 = 2
@@ -534,7 +534,7 @@ oneil eval freq.on \
   -x "(f :rad/s)" \
 ```
 
-```text
+```oneil-eval-output
 f = 1 :Hz
 (f :cycle/s) = 1 :cycle/s
 (f :rad/s) = 6.283 :rad/s
@@ -557,6 +557,6 @@ $ Wavelength: lambda = c/(f/2*pi) :cm
 oneil eval freq2.on
 ```
 
-```text
+```oneil-eval-output
 lambda = 0.6075 :cm  # Wavelength
 ```
