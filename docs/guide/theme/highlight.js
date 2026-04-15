@@ -61,6 +61,29 @@ hljs.registerLanguage("oneil", function (hljs) {
         end: /$/m,
       },
 
+      // use declaration
+      {
+        begin: [
+          /^\s*/m,
+          /use/,
+          /\s+/,
+          IDENT_RE,
+        ],
+        beginScope: {
+          2: "keyword",
+        },
+        end: /$/m,
+        keywords: ["as", "with"],
+        contains: [
+          // use foo with [ ... ]
+          {
+            begin: /\[/,
+            end: /\]/,
+            keywords: ["as"],
+          }
+        ],
+      },
+
       // section declaration
       {
         begin: [
