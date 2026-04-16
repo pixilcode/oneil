@@ -41,6 +41,7 @@ and provide your PAT. You can then run
 ```bash
 vsce publish --follow-symlinks
 ```
+
 to publish the extension to the market place.
 
 > [!INFO]
@@ -89,6 +90,8 @@ to publish to the Open VSX Registry.
 > to manually build the package. However, because building the package requires
 > the `--follow-symlinks` flag, we are required to take a roundabout way to
 > publish.
+
+<!---->
 
 > ![WARNING]
 > At the time of writing, Open VSX does not allow you to set a duration for your

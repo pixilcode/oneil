@@ -7,35 +7,17 @@
       "include": "#comments"
     },
     {
-      "include": "#keywords"
+      "include": "#declarations"
     },
     {
-      "include": "#numbers"
-    },
-    {
-      "include": "#strings"
-    },
-    {
-      "include": "#operators"
-    },
-    {
-      "include": "#functions"
-    },
-    {
-      "include": "#constants"
-    },
-    {
-      "include": "#units"
-    },
-    {
-      "include": "#identifiers"
+      "include": "#metadata"
     }
   ],
   "repository": {
     "comments": {
       "patterns": [
         {
-          "comment": "single-line comments",
+          "comment": "hash comments",
           "name": "comment.line.number-sign.oneil",
           "begin": "#",
           "end": "$",
@@ -43,14 +25,14 @@
             {
               "comment": "comment tags",
               "name": "keyword.other.commenttag.oneil",
-              "match": "\\b(TODO|NOTE|FIXME)\\b"
+              "match": "\\b(TODO|NOTE|FIXME|BUG|OPTIMIZE|HACK|XXX)\\b"
             }
           ]
         },
         {
-          "comment": "single-line notes",
+          "comment": "single-line notes (LaTeX)",
           "name": "comment.line.documentation.oneil",
-          "begin": "^\\s*~(?!~)",
+          "begin": "^\\s*~(?!~~)",
           "end": "$",
           "contentName": "meta.embedded.latex",
           "patterns": [
@@ -60,22 +42,10 @@
           ]
         },
         {
-          "comment": "multi-line notes",
+          "comment": "multi-line notes (LaTeX)",
           "name": "comment.block.documentation.oneil",
-          "begin": "~~~~*",
-          "end": "~~~~*",
-          "contentName": "meta.embedded.latex",
-          "patterns": [
-            {
-              "include": "text.tex.latex"
-            }
-          ]
-        },
-        {
-          "comment": "indented notes (deprecated)",
-          "name": "comment.block.documentation.oneil",
-          "begin": "^\\s+(?=[^{#\\s])",
-          "end": "$",
+          "begin": "^\\s*~~~[~]*\\s*$",
+          "end": "^\\s*~~~[~]*\\s*$",
           "contentName": "meta.embedded.latex",
           "patterns": [
             {
@@ -85,36 +55,212 @@
         }
       ]
     },
-    "keywords": {
+    "declarations": {
       "patterns": [
         {
-          "name": "keyword.control.oneil",
-          "match": "\\b(import|use|ref|as|with|section|test|if|and|or|not)\\b"
+          "comment": "import declaration",
+          "begin": "^(\\s*)(import)(\\s+)([A-Za-z_][A-Za-z0-9_]*)(?=#|$)",
+          "beginCaptures": {
+            "2": {
+              "name": "keyword.control.oneil"
+            },
+            "4": {
+              "name": "variable.other.oneil"
+            }
+          },
+          "end": "(?=#)|$"
         },
         {
-          "comment": "deprecated",
-          "name": "keyword.control.oneil",
-          "match": "\\b(from)\\b"
+          "comment": "use declaration",
+          "begin": "^(\\s*)(use)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+          "beginCaptures": {
+            "2": {
+              "name": "keyword.control.oneil"
+            }
+          },
+          "end": "(?=#)|$",
+          "patterns": [
+            {
+              "name": "keyword.control.oneil",
+              "match": "\\b(as|with)\\b"
+            },
+            {
+              "begin": "\\[",
+              "end": "\\]",
+              "patterns": [
+                {
+                  "name": "keyword.control.oneil",
+                  "match": "\\bas\\b"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "ref declaration",
+          "begin": "^(\\s*)(ref)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+          "beginCaptures": {
+            "2": {
+              "name": "keyword.control.oneil"
+            }
+          },
+          "end": "(?=#)|$",
+          "patterns": [
+            {
+              "name": "keyword.control.oneil",
+              "match": "\\bas\\b"
+            }
+          ]
+        },
+        {
+          "comment": "section declaration",
+          "begin": "^(\\s*)(section)(\\s+)([^()\\[\\]{#~:= \\t\\n*$][^()\\[\\]#:=\\n]*)",
+          "beginCaptures": {
+            "2": {
+              "name": "keyword.control.oneil"
+            },
+            "4": {
+              "name": "entity.name.section.oneil"
+            }
+          },
+          "end": "(?=#)|$"
+        },
+        {
+          "comment": "test declaration",
+          "begin": "^(\\s*)(test)(\\s*:)",
+          "beginCaptures": {
+            "2": {
+              "name": "keyword.control.oneil"
+            }
+          },
+          "end": "(?=#)|$",
+          "patterns": [
+            {
+              "include": "#expression"
+            }
+          ]
+        },
+        {
+          "comment": "parameter definition (name[.model] =), handles both parameter definitions and design overrides",
+          "begin": "([A-Za-z_][A-Za-z0-9_]*)(?:\\.([A-Za-z_][A-Za-z0-9_]*))?\\s*=(?!=)",
+          "beginCaptures": {
+            "1": {
+              "name": "variable.other.oneil"
+            },
+            "2": {
+              "name": "entity.name.type.oneil"
+            }
+          },
+          "end": "(?=#)|$",
+          "patterns": [
+            {
+              "name": "keyword.control.oneil",
+              "match": "\\bif\\b"
+            },
+            {
+              "include": "#expression"
+            }
+          ]
+        },
+        {
+          "comment": "piecewise branch",
+          "begin": "\\{",
+          "end": "(?=#)|$",
+          "patterns": [
+            {
+              "name": "keyword.control.oneil",
+              "match": "\\bif\\b"
+            },
+            {
+              "include": "#expression"
+            }
+          ]
+        }
+      ]
+    },
+    "metadata": {
+      "patterns": [
+        {
+          "comment": "parameter metadata (label, limits); must stay after declarations in root order",
+          "begin": "^\\s*((\\$|\\*\\*?)?)\\s*([^()\\[\\]{#~:= \\t\\n*$][^()\\[\\]#:=\\n]*)\\s*",
+          "beginCaptures": {
+            "3": {
+              "name": "entity.name.tag.oneil"
+            }
+          },
+          "end": ":\\s*",
+          "patterns": [
+            {
+              "begin": "\\(",
+              "end": "\\)\\s*",
+              "patterns": [
+                {
+                  "include": "#expression"
+                }
+              ]
+            },
+            {
+              "begin": "\\[",
+              "end": "\\]\\s*",
+              "patterns": [
+                {
+                  "include": "#expression"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        {
+          "include": "#expr-literals"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#external-ref"
+        },
+        {
+          "include": "#operators"
+        },
+        {
+          "include": "#function-invoke"
+        },
+        {
+          "include": "#unit-cast"
+        },
+        {
+          "include": "#identifiers"
+        }
+      ]
+    },
+    "expr-literals": {
+      "patterns": [
+        {
+          "name": "constant.language.oneil",
+          "match": "\\b(true|false|inf)\\b"
+        },
+        {
+          "name": "keyword.operator.word.oneil",
+          "match": "\\b(and|or|not)\\b"
         }
       ]
     },
     "numbers": {
       "patterns": [
         {
-          "name": "constant.numeric.scientific.oneil",
-          "match": "\\b(\\+|-)?inf\\b"
+          "name": "constant.numeric.oneil",
+          "match": "\\b(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?\\b"
         },
         {
-          "name": "constant.numeric.scientific.oneil",
-          "match": "\\b(\\+|-)?([0-9]*\\.[0-9]+|[0-9]+)[eE][+-]?[0-9]+\\b"
-        },
-        {
-          "name": "constant.numeric.float.oneil",
-          "match": "\\b(\\+|-)?[0-9]*\\.[0-9]+\\b"
-        },
-        {
-          "name": "constant.numeric.integer.oneil",
-          "match": "\\b(\\+|-)?[0-9]+\\b"
+          "name": "constant.numeric.oneil",
+          "match": "\\b\\d+\\b"
         }
       ]
     },
@@ -122,55 +268,63 @@
       "patterns": [
         {
           "name": "string.quoted.single.oneil",
-          "match": "\\'[^\\']*\\'"
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.oneil",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "external-ref": {
+      "patterns": [
+        {
+          "comment": "external parameter reference",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\.([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "2": {
+              "name": "entity.name.type.oneil"
+            }
+          }
         }
       ]
     },
     "operators": {
       "patterns": [
         {
-          "name": "keyword.operator.arithmetic.oneil",
-          "match": "\\+|-|--|\\*|/|//|%|\\^"
+          "name": "keyword.operator.oneil",
+          "match": "--|//|<=|>=|==|!="
         },
         {
-          "name": "keyword.operator.comparison.oneil",
-          "match": "<=|>=|==|!=|<|>"
-        },
-        {
-          "name": "keyword.operator.assignment.oneil",
-          "match": "=|=>"
+          "name": "keyword.operator.oneil",
+          "match": "[+\\-*/%^?<>|]"
         }
       ]
     },
-    "functions": {
+    "function-invoke": {
       "patterns": [
         {
-          "name": "support.function.oneil",
-          "match": "\\b(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|min|max|sqrt|abs|mnmx|log|log2|log10|ln|floor|ceiling|extent|range|strip|mid|sign)\\b"
+          "comment": "identifier followed by (",
+          "name": "entity.name.function.oneil",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()"
         }
       ]
     },
-    "constants": {
+    "unit-cast": {
       "patterns": [
         {
-          "name": "constant.language.oneil",
-          "match": "\\b(pi|e)\\b"
-        }
-      ]
-    },
-    "units": {
-      "patterns": [
-        {
-          "name": "entity.name.type.unit.oneil",
-          "match": "(?<=:)\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\^[+-]?[0-9]+)?(?:\\s*[*/]\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\^[+-]?[0-9]+)?)*\\s*$"
-        }
-      ]
-    },
-    "identifiers": {
-      "patterns": [
-        {
-          "name": "variable.other.oneil",
-          "match": "[A-Za-z_][A-Za-z0-9_]*"
+          "comment": "unit after : until ) or end of line",
+          "begin": ":",
+          "end": "(?=\\)|$)",
+          "patterns": [
+            {
+              "name": "entity.name.type.oneil",
+              "match": "[A-Za-z_][A-Za-z0-9_]*(?:\\^[+-]?[0-9]+)?(?:\\s*[*/]\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\^[+-]?[0-9]+)?)*"
+            }
+          ]
         }
       ]
     }
