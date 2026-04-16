@@ -1,5 +1,8 @@
 (* Oneil Language Grammar in EBNF *)
 
+(* IMPORTANT: Any time this is updated, `docs/guide/theme/highlight.js` and
+              `vscode/syntaxes/oneil.tmLanguage.json` should also be updated. *)
+
 (* NOTE: Identifiers and keywords are assumed to be separated by whitespace, as
          is standard. So, `importabc` is parsed as a single token, not `import`
          followed by `abc`.
