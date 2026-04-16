@@ -19,6 +19,9 @@ In order to modify the syntax highlighting, edit
 `syntaxes/oneil.tmLanguage.json`. For more details, see the [VS Code docs on
 syntax highlighting](https://code.visualstudio.com/api/language-extensions/syntax-highlight-guide).
 
+Use this [TextMate Grammar Testing Tool](https://www.leskoff.com/s02050-0) to
+quickly iterate on the grammar.
+
 ### Publishing the extension
 
 For details on how the extension is published, reference [the VS Code
