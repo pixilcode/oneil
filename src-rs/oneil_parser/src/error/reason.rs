@@ -95,6 +95,51 @@ impl ParserErrorReason {
         }
     }
 
+    /// Missing target model name after `design`.
+    #[must_use]
+    pub(crate) const fn design_missing_target(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::DesignMissingTarget),
+        }
+    }
+
+    /// Missing design file name after `use design`.
+    #[must_use]
+    pub(crate) const fn use_design_missing_file(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::UseDesignMissingFile),
+        }
+    }
+
+    /// Top-level `design <model>` in a `.on` model file (only allowed in `.one` bundles).
+    #[must_use]
+    pub(crate) const fn design_header_wrong_file(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::DesignHeaderWrongFile),
+        }
+    }
+
+    /// Duplicate `design <model>` declaration in a `.one` design bundle.
+    #[must_use]
+    pub(crate) const fn design_header_duplicate(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::DesignHeaderDuplicate),
+        }
+    }
+
+    /// First top-level declaration in a `.one` design bundle is not `design <model>`.
+    #[must_use]
+    pub(crate) const fn design_header_not_first(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::DesignHeaderNotFirst),
+        }
+    }
+
     #[must_use]
     pub(crate) const fn model_path_missing_subcomponent(dot_span: Span) -> Self {
         Self::Incomplete {
@@ -407,6 +452,16 @@ pub enum DeclKind {
     ModelMissingSubcomponent,
     /// Found an incomplete alias after `as`
     AsMissingAlias,
+    /// Missing model identifier after `design`.
+    DesignMissingTarget,
+    /// Missing design file name after `use design`.
+    UseDesignMissingFile,
+    /// `design <model>` at file top level is only valid in `.one` design bundle files.
+    DesignHeaderWrongFile,
+    /// Only one `design <model>` declaration is allowed per `.one` design bundle.
+    DesignHeaderDuplicate,
+    /// In a `.one` design bundle, the first top-level declaration must be `design <model>`.
+    DesignHeaderNotFirst,
 }
 
 /// The different kind of `import` errors

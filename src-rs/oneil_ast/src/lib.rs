@@ -14,8 +14,9 @@ mod unit;
 
 pub use debug_info::{TraceLevel, TraceLevelNode};
 pub use declaration::{
-    Decl, DeclNode, Import, ImportNode, ModelInfo, ModelInfoNode, ModelKind, SubmodelList,
-    SubmodelListNode, UseModel, UseModelNode,
+    Decl, DeclNode, DesignParameter, DesignParameterNode, DesignTarget, DesignTargetNode, Import,
+    ImportNode, ModelInfo, ModelInfoNode, ModelKind, SubmodelList, SubmodelListNode, UseDesign,
+    UseDesignNode, UseModel, UseModelNode,
 };
 pub use expression::{
     BinaryOp, BinaryOpNode, ComparisonOp, ComparisonOpNode, Expr, ExprNode, ExprVisitor, Literal,

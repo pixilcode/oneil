@@ -1,0 +1,14 @@
+# Test: shared refs both see the same overlay
+# Both probes share same gravity reference
+# Overlay changes the shared reference, affecting both
+ref ../gravity_earth as planet
+
+use design shared_ref_design for planet
+
+# Both use same (replaced) gravity - Mars
+# Weight = 100 * 3.72 = 372 N each
+# Total = 744 N
+Payload: mass = 100 :kg
+Weight A: w_a = mass * g.planet :N
+Weight B: w_b = mass * g.planet :N
+Total Weight: total = w_a + w_b :N

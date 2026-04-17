@@ -7,13 +7,15 @@ mod eval_expr;
 mod eval_model;
 mod eval_parameter;
 mod eval_unit;
+mod instance_graph;
 
 pub use context::{ExternalEvaluationContext, IrLoadError};
 pub use error::{EvalError, EvalErrors};
 
 pub use eval_expr::eval_expr_in_model;
-pub use eval_model::eval_model;
+pub use eval_model::{eval_model, eval_model_from_graph, eval_model_with_designs};
 pub use eval_unit::eval_unit_external as eval_unit;
+pub use instance_graph::{InstanceGraph, InstancedModel, OverlayBinding};
 
 #[cfg(test)]
 mod test_context;

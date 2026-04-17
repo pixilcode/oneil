@@ -9,6 +9,7 @@ use oneil_resolver as resolver;
 #[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
 use oneil_shared::{
+    EvalInstanceKey,
     load_result::LoadResult,
     paths::{ModelPath, SourcePath},
 };
@@ -126,8 +127,83 @@ pub type AstCache = ModelCache<output::ast::ModelNode, Vec<ParserError>>;
 /// Cache for resolved IR models keyed by path.
 pub type IrCache = ModelCache<output::ir::Model, resolver::ResolutionErrorCollection>;
 
-/// Cache for evaluated output models keyed by path.
-pub type EvalCache = ModelCache<output::Model, eval::EvalErrors>;
+/// Cache for evaluated output models keyed by file path and import instance.
+#[derive(Debug, Default)]
+pub struct EvalCache {
+    entries: IndexMap<EvalInstanceKey, LoadResult<output::Model, eval::EvalErrors>>,
+}
+
+impl EvalCache {
+    /// Creates an empty evaluation cache.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the cached entry for the root instance of `path`, if present.
+    #[must_use]
+    pub fn get_entry(
+        &self,
+        path: &ModelPath,
+    ) -> Option<&LoadResult<output::Model, eval::EvalErrors>> {
+        self.entries.get(&EvalInstanceKey::root(path.clone()))
+    }
+
+    /// Returns the cached entry for a specific evaluated instance.
+    #[must_use]
+    pub fn get_entry_instance(
+        &self,
+        key: &EvalInstanceKey,
+    ) -> Option<&LoadResult<output::Model, eval::EvalErrors>> {
+        self.entries.get(key)
+    }
+
+    /// Returns the successful model for the root instance of `path`, if present.
+    #[must_use]
+    pub fn get_value(&self, path: &ModelPath) -> Option<&output::Model> {
+        self.get_entry(path).and_then(LoadResult::value)
+    }
+
+    /// Inserts a result for an evaluated instance, replacing any existing entry.
+    pub fn insert(
+        &mut self,
+        key: EvalInstanceKey,
+        result: LoadResult<output::Model, eval::EvalErrors>,
+    ) {
+        self.entries.insert(key, result);
+    }
+
+    /// Removes every cached evaluation whose on-disk model path equals `path`.
+    pub fn remove(&mut self, path: &ModelPath) {
+        self.entries.retain(|key, _| key.model_path != *path);
+    }
+
+    /// Returns whether the root instance of `path` has a cached entry.
+    #[must_use]
+    pub fn contains(&self, path: &ModelPath) -> bool {
+        self.entries
+            .contains_key(&EvalInstanceKey::root(path.clone()))
+    }
+
+    /// Returns the number of cached evaluated instances.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Returns `true` if there are no cached instances.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Iterates all instance keys and their load results.
+    pub fn iter(
+        &self,
+    ) -> indexmap::map::Iter<'_, EvalInstanceKey, LoadResult<output::Model, eval::EvalErrors>> {
+        self.entries.iter()
+    }
+}
 
 /// Cache for Python import function maps keyed by path.
 ///
@@ -208,6 +284,12 @@ impl<T, E> ModelCache<T, E> {
     #[must_use]
     pub fn get_entry(&self, path: &ModelPath) -> Option<&LoadResult<T, E>> {
         self.entries.get(path)
+    }
+
+    /// Returns a mutable reference to the cached entry for `path`.
+    #[must_use]
+    pub fn get_entry_mut(&mut self, path: &ModelPath) -> Option<&mut LoadResult<T, E>> {
+        self.entries.get_mut(path)
     }
 
     /// Returns the value for `path`, if present.

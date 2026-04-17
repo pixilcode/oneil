@@ -120,7 +120,7 @@ pub fn resolve_model_imports<E>(
 
         // add the reference to the active model
         resolution_context.add_reference_to_active_model(
-            reference_name,
+            reference_name.clone(),
             reference_name_span,
             resolved_path.clone(),
         );
@@ -130,12 +130,24 @@ pub fn resolve_model_imports<E>(
             continue;
         };
 
-        resolve_sumbodels(&resolved_path, submodel_list, resolution_context);
+        resolve_extracted_submodels(
+            &resolved_path,
+            &reference_name,
+            submodel_list,
+            resolution_context,
+        );
     }
 }
 
-fn resolve_sumbodels<E>(
-    resolved_path: &ModelPath,
+/// Resolves extracted submodels from a `with` clause.
+///
+/// Creates both:
+/// 1. `SubmodelImport` entries that store the relative path within the parent
+///    (for eval-time re-resolution through potentially replaced parent)
+/// 2. `ReferenceImport` entries with the resolved path (for variable validation)
+fn resolve_extracted_submodels<E>(
+    parent_model_path: &ModelPath,
+    parent_reference_name: &ReferenceName,
     submodel_list: &oneil_ast::Node<oneil_ast::SubmodelList>,
     resolution_context: &mut ResolutionContext<'_, E>,
 ) where
@@ -146,14 +158,13 @@ fn resolve_sumbodels<E>(
         let mut submodel_subcomponents = submodel_info.subcomponents().to_vec();
         submodel_subcomponents.insert(0, submodel_info.top_component().clone());
 
-        // get the reference name for the submodel
+        // get the reference name for the extracted submodel
         let (reference_name, reference_name_span) = get_reference_name_and_span(submodel_info);
 
         // check for duplicate references
         let maybe_original_reference =
             resolution_context.get_reference_from_active_model(&reference_name);
         if let Some(original_reference) = maybe_original_reference {
-            // if there is a duplicate, add the error and continue
             let error = ModelImportResolutionError::duplicate_reference(
                 reference_name.clone(),
                 *original_reference.name_span(),
@@ -169,20 +180,36 @@ fn resolve_sumbodels<E>(
             continue;
         }
 
-        // resolve the reference path
+        // validate the submodel path exists (type-checking)
         let resolved_reference_path = resolve_model_path(
-            resolved_path.clone(),
+            parent_model_path.clone(),
             reference_name_span,
             &submodel_subcomponents,
             resolution_context,
         );
 
         match resolved_reference_path {
-            Ok(resolved_reference_path) => {
+            Ok(resolved_path) => {
+                // Convert IdentifierNodes to SubmodelNames for the path
+                let submodel_path: Vec<SubmodelName> = submodel_subcomponents
+                    .iter()
+                    .map(|id| SubmodelName::from(id.as_str()))
+                    .collect();
+
+                // Add SubmodelImport with relative path (for eval-time re-resolution)
+                let submodel_name = SubmodelName::from(reference_name.as_str());
+                resolution_context.add_extracted_submodel_to_active_model(
+                    submodel_name,
+                    reference_name_span,
+                    parent_reference_name.clone(),
+                    submodel_path,
+                );
+
+                // Also add ReferenceImport with resolved path (for variable validation)
                 resolution_context.add_reference_to_active_model(
                     reference_name,
                     reference_name_span,
-                    resolved_reference_path,
+                    resolved_path,
                 );
             }
             Err(error) => {
@@ -197,7 +224,9 @@ fn resolve_sumbodels<E>(
 }
 
 fn get_submodel_name_and_span(model_info: &ast::ModelInfo) -> (SubmodelName, Span) {
-    let model_name = model_info.get_model_name();
+    // Use get_alias() to get the effective name (alias if provided, else model name)
+    // This ensures `use foo as bar` creates submodel "bar", not "foo"
+    let model_name = model_info.get_alias();
     let name = SubmodelName::from(model_name.as_str());
     let span = model_name.span();
     (name, span)
@@ -367,7 +396,8 @@ mod tests {
     use oneil_ast as ast;
     use oneil_ir as ir;
 
-    /// Asserts that the submodel map contains exactly the expected submodels.
+    /// Asserts that the submodel map contains exactly the expected direct submodels.
+    /// Direct submodels are those with empty `submodel_path` (not extracted via `with`).
     /// Uses the reference map to resolve each submodel's path via its reference name.
     macro_rules! assert_has_submodels {
         ($submodel_map:expr, $reference_map:expr, $expected_submodels:expr $(,)?) => {
@@ -376,17 +406,28 @@ mod tests {
             let expected_submodels: Vec<(&'static str, &ModelPath)> =
                 $expected_submodels.into_iter().collect();
 
-            // check that the submodel map length is the same as the number of submodels
+            // Count direct (non-extracted) submodels
+            let direct_submodels: Vec<_> = submodel_map
+                .iter()
+                .filter(|(_, import)| !import.is_extracted())
+                .collect();
+
+            // check that the direct submodel count matches expected
             assert_eq!(
-                submodel_map.len(),
+                direct_submodels.len(),
                 expected_submodels.len(),
-                "length of *actual* submodel map differs from *expected* submodel map",
+                "length of *actual* direct submodel map differs from *expected* submodel map",
             );
 
             for (submodel_name, expected_path) in expected_submodels {
                 let submodel_name = SubmodelName::from(submodel_name);
                 let submodel_import = submodel_map.get(&submodel_name).expect(
                     format!("did not find submodel for '{}'", submodel_name.as_str()).as_str(),
+                );
+                assert!(
+                    !submodel_import.is_extracted(),
+                    "expected '{}' to be a direct submodel, not extracted",
+                    submodel_name.as_str()
                 );
                 let reference_import = reference_map
                     .get(submodel_import.reference_name())
@@ -397,6 +438,62 @@ mod tests {
                     expected_path,
                     "actual submodel path for '{}' differs from expected",
                     submodel_name.as_str(),
+                );
+            }
+        };
+    }
+
+    /// Asserts that the submodel map contains the expected extracted submodels.
+    /// Extracted submodels are those created via `with` clauses.
+    macro_rules! assert_has_extracted_submodels {
+        ($submodel_map:expr, $expected_extractions:expr $(,)?) => {
+            let submodel_map: &IndexMap<SubmodelName, ir::SubmodelImport> = $submodel_map;
+            let expected_extractions: Vec<(&'static str, &'static str, Vec<&'static str>)> =
+                $expected_extractions.into_iter().collect();
+
+            // Count extracted submodels
+            let extracted_submodels: Vec<_> = submodel_map
+                .iter()
+                .filter(|(_, import)| import.is_extracted())
+                .collect();
+
+            // check that the extracted submodel count matches expected
+            assert_eq!(
+                extracted_submodels.len(),
+                expected_extractions.len(),
+                "length of *actual* extracted submodel map differs from *expected*",
+            );
+
+            for (submodel_name, parent_ref, expected_path) in expected_extractions {
+                let submodel_name = SubmodelName::from(submodel_name);
+                let submodel_import = submodel_map.get(&submodel_name).expect(
+                    format!(
+                        "did not find extracted submodel '{}'",
+                        submodel_name.as_str()
+                    )
+                    .as_str(),
+                );
+                assert!(
+                    submodel_import.is_extracted(),
+                    "expected '{}' to be an extracted submodel",
+                    submodel_name.as_str()
+                );
+                assert_eq!(
+                    submodel_import.reference_name().as_str(),
+                    parent_ref,
+                    "parent reference for '{}' differs from expected",
+                    submodel_name.as_str()
+                );
+                let actual_path: Vec<&str> = submodel_import
+                    .submodel_path()
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect();
+                assert_eq!(
+                    actual_path,
+                    expected_path,
+                    "submodel_path for '{}' differs from expected",
+                    submodel_name.as_str()
                 );
             }
         };
@@ -462,11 +559,11 @@ mod tests {
         // run the resolution
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the resolved submodels
+        // check the resolved submodels (keyed by alias "temp", not model name "temperature")
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
-            [("temperature", &temperature_path)],
+            [("temp", &temperature_path)],
         );
 
         // check the resolved references
@@ -520,11 +617,11 @@ mod tests {
         // run the resolution
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the resolved submodels
+        // check the resolved submodels (uses alias "temp" as key, not model name "temperature")
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
-            [("temperature", &temperature_path)],
+            [("temp", &temperature_path)],
         );
 
         // check the resolved references
@@ -680,7 +777,8 @@ mod tests {
             .get(&ReferenceName::from("error"))
             .expect("error should exist");
 
-        assert_eq!(submodel_name, &Some(SubmodelName::from("error_model")));
+        // Submodel name uses alias "error", not model name "error_model"
+        assert_eq!(submodel_name, &Some(SubmodelName::from("error")));
 
         let ModelImportResolutionError::ModelHasError {
             model_path,
@@ -848,14 +946,11 @@ mod tests {
         // run the resolution
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the resolved submodels
+        // check the resolved submodels (keyed by aliases, not model names)
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
-            [
-                ("temperature", &temperature_path),
-                ("pressure", &pressure_path),
-            ],
+            [("temp", &temperature_path), ("press", &pressure_path),],
         );
 
         // check the resolved references
@@ -907,11 +1002,11 @@ mod tests {
         // run the resolution
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the resolved submodels (only temperature)
+        // check the resolved submodels (only temp, keyed by alias)
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
-            [("temperature", &temperature_path)],
+            [("temp", &temperature_path)],
         );
 
         // check the resolved references (only temp)
@@ -927,7 +1022,8 @@ mod tests {
         let (submodel_name, error) = model_import_errors
             .get(&ReferenceName::from("error"))
             .expect("error should exist");
-        assert_eq!(submodel_name, &Some(SubmodelName::from("error_model")));
+        // Submodel name uses alias "error", not model name "error_model"
+        assert_eq!(submodel_name, &Some(SubmodelName::from("error")));
 
         let ModelImportResolutionError::ModelHasError {
             model_path: err_path,
@@ -1073,10 +1169,11 @@ mod tests {
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
         // check the resolved submodels (only first; second failed due to duplicate alias)
+        // Keyed by alias "temp", not model name "temperature"
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
-            [("temperature", &temperature_path)],
+            [("temp", &temperature_path)],
         );
 
         // check the resolved references (only temp -> temperature)
@@ -1092,20 +1189,20 @@ mod tests {
             .get(&ReferenceName::from("temp"))
             .expect("error should exist");
 
-        assert_eq!(
-            submodel_name,
-            &Some(SubmodelName::from("other_temperature"))
-        );
+        // Submodel name uses alias "temp", not model name "other_temperature"
+        assert_eq!(submodel_name, &Some(SubmodelName::from("temp")));
 
-        let ModelImportResolutionError::DuplicateReference {
-            reference,
+        // With aliased submodels, duplicate aliases now trigger DuplicateSubmodel
+        // (since both submodels are keyed by "temp")
+        let ModelImportResolutionError::DuplicateSubmodel {
+            submodel,
             original_span: _,
             duplicate_span: _,
         } = error
         else {
-            panic!("Expected DuplicateReference, got {error:?}");
+            panic!("Expected DuplicateSubmodel, got {error:?}");
         };
-        assert_eq!(reference.as_str(), "temp");
+        assert_eq!(submodel.as_str(), "temp");
     }
 
     #[test]
@@ -1209,11 +1306,11 @@ mod tests {
         // run the resolution
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the resolved submodels (only temperature)
+        // check the resolved submodels (only temp, keyed by alias)
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
-            [("temperature", &temperature_path)],
+            [("temp", &temperature_path)],
         );
 
         // check the resolved references (only temp)
@@ -1228,6 +1325,7 @@ mod tests {
         let (submodel_name, error) = model_import_errors
             .get(&ReferenceName::from("undefined"))
             .expect("error should exist");
+        // No alias, so submodel name is "undefined" (the default alias)
         assert_eq!(submodel_name, &Some(SubmodelName::from("undefined")));
 
         let ModelImportResolutionError::UndefinedSubmodel {
@@ -1278,17 +1376,23 @@ mod tests {
         // run the resolution
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the resolved submodels (weather as submodel)
+        // check the resolved direct submodels (weather as submodel)
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
             [("weather", &weather_path)],
         );
 
-        // check the resolved references (temp -> temperature, weather -> weather_path)
+        // check extracted submodels (temp extracted from weather via "temperature" path)
+        assert_has_extracted_submodels!(
+            resolution_context.get_active_model_submodels(),
+            [("temp", "weather", vec!["temperature"])],
+        );
+
+        // check the resolved references (weather + temp, extracted submodels also create references)
         assert_has_references!(
             resolution_context.get_active_model_references(),
-            [("temp", &temperature_path), ("weather", &weather_path)],
+            [("weather", &weather_path), ("temp", &temperature_path)],
         );
 
         // check the errors
@@ -1341,20 +1445,29 @@ mod tests {
         // run the resolution
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the resolved submodels (weather as submodel)
+        // check the resolved direct submodels (weather as submodel)
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
             [("weather", &weather_path)],
         );
 
-        // check the resolved references (temp, press, weather)
+        // check extracted submodels (temp and press extracted from weather)
+        assert_has_extracted_submodels!(
+            resolution_context.get_active_model_submodels(),
+            [
+                ("temp", "weather", vec!["temperature"]),
+                ("press", "weather", vec!["pressure"]),
+            ],
+        );
+
+        // check the resolved references (weather + temp + press)
         assert_has_references!(
             resolution_context.get_active_model_references(),
             [
+                ("weather", &weather_path),
                 ("temp", &temperature_path),
                 ("press", &pressure_path),
-                ("weather", &weather_path),
             ],
         );
 
@@ -1411,17 +1524,23 @@ mod tests {
         // resolve the submodels
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the submodels
+        // check the direct submodels
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
             [("weather", &weather_path)],
         );
 
-        // check the references
+        // check extracted submodels (temp extracted via nested path atmosphere.temperature)
+        assert_has_extracted_submodels!(
+            resolution_context.get_active_model_submodels(),
+            [("temp", "weather", vec!["atmosphere", "temperature"])],
+        );
+
+        // check the references (weather + temp)
         assert_has_references!(
             resolution_context.get_active_model_references(),
-            [("temp", &temperature_path), ("weather", &weather_path)],
+            [("weather", &weather_path), ("temp", &temperature_path)],
         );
 
         // check the errors
@@ -1469,7 +1588,7 @@ mod tests {
             [("weather", &weather_path)],
         );
 
-        // check the references
+        // check the references (only weather, undefined failed)
         assert_has_references!(
             resolution_context.get_active_model_references(),
             [("weather", &weather_path)],
@@ -1482,7 +1601,8 @@ mod tests {
         let (submodel_name, error) = model_import_errors
             .get(&ReferenceName::from("undefined"))
             .expect("error should exist");
-        assert_eq!(submodel_name, &None); // because it is in a with clause and therefore is a reference
+        // Failed extractions don't create SubmodelImport, so submodel_name is None
+        assert_eq!(submodel_name, &None);
 
         let ModelImportResolutionError::UndefinedSubmodel {
             parent_model_path,
@@ -1538,26 +1658,33 @@ mod tests {
         // resolve the submodels
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the submodels
+        // check the direct submodels
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
             [("weather", &weather_path)],
         );
 
-        // check the references
-        assert_has_references!(
-            resolution_context.get_active_model_references(),
-            [("temp", &temperature_path), ("weather", &weather_path)],
+        // check extracted submodels (temp extracted successfully)
+        assert_has_extracted_submodels!(
+            resolution_context.get_active_model_submodels(),
+            [("temp", "weather", vec!["temperature"])],
         );
 
-        // check the errors
+        // check the references (weather + temp, undefined failed)
+        assert_has_references!(
+            resolution_context.get_active_model_references(),
+            [("weather", &weather_path), ("temp", &temperature_path)],
+        );
+
+        // check the errors (undefined extraction failed)
         let model_import_errors = resolution_context.get_active_model_model_import_errors();
         assert_eq!(model_import_errors.len(), 1);
         let (submodel_name, error) = model_import_errors
             .get(&ReferenceName::from("undefined"))
             .expect("error should exist");
-        assert_eq!(submodel_name, &None); // because it is in a with clause and therefore is a reference
+        // Failed extractions don't create SubmodelImport, so submodel_name is None
+        assert_eq!(submodel_name, &None);
 
         let ModelImportResolutionError::UndefinedSubmodel {
             parent_model_path,
@@ -1617,20 +1744,29 @@ mod tests {
         // resolve the submodels
         resolve_model_imports(&model_path, import_models, &mut resolution_context);
 
-        // check the submodels
+        // check the direct submodels (keyed by alias "weather_model", not model name "weather")
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
-            [("weather", &weather_path)],
+            [("weather_model", &weather_path)],
         );
 
-        // check the references
+        // check extracted submodels (temp and press extracted from weather_model)
+        assert_has_extracted_submodels!(
+            resolution_context.get_active_model_submodels(),
+            [
+                ("temp", "weather_model", vec!["temperature"]),
+                ("press", "weather_model", vec!["pressure"]),
+            ],
+        );
+
+        // check the references (weather_model + temp + press)
         assert_has_references!(
             resolution_context.get_active_model_references(),
             [
+                ("weather_model", &weather_path),
                 ("temp", &temperature_path),
                 ("press", &pressure_path),
-                ("weather_model", &weather_path),
             ],
         );
 
@@ -1774,14 +1910,20 @@ mod tests {
         // resolve the submodels
         resolve_model_imports(&model_path, model_imports, &mut resolution_context);
 
-        // check the submodels
+        // check the direct submodels (none, since ref doesn't create a submodel)
         assert_has_submodels!(
             resolution_context.get_active_model_submodels(),
             resolution_context.get_active_model_references(),
             [],
         );
 
-        // check the references
+        // check extracted submodels (press extracted from temp)
+        assert_has_extracted_submodels!(
+            resolution_context.get_active_model_submodels(),
+            [("press", "temp", vec!["pressure"])],
+        );
+
+        // check the references (temp + press)
         assert_has_references!(
             resolution_context.get_active_model_references(),
             [("temp", &temperature_path), ("press", &pressure_path)],

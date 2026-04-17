@@ -3,28 +3,36 @@
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 
-/// The extension for Oneil source files.
+/// The extension for ordinary Oneil model files.
 const ON_EXTENSION: &str = "on";
+
+/// The extension for Oneil design bundle files (`use design` targets).
+const ONE_EXTENSION: &str = "one";
+
+#[must_use]
+fn is_oneil_model_path_extension(ext: Option<&std::ffi::OsStr>) -> bool {
+    ext.and_then(|e| e.to_str())
+        .is_some_and(|s| s == ON_EXTENSION || s == ONE_EXTENSION)
+}
 
 /// The extension for Python module files.
 const PYTHON_EXTENSION: &str = "py";
 
-/// A path to an Oneil model file.
+/// A path to an Oneil model or design source file (`.on` or `.one`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ModelPath(PathBuf);
 
 impl ModelPath {
-    /// Creates a new model path from a path with the `.on` extension.
+    /// Creates a new model path from a path with a supported extension (`.on` or `.one`).
     ///
     /// # Panics
     ///
-    /// Panics if the path has an extension other than `.on`.
+    /// Panics if the path does not use a supported Oneil source extension.
     #[must_use]
     fn new(path: PathBuf) -> Self {
-        debug_assert_eq!(
-            path.extension().map(|ext| ext.to_string_lossy()),
-            Some(ON_EXTENSION.into()),
-            "Model paths must have an extension of .{ON_EXTENSION}"
+        debug_assert!(
+            is_oneil_model_path_extension(path.extension()),
+            "Model paths must end with `.{ON_EXTENSION}` or `.{ONE_EXTENSION}`"
         );
 
         Self(path)
@@ -40,11 +48,11 @@ impl ModelPath {
         Self::from_path_no_ext(Path::new(s))
     }
 
-    /// Creates a new model path from a path with the `.on` extension.
+    /// Creates a new model path from a path with a supported extension (`.on` or `.one`).
     ///
     /// # Panics
     ///
-    /// Panics if the given path does not have the `.on` extension.
+    /// Panics if the given path does not have a supported Oneil source extension.
     #[must_use]
     pub fn from_str_with_ext(path: &str) -> Self {
         Self::from_path_with_ext(Path::new(path))
@@ -71,17 +79,53 @@ impl ModelPath {
         })
     }
 
-    /// Creates a new model path from a path with the `.on` extension.
+    /// Creates a new model path from a path with a supported extension (`.on` or `.one`).
     ///
     /// # Panics
     ///
-    /// Panics if the given path does not have the `.on` extension.
+    /// Panics if the given path does not have a supported Oneil source extension.
     #[must_use]
     pub fn from_path_with_ext(path: &Path) -> Self {
         Self::try_from(path).unwrap_or_else(|()| {
             panic!(
-                "given path must have `.{ON_EXTENSION}` extension, got {}",
+                "given path must have `.{ON_EXTENSION}` or `.{ONE_EXTENSION}` extension, got {}",
                 path.display()
+            )
+        })
+    }
+
+    /// Returns `true` when this path uses the `.one` design bundle extension.
+    #[must_use]
+    pub fn is_design_bundle(&self) -> bool {
+        self.0
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|s| s == ONE_EXTENSION)
+    }
+
+    /// Returns a path for a sibling design file relative to the current model's path
+    /// with a `.one` extension.
+    ///
+    /// This is similar to `get_sibling_model_path` but for design files.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the resulting path does not have a `.one` extension.
+    #[must_use]
+    pub fn get_sibling_design_path(&self, sibling_path: Self) -> Self {
+        let parent = self.0.parent();
+        let sibling_path = sibling_path.into_path_buf().with_extension(ONE_EXTENSION);
+
+        let joined = if let Some(parent) = parent {
+            parent.join(&sibling_path)
+        } else {
+            sibling_path
+        };
+
+        Self::try_from(joined.as_path()).unwrap_or_else(|()| {
+            panic!(
+                "expected design path with `.{ONE_EXTENSION}` extension, got {}",
+                joined.display()
             )
         })
     }
@@ -130,7 +174,7 @@ impl TryFrom<&Path> for ModelPath {
     type Error = ();
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        if path.extension().map(|ext| ext.to_string_lossy()) == Some(ON_EXTENSION.into()) {
+        if is_oneil_model_path_extension(path.extension()) {
             Ok(Self(path.to_path_buf()))
         } else {
             Err(())
@@ -272,14 +316,13 @@ impl TryFrom<SourcePath> for ModelPath {
 
     /// Attempts to convert a [`SourcePath`] to a [`ModelPath`].
     ///
-    /// Succeeds only when the path has the `.on` extension.
+    /// Succeeds when the path has the `.on` or `.one` extension.
     fn try_from(value: SourcePath) -> Result<Self, Self::Error> {
-        value
-            .as_path()
-            .extension()
-            .filter(|ext| ext.to_string_lossy().as_ref() == ON_EXTENSION)
-            .map(|_| Self::from_path_with_ext(value.as_path()))
-            .ok_or(())
+        if is_oneil_model_path_extension(value.as_path().extension()) {
+            Ok(Self::from_path_with_ext(value.as_path()))
+        } else {
+            Err(())
+        }
     }
 }
 

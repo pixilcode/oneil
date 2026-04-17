@@ -1,0 +1,5 @@
+# Derived design: Override to custom low-g environment
+design ../gravity_earth
+
+use design use_design_nofor_base
+g = 5.0 :m/s^2

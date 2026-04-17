@@ -70,6 +70,43 @@ fn print_decl(decl: &ast::DeclNode, indent: usize, prefix: &str) {
                 dbg_style::IDENTIFIER.style(import.path().as_str())
             );
         }
+        ast::Decl::DesignTarget(dt) => {
+            println!(
+                "{}{} {} {}",
+                "    ".repeat(indent),
+                dbg_style::TREE.style(prefix),
+                dbg_style::LABEL.style("DesignTarget:"),
+                dbg_style::IDENTIFIER.style(dt.target().as_str())
+            );
+        }
+        ast::Decl::UseDesign(ud) => {
+            let for_part = ud
+                .instance()
+                .map(|a| format!(" for {}", a.as_str()))
+                .unwrap_or_default();
+            println!(
+                "{}{} {} {}{}",
+                "    ".repeat(indent),
+                dbg_style::TREE.style(prefix),
+                dbg_style::LABEL.style("UseDesign:"),
+                dbg_style::IDENTIFIER.style(ud.design_file().as_str()),
+                dbg_style::LITERAL.style(for_part)
+            );
+        }
+        ast::Decl::DesignParameter(p) => {
+            let instance_part = p
+                .instance()
+                .map(|i| format!(".{}", i.as_str()))
+                .unwrap_or_default();
+            println!(
+                "{}{} {} {}{} = …",
+                "    ".repeat(indent),
+                dbg_style::TREE.style(prefix),
+                dbg_style::LABEL.style("DesignParameter:"),
+                dbg_style::IDENTIFIER.style(p.ident().as_str()),
+                dbg_style::LITERAL.style(instance_part)
+            );
+        }
         ast::Decl::UseModel(use_model) => {
             let alias = use_model.model_info().get_alias();
             let alias_str = format!(" as {}", alias.as_str());

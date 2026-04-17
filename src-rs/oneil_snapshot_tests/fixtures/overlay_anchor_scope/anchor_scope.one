@@ -1,0 +1,6 @@
+design parent
+
+# Scoped override: RHS references `multiplier`, which lives on parent (the design's
+# target / lexical scope), NOT on child. With anchor-scope evaluation this resolves
+# to parent.multiplier = 10, so base.a becomes 2 * 10 = 20.
+base.a = 2 * multiplier

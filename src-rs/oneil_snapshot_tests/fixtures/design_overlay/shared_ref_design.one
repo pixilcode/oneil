@@ -1,0 +1,4 @@
+# Replace Earth gravity with Mars gravity
+design shared_ref
+
+use ../gravity_mars as planet

@@ -1,0 +1,5 @@
+# Direct test of propulsion system
+use mid_with_matching as propulsion
+
+# Earth T/W ratio: 1000 / (100 * 9.81) ≈ 1.02
+Earth Performance: result = ratio.propulsion

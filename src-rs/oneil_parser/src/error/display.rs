@@ -53,6 +53,20 @@ impl fmt::Display for DeclKind {
             Self::Use(use_kind) => use_kind.fmt(f),
             Self::ModelMissingSubcomponent => write!(f, "expected submodel name after `.`"),
             Self::AsMissingAlias => write!(f, "expected model alias after `as`"),
+            Self::DesignMissingTarget => write!(f, "expected model name after `design`"),
+            Self::UseDesignMissingFile => write!(f, "expected design file name after `use design`"),
+            Self::DesignHeaderWrongFile => write!(
+                f,
+                "`design` declaration is only allowed in `.one` design bundle files"
+            ),
+            Self::DesignHeaderDuplicate => write!(
+                f,
+                "only one `design` declaration is allowed per design bundle"
+            ),
+            Self::DesignHeaderNotFirst => write!(
+                f,
+                "in a `.one` design bundle, `design <model>` must be the first declaration after the optional note"
+            ),
         }
     }
 }

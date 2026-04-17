@@ -1,0 +1,10 @@
+# Design file that overrides an augmented parameter on a reference
+
+design parent
+
+# Override the design-augmented parameter on reference c
+# This tests if param.ref = value syntax works for augmented params
+doubled.c = 100
+
+# Also override a normal param on c
+base.c = 50

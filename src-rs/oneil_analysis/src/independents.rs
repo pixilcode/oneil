@@ -48,7 +48,8 @@ pub fn get_independents<E: ExternalAnalysisContext>(
     }
 
     for ref_path in model.references.values() {
-        let (nested_independents, nested_errors) = get_independents(ref_path, external_context);
+        let (nested_independents, nested_errors) =
+            get_independents(&ref_path.model_path, external_context);
 
         result.extend(nested_independents);
         errors.extend(nested_errors);

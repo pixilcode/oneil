@@ -1,0 +1,5 @@
+# Mission model that extracts gravity reference from satellite
+use child_with_ref as satellite with [inner]
+
+# Use extracted gravity for surface calculations (100kg object)
+Surface Weight: weight = 100 * g.inner :N

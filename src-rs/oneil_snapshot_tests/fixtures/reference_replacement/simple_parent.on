@@ -1,0 +1,6 @@
+# Landing calculation using Earth gravity
+use ../gravity_earth as planet
+
+# Weight of 100kg lander
+Lander Mass: mass = 100 :kg
+Landing Weight: weight = mass * g.planet :N

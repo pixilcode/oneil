@@ -1,0 +1,7 @@
+# Evaluate mission planning with design overlay
+# The extracted orbital period should come from Mars (687 days), not Earth (365.25 days)
+use extract_parent as mission
+use design extract_design for mission
+
+# Mission planning uses the (replaced) orbital period
+Planned Duration: planned = mission_days.mission :day

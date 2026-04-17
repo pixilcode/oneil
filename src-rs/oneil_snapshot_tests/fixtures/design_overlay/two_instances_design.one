@@ -1,0 +1,4 @@
+# Replace Earth gravity with Mars gravity for planet_a
+design two_instances
+
+use ../gravity_mars as planet_a

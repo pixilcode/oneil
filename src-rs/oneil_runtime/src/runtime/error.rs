@@ -106,6 +106,7 @@ impl Runtime {
             python_import_errors,
             parameter_errors,
             test_errors,
+            design_resolution_errors,
         } = merge_ir_and_eval_errors(ir_errors, eval_errors);
 
         #[cfg(not(feature = "python"))]
@@ -133,6 +134,7 @@ impl Runtime {
             || !python_import_errors.is_empty()
             || !parameter_errors.is_empty()
             || !test_errors.is_empty()
+            || !design_resolution_errors.is_empty()
         {
             // if there are other errors, add them as a model error
             errors.add_model_error(
@@ -142,6 +144,7 @@ impl Runtime {
                     python_import_errors: Box::new(python_import_errors),
                     parameter_errors: Box::new(parameter_errors),
                     test_errors: Box::new(test_errors),
+                    design_resolution_errors: Box::new(design_resolution_errors),
                 },
             );
         }
@@ -201,6 +204,8 @@ struct IrErrorsResult {
     parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
     /// Test resolution errors.
     test_errors: IndexMap<TestIndex, Vec<OneilError>>,
+    /// Design / `use design` resolution messages.
+    design_resolution_errors: Vec<OneilError>,
 }
 
 /// Collects resolution errors from IR into structured error data and model/python path sets.
@@ -291,6 +296,12 @@ fn collect_ir_errors(
         test_errors.insert(*test_index, oneil_errors);
     }
 
+    let design_resolution_errors: Vec<OneilError> = errors
+        .get_design_resolution_errors()
+        .iter()
+        .map(|e| OneilError::from_error_with_source(e, path_buf.clone(), source))
+        .collect();
+
     IrErrorsResult {
         models_with_errors,
         python_imports_with_errors,
@@ -298,6 +309,7 @@ fn collect_ir_errors(
         python_import_errors,
         parameter_errors,
         test_errors,
+        design_resolution_errors,
     }
 }
 
@@ -339,8 +351,8 @@ fn collect_eval_errors(
     let mut models_with_errors = IndexSet::new();
 
     if include_indirect_errors {
-        for reference_path in &errors.references {
-            models_with_errors.insert(reference_path.clone());
+        for reference_key in &errors.references {
+            models_with_errors.insert(reference_key.model_path.clone());
         }
     }
 
@@ -409,6 +421,8 @@ struct MergedErrors {
     pub parameter_errors: IndexMap<ParameterName, Vec<OneilError>>,
     /// Test errors.
     pub test_errors: IndexMap<TestIndex, Vec<OneilError>>,
+    /// Design / `use design` resolution errors.
+    pub design_resolution_errors: Vec<OneilError>,
 }
 
 /// Merges optional IR and eval error results into a single combined result.
@@ -436,6 +450,7 @@ fn merge_ir_and_eval_errors(
                 .chain(ir.parameter_errors)
                 .collect(),
             test_errors: ir.test_errors.into_iter().chain(eval.test_errors).collect(),
+            design_resolution_errors: ir.design_resolution_errors,
         },
 
         (Some(ir), None) => MergedErrors {
@@ -445,6 +460,7 @@ fn merge_ir_and_eval_errors(
             python_import_errors: ir.python_import_errors,
             parameter_errors: ir.parameter_errors,
             test_errors: ir.test_errors,
+            design_resolution_errors: ir.design_resolution_errors,
         },
 
         (None, Some(eval)) => MergedErrors {
@@ -454,6 +470,7 @@ fn merge_ir_and_eval_errors(
             python_import_errors: IndexMap::new(),
             parameter_errors: eval.parameter_errors,
             test_errors: eval.test_errors,
+            design_resolution_errors: Vec::new(),
         },
 
         (None, None) => MergedErrors {
@@ -463,6 +480,7 @@ fn merge_ir_and_eval_errors(
             python_import_errors: IndexMap::new(),
             parameter_errors: IndexMap::new(),
             test_errors: IndexMap::new(),
+            design_resolution_errors: Vec::new(),
         },
     }
 }

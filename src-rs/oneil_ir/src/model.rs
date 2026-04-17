@@ -8,6 +8,7 @@ use oneil_shared::{
 
 use crate::{
     Note,
+    design_overlay::{Design, DesignApplication},
     model_import::{ReferenceImport, SubmodelImport},
     parameter::Parameter,
     python_import::PythonImport,
@@ -24,12 +25,26 @@ pub struct Model {
     parameters: IndexMap<ParameterName, Parameter>,
     tests: IndexMap<TestIndex, Test>,
     note: Option<Note>,
+    /// `design <model>` target for this file, when present.
+    design_target: Option<ModelPath>,
+    /// Resolved design content exported by this file (for `use design` consumers).
+    design_export: Design,
+    /// Designs applied to references via `use design X for ref`.
+    /// Maps reference alias → design containing `parameter_additions` that augment the ref.
+    /// Used during resolution to support `ref.augmented_param` lookups.
+    augmented_reference_params: IndexMap<ReferenceName, Design>,
+    /// Designs applied by this model file via `use design X [for ref]`.
+    ///
+    /// Declarative records consumed by the instancing pass to stamp overrides,
+    /// reference replacements, and parameter additions onto the live tree.
+    applied_designs: Vec<DesignApplication>,
 }
 
 impl Model {
     /// Creates a new model with the specified components.
     #[must_use]
-    pub const fn new(
+    #[expect(clippy::too_many_arguments)]
+    pub fn new(
         path: ModelPath,
         python_imports: IndexMap<PythonPath, PythonImport>,
         submodels: IndexMap<SubmodelName, SubmodelImport>,
@@ -37,6 +52,8 @@ impl Model {
         parameters: IndexMap<ParameterName, Parameter>,
         tests: IndexMap<TestIndex, Test>,
         note: Option<Note>,
+        design_target: Option<ModelPath>,
+        design_export: Design,
     ) -> Self {
         Self {
             path,
@@ -46,6 +63,10 @@ impl Model {
             parameters,
             tests,
             note,
+            design_target,
+            design_export,
+            augmented_reference_params: IndexMap::new(),
+            applied_designs: Vec::new(),
         }
     }
 
@@ -122,6 +143,62 @@ impl Model {
     #[must_use]
     pub const fn note(&self) -> Option<&Note> {
         self.note.as_ref()
+    }
+
+    /// Returns the declared `design <model>` target path, if any.
+    #[must_use]
+    pub const fn design_target(&self) -> Option<&ModelPath> {
+        self.design_target.as_ref()
+    }
+
+    /// Returns the resolved design content this file exports.
+    #[must_use]
+    pub const fn design_export(&self) -> &Design {
+        &self.design_export
+    }
+
+    /// Returns a mutable reference to the design content this file exports.
+    #[must_use]
+    pub const fn design_export_mut(&mut self) -> &mut Design {
+        &mut self.design_export
+    }
+
+    /// Sets the `design` target for this model file.
+    pub fn set_design_target(&mut self, target: Option<ModelPath>) {
+        self.design_target = target;
+    }
+
+    /// Sets the exported design content for this model file.
+    pub fn set_design_export(&mut self, design: Design) {
+        self.design_export = design;
+    }
+
+    /// Returns the designs applied to references via `use design X for ref`.
+    #[must_use]
+    pub const fn augmented_reference_params(&self) -> &IndexMap<ReferenceName, Design> {
+        &self.augmented_reference_params
+    }
+
+    /// Returns the design for a specific augmented reference, if any.
+    #[must_use]
+    pub fn get_augmented_design(&self, reference: &ReferenceName) -> Option<&Design> {
+        self.augmented_reference_params.get(reference)
+    }
+
+    /// Adds a design that augments a reference with new parameters.
+    pub fn add_augmented_reference(&mut self, reference: ReferenceName, design: Design) {
+        self.augmented_reference_params.insert(reference, design);
+    }
+
+    /// Returns the declarative `use design …` applications recorded for this model.
+    #[must_use]
+    pub const fn applied_designs(&self) -> &[DesignApplication] {
+        self.applied_designs.as_slice()
+    }
+
+    /// Records a `use design X [for ref]` application on this model.
+    pub fn add_applied_design(&mut self, application: DesignApplication) {
+        self.applied_designs.push(application);
     }
 
     /// Adds a Python import to this model.

@@ -1,0 +1,15 @@
+# Test: use creates unique instances, overlay affects only one
+# Planet A gets overlay (Mars), Planet B keeps default (Earth)
+use ../gravity_earth as planet_a
+use ../gravity_earth as planet_b
+
+use design two_instances_design for planet_a
+
+# Calculate 100kg weight on each planet
+# Planet A (Mars): w = 100 * 3.72 = 372 N
+# Planet B (Earth): w = 100 * 9.81 = 981 N
+# Total: 1353 N
+Payload: mass = 100 :kg
+Weight A: w_a = mass * g.planet_a :N
+Weight B: w_b = mass * g.planet_b :N
+Total Weight: total = w_a + w_b :N

@@ -272,6 +272,17 @@ fn try_resolve_identifier_as_parameter<E>(
     }
 }
 
+/// Resolves a parameter value expression from AST (used for design shorthand lines).
+pub(super) fn resolve_ast_parameter_value<E>(
+    value: &ast::ParameterValue,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::ParameterValue, Vec<ParameterResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    resolve_parameter_value(value, resolution_context)
+}
+
 /// Resolves a parameter value expression.
 fn resolve_parameter_value<E>(
     value: &ast::ParameterValue,

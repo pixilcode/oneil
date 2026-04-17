@@ -1,0 +1,9 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 164
+expression: output
+---
+Model: fixtures/use_design_merge/use_design_nofor_parent.on
+Tests: 0/0
+Parameters:
+  result = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(5.0)), unit: Unit { dimension_map: DimensionMap({Distance: 1.0, Time: -2.0}), magnitude: 1.0, is_db: false, display_unit: Divide(Unit { name: "m", exponent: 1.0 }, Unit { name: "s", exponent: 2.0 }) } })

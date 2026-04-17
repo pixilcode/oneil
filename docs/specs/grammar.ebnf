@@ -15,8 +15,21 @@ EndOfLine = { LineBreak | Comment | ? end of file ? } ;
 OptEndOfLine = [ EndOfLine ] ;
 
 (* Top Level Structure *)
+(* In `.one` design bundles, the first `Declaration` after the optional `Note` must be `DesignTargetDecl`. *)
 Model = [ EndOfLine ], [ Note ], { Declaration } { Section } ;
-Declaration = ImportDecl | UseDecl | ParameterDecl | TestDecl ;
+Declaration = DesignTargetDecl | ImportDecl | UseDesignDecl | UseDecl | DesignBodyParameterDecl | ParameterDecl | TestDecl ;
+
+(* Design target: this file parameterizes another model *)
+(* The path can include directory prefixes: `design ../models/radar` *)
+DesignTargetDecl = "design", [ DirectoryPath ], Identifier, EndOfLine ;
+
+(* Apply a design file (`<Identifier>.one`) to the design target or to a specific import alias *)
+(* The path can include directory prefixes: `use design ../configs/net_design for net` *)
+UseDesignDecl = "use", "design", [ DirectoryPath ], Identifier, [ "for", Identifier ], EndOfLine ;
+
+(* Shorthand parameter line in a file that starts with `design` (no preamble label) *)
+(* Supports scoped overrides: `param.instance = value` for nested reference parameters *)
+DesignBodyParameterDecl = Identifier, [ ".", Identifier ], "=", ( Expr [ ":", UnitExpr ] | PiecewiseExpr ), EndOfLine, [ Note ] ;
 
 (* Notes *)
 Note = SingleLineNote | MultiLineNote ;
@@ -26,13 +39,15 @@ MultiLineNoteDelimiter = "~~~", "~"*, LineBreak ;
 NoteLine = { Any character except LineBreak or MultiLineNoteDelimiter }, LineBreak ; (* can contain anything except the multi-note delimiter*)
 
 (* Sections *)
-Section = "section", Label, EndOfLine, [ Note ], { ImportDecl | UseDecl | ParameterDecl | TestDecl } ;
+Section = "section", Label, EndOfLine, [ Note ], { ImportDecl | UseDesignDecl | UseDecl | ParameterDecl | TestDecl } ;
 
 (* Imports *)
 ImportDecl = "import", Identifier, EndOfLine ;
+(* In design files (.one), `use model as alias` becomes a reference replacement for the target model's `alias` reference *)
 UseDecl = ("use" | "ref"), [ DirectoryPath ], ModelInfo, [ "with", SubmodelList ], EndOfLine ;
 DirectoryPath = DirectoryName, "/", { DirectoryName, "/" } ;
 DirectoryName = Identifier | ".." | "." ;
+(* Nested paths must use `with`; SubmodelComponents is only allowed together with `with` in the implementation. *)
 ModelInfo = Identifier, [ SubmodelComponents ], [ AsAlias ] ;
 SubmodelComponents = ".", Identifier, { ".", Identifier }  ;
 AsAlias = "as", Identifier ;

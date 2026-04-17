@@ -1,23 +1,36 @@
 /// Configuration for the Oneil parser.
-///
-/// This struct allows for customization of parser behavior. Currently, the
-/// configuration is minimal but provides a foundation for future parser
-/// customization options such as parser version selection and language feature
-/// toggles.
+use oneil_shared::paths::ModelPath;
+
+/// Options that affect parsing of whole-model input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Config {}
+pub struct Config {
+    /// When `true`, a top-level `design <model>` line is accepted (`.one` design bundles).
+    ///
+    /// Ordinary `.on` model files keep this `false` so `design` is only available via `use design`.
+    pub allow_design_header: bool,
+}
 
 impl Config {
-    /// Creates a new configuration with default settings.
+    /// Creates a configuration with default settings (model file semantics).
     #[must_use]
     pub const fn new() -> Self {
-        Self {}
+        Self {
+            allow_design_header: false,
+        }
+    }
+
+    /// Returns parser settings implied by a [`ModelPath`] (by file extension).
+    #[must_use]
+    pub fn for_model_path(path: &ModelPath) -> Self {
+        Self {
+            allow_design_header: path.is_design_bundle(),
+        }
     }
 }
 
 impl Default for Config {
-    /// Creates a default configuration.
+    /// Same as [`Config::new`].
     fn default() -> Self {
-        Self {}
+        Self::new()
     }
 }

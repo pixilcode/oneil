@@ -1,0 +1,11 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 139
+expression: output
+---
+error: parameter value unit `m/s^2` does not match expected unit `N`
+  at fixtures/with_clause/with_parent_direct.on:5:26
+---
+
+Model: fixtures/with_clause/with_parent_direct.on
+Tests: 0/0

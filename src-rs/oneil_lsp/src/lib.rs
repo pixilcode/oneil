@@ -359,7 +359,7 @@ impl Backend {
 
         let (successful_models, diagnostics) = {
             let mut runtime = self.runtime.lock().expect("runtime mutex poisoned");
-            let (result, errors) = runtime.eval_model(model_path);
+            let (result, errors) = runtime.eval_model(model_path, None);
 
             let successful_models = result
                 .map(|result| result.all_model_paths())

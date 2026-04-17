@@ -1,0 +1,9 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 101
+expression: output
+---
+Model: fixtures/reference_replacement/simple_replace_eval.on
+Tests: 0/0
+Parameters:
+  result = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(372.0)), unit: Unit { dimension_map: DimensionMap({Mass: 1.0, Distance: 1.0, Time: -2.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "N", exponent: 1.0 } } })

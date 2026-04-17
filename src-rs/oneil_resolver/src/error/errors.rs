@@ -6,6 +6,7 @@ use oneil_shared::paths::PythonPath;
 use oneil_shared::symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex};
 
 use super::circular_dependency::CircularDependencyError;
+use super::design::DesignResolutionError;
 use super::model_import::ModelImportResolutionError;
 use super::parameter::ParameterResolutionError;
 use super::python_import::PythonImportResolutionError;
@@ -19,6 +20,8 @@ pub struct ResolutionErrorCollection {
     model_import: IndexMap<ReferenceName, (Option<SubmodelName>, ModelImportResolutionError)>,
     parameter: IndexMap<ParameterName, Vec<ParameterResolutionError>>,
     test: IndexMap<TestIndex, Vec<VariableResolutionError>>,
+    /// Design overlay / `use design` resolution errors.
+    design_resolution: Vec<DesignResolutionError>,
 }
 
 impl ResolutionErrorCollection {
@@ -31,6 +34,7 @@ impl ResolutionErrorCollection {
             model_import: IndexMap::new(),
             parameter: IndexMap::new(),
             test: IndexMap::new(),
+            design_resolution: Vec::new(),
         }
     }
 
@@ -42,6 +46,7 @@ impl ResolutionErrorCollection {
             && self.model_import.is_empty()
             && self.parameter.is_empty()
             && self.test.is_empty()
+            && self.design_resolution.is_empty()
     }
 
     /// Adds a circular dependency error.
@@ -84,6 +89,17 @@ impl ResolutionErrorCollection {
     /// Adds a test resolution error.
     pub fn add_test_error(&mut self, test_index: TestIndex, error: VariableResolutionError) {
         self.test.entry(test_index).or_default().push(error);
+    }
+
+    /// Adds a design-resolution error (for example an invalid `use design` or dependent overlay).
+    pub fn add_design_resolution_error(&mut self, error: DesignResolutionError) {
+        self.design_resolution.push(error);
+    }
+
+    /// Returns design-resolution errors, if any.
+    #[must_use]
+    pub const fn get_design_resolution_errors(&self) -> &[DesignResolutionError] {
+        self.design_resolution.as_slice()
     }
 
     /// Returns a reference to the list of circular dependency errors.
@@ -141,6 +157,7 @@ impl ResolutionErrorCollection {
         IndexMap<ReferenceName, (Option<SubmodelName>, ModelImportResolutionError)>,
         IndexMap<ParameterName, Vec<ParameterResolutionError>>,
         IndexMap<TestIndex, Vec<VariableResolutionError>>,
+        Vec<DesignResolutionError>,
     ) {
         (
             self.circular_dependency,
@@ -148,6 +165,7 @@ impl ResolutionErrorCollection {
             self.model_import,
             self.parameter,
             self.test,
+            self.design_resolution,
         )
     }
 }

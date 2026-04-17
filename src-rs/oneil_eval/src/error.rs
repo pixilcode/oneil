@@ -4,6 +4,7 @@ use std::{error::Error, fmt};
 
 use indexmap::{IndexMap, IndexSet};
 use oneil_shared::{
+    EvalInstanceKey,
     error::{AsOneilError, Context as ErrorContext, ErrorLocation},
     paths::ModelPath,
     span::Span,
@@ -19,8 +20,8 @@ pub struct EvalErrors {
     pub parameters: IndexMap<ParameterName, Vec<EvalError>>,
     /// Errors that occurred during evaluation of the tests.
     pub tests: IndexMap<TestIndex, Vec<EvalError>>,
-    /// References that had errors.
-    pub references: IndexSet<ModelPath>,
+    /// References that had errors (per evaluated instance).
+    pub references: IndexSet<EvalInstanceKey>,
 }
 
 /// Represents the expected type for type checking operations.
@@ -238,6 +239,19 @@ pub enum EvalError {
         /// The name of the parameter that has errors.
         parameter_name: ParameterName,
         /// The source span of the parameter name.
+        variable_span: Span,
+    },
+    /// An error indicating that a parameter's evaluation depends on itself (directly or
+    /// transitively).
+    ///
+    /// Detected by the lazy evaluator when it re-enters evaluation of a parameter already
+    /// marked as in-progress in the memo table.
+    CircularParameterEvaluation {
+        /// The path of the model whose parameter is being evaluated circularly.
+        model_path: Option<ModelPath>,
+        /// The name of the parameter that was re-entered.
+        parameter_name: ParameterName,
+        /// The source span of the variable reference that triggered the cycle.
         variable_span: Span,
     },
     /// An error indicating that a function was called with an invalid number of arguments.
@@ -620,6 +634,22 @@ impl fmt::Display for EvalError {
 
                 write!(f, "parameter `{parameter_name}` in {model_path} has errors")
             }
+            Self::CircularParameterEvaluation {
+                model_path,
+                parameter_name,
+                variable_span: _,
+            } => {
+                let model_path = model_path.as_ref().map_or_else(
+                    || "current model".to_string(),
+                    |path| format!("model `{}`", path.as_path().display()),
+                );
+                let parameter_name = parameter_name.as_str();
+
+                write!(
+                    f,
+                    "parameter `{parameter_name}` in {model_path} depends on itself"
+                )
+            }
             Self::InvalidArgumentCount {
                 function_name,
                 function_name_span: _,
@@ -900,6 +930,11 @@ impl AsOneilError for EvalError {
                 parameter_name: _,
                 variable_span: location_span,
             }
+            | Self::CircularParameterEvaluation {
+                model_path: _,
+                parameter_name: _,
+                variable_span: location_span,
+            }
             | Self::InvalidArgumentCount {
                 function_name: _,
                 function_name_span: location_span,
@@ -1104,6 +1139,11 @@ impl AsOneilError for EvalError {
                 exponent_interval.max(),
             ))],
             Self::ParameterHasError {
+                model_path: _,
+                parameter_name: _,
+                variable_span: _,
+            }
+            | Self::CircularParameterEvaluation {
                 model_path: _,
                 parameter_name: _,
                 variable_span: _,
@@ -1399,6 +1439,11 @@ impl AsOneilError for EvalError {
                 exponent_value_span: _,
             } => Vec::new(),
             Self::ParameterHasError {
+                model_path: _,
+                parameter_name: _,
+                variable_span: _,
+            }
+            | Self::CircularParameterEvaluation {
                 model_path: _,
                 parameter_name: _,
                 variable_span: _,

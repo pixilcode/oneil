@@ -12,8 +12,9 @@ use oneil_shared::{
 };
 
 use crate::error::{
-    CircularDependencyError, ModelImportResolutionError, ParameterResolutionError,
-    PythonImportResolutionError, ResolutionErrorCollection, VariableResolutionError,
+    CircularDependencyError, DesignResolutionError, ModelImportResolutionError,
+    ParameterResolutionError, PythonImportResolutionError, ResolutionErrorCollection,
+    VariableResolutionError,
 };
 
 use super::{AstLoadingFailedError, ExternalResolutionContext};
@@ -43,6 +44,8 @@ impl ModelResolutionResult {
             IndexMap::new(),
             IndexMap::new(),
             None,
+            None,
+            ir::Design::new(),
         );
 
         Self {
@@ -109,6 +112,13 @@ pub struct ResolutionContext<'external, E: ExternalResolutionContext> {
     visited_models: IndexSet<ModelPath>,
     /// Map of model results.
     model_results: IndexMap<ModelPath, ModelResolutionResult>,
+    /// Design-local parameters visible during resolution but not persisted in the IR.
+    ///
+    /// When a design file declares new parameters (e.g., `design target; x = 1; y = 2 * x`),
+    /// the resolver needs those names to be visible as local parameters on the target
+    /// while resolving the design values, but we don't want to pollute the target model's
+    /// shared IR with them. Keyed by `(target model path, parameter name)`.
+    design_local_scratch: IndexMap<(ModelPath, ParameterName), ir::Parameter>,
 }
 
 impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
@@ -120,6 +130,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
             active_models: Vec::new(),
             visited_models: IndexSet::new(),
             model_results: IndexMap::new(),
+            design_local_scratch: IndexMap::new(),
         }
     }
 
@@ -141,6 +152,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
             active_models: Vec::new(),
             visited_models: IndexSet::new(),
             model_results,
+            design_local_scratch: IndexMap::new(),
         }
     }
 
@@ -212,12 +224,22 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     /// # Panics
     ///
     /// Panics if there is no active model or if the active model is not in the model map.
-    fn active_model_mut(&mut self) -> &mut ir::Model {
+    pub(crate) fn active_model_mut(&mut self) -> &mut ir::Model {
         let path = self.active_models.last().expect("no active model");
         self.model_results
             .get_mut(path)
             .expect("active model not in model results map")
             .model_mut()
+    }
+
+    /// Records a design-resolution error on the active model.
+    pub(crate) fn add_design_resolution_error_to_active_model(
+        &mut self,
+        message: impl Into<String>,
+        span: Span,
+    ) {
+        self.active_model_errors_mut()
+            .add_design_resolution_error(DesignResolutionError::new(message, span));
     }
 
     /// Returns a mutable reference to the resolution errors for the current active model.
@@ -376,6 +398,28 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
         self.active_model_mut().add_submodel(submodel_name, import);
     }
 
+    /// Adds an extracted submodel (from a `with` clause) to the active model.
+    ///
+    /// Unlike direct submodels, extracted submodels store a relative path within the
+    /// parent reference that is resolved at evaluation time, allowing design replacements
+    /// to properly propagate.
+    pub fn add_extracted_submodel_to_active_model(
+        &mut self,
+        submodel_name: SubmodelName,
+        submodel_name_span: Span,
+        parent_reference: ReferenceName,
+        submodel_path: Vec<SubmodelName>,
+    ) {
+        let import = ir::SubmodelImport::extracted(
+            submodel_name.clone(),
+            submodel_name_span,
+            parent_reference,
+            submodel_path,
+        );
+
+        self.active_model_mut().add_submodel(submodel_name, import);
+    }
+
     /// Gets a reference from the active model.
     #[must_use]
     pub fn get_reference_from_active_model(
@@ -489,6 +533,21 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
             .add_parameter(parameter_name, parameter);
     }
 
+    /// Registers a design-local parameter scoped to `target_model_path`.
+    ///
+    /// The parameter is visible to variable lookups while the target model is active
+    /// but is not persisted into the target model's IR. Design-locals are ultimately
+    /// stored in the design bundle's `parameter_additions`, not on the target itself.
+    pub fn register_design_local_parameter(
+        &mut self,
+        target_model_path: ModelPath,
+        parameter_name: ParameterName,
+        parameter: ir::Parameter,
+    ) {
+        self.design_local_scratch
+            .insert((target_model_path, parameter_name), parameter);
+    }
+
     /// Looks up a parameter in the active model.
     #[must_use]
     pub fn lookup_parameter_in_active_model(
@@ -507,10 +566,47 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
             return ParameterResult::HasError;
         }
 
-        self.active_model()
-            .get_parameters()
-            .get(parameter_name)
-            .map_or(ParameterResult::NotFound, ParameterResult::Found)
+        if let Some(parameter) = self.active_model().get_parameters().get(parameter_name) {
+            return ParameterResult::Found(parameter);
+        }
+
+        if let Some(parameter) = self
+            .design_local_scratch
+            .get(&(active_path.clone(), parameter_name.clone()))
+        {
+            return ParameterResult::Found(parameter);
+        }
+
+        ParameterResult::NotFound
+    }
+
+    /// Adds a design bundle that augments a reference with new parameters.
+    ///
+    /// When `use design D for ref` is processed and D has `parameter_additions`,
+    /// those parameters become accessible via `ref.param` syntax.
+    pub fn add_augmented_reference_to_active_model(
+        &mut self,
+        reference: ReferenceName,
+        bundle: ir::Design,
+    ) {
+        self.active_model_mut()
+            .add_augmented_reference(reference, bundle);
+    }
+
+    /// Checks if a parameter is an augmented parameter for a reference in the active model.
+    ///
+    /// Returns the design bundle if the parameter is found, None otherwise.
+    #[must_use]
+    pub fn get_augmented_param_for_reference(
+        &self,
+        reference_name: &ReferenceName,
+        parameter_name: &ParameterName,
+    ) -> Option<&ir::Design> {
+        let bundle = self.active_model().get_augmented_design(reference_name)?;
+        bundle
+            .parameter_additions
+            .contains_key(parameter_name)
+            .then_some(bundle)
     }
 
     /// Adds a parameter error to the active model.

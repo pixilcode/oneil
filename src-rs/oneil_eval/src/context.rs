@@ -3,6 +3,7 @@ use indexmap::{IndexMap, IndexSet};
 use oneil_ir as ir;
 use oneil_output as output;
 use oneil_shared::{
+    EvalInstanceKey,
     load_result::LoadResult,
     partial::MaybePartialResult,
     paths::{ModelPath, PythonPath},
@@ -14,6 +15,8 @@ use oneil_shared::{
 };
 
 use crate::error::{EvalError, EvalErrors};
+use crate::eval_parameter;
+use crate::instance_graph::{InstanceGraph, OverlayBinding};
 
 /// Error indicating that an IR model could not be loaded.
 #[derive(Debug, Clone, Copy)]
@@ -63,20 +66,37 @@ pub trait ExternalEvaluationContext {
     /// Returns a prefix by name if it is defined in the builtin context.
     fn lookup_prefix(&self, name: &UnitPrefix) -> Option<f64>;
 
-    /// Returns pre-loaded evaluated models.
+    /// Returns pre-loaded evaluated models (each distinct import instance).
     fn get_preloaded_models(
         &self,
-    ) -> impl Iterator<Item = (ModelPath, &LoadResult<output::Model, EvalErrors>)>;
+    ) -> impl Iterator<Item = (EvalInstanceKey, &LoadResult<output::Model, EvalErrors>)>;
+}
+
+/// State of a parameter in the lazy evaluation memo table.
+///
+/// Parameters are registered as [`ParamSlot::Pending`] during model setup (carrying the IR
+/// needed to evaluate them later), transition to [`ParamSlot::InProgress`] while they are being
+/// evaluated (so recursive lookups can detect cycles), and settle to [`ParamSlot::Done`] once
+/// evaluation completes (either with a value or with errors).
+#[derive(Debug, Clone)]
+enum ParamSlot {
+    /// Not yet evaluated. Carries the IR so the evaluator can compute it on demand.
+    Pending(ir::Parameter),
+    /// Currently being evaluated. Re-entering this slot indicates a dependency cycle.
+    InProgress,
+    /// Evaluation completed (successfully or with errors).
+    Done(Result<output::Parameter, Vec<EvalError>>),
 }
 
 /// Represents a model in progress of being evaluated.
 #[derive(Debug, Clone)]
 struct ModelInProgress {
-    parameters: IndexMap<ParameterName, Result<output::Parameter, Vec<EvalError>>>,
+    parameters: IndexMap<ParameterName, ParamSlot>,
     submodels: IndexMap<SubmodelName, ReferenceName>,
-    references: IndexMap<ReferenceName, ModelPath>,
-    references_with_errors: IndexSet<ModelPath>,
+    references: IndexMap<ReferenceName, EvalInstanceKey>,
+    references_with_errors: IndexSet<EvalInstanceKey>,
     tests: IndexMap<TestIndex, Result<output::Test, Vec<EvalError>>>,
+    overlays: IndexMap<ParameterName, OverlayBinding>,
 }
 
 impl ModelInProgress {
@@ -88,6 +108,7 @@ impl ModelInProgress {
             references: IndexMap::new(),
             references_with_errors: IndexSet::new(),
             tests: IndexMap::new(),
+            overlays: IndexMap::new(),
         }
     }
 }
@@ -98,42 +119,107 @@ impl Default for ModelInProgress {
     }
 }
 
-/// Evaluation context that tracks models, their parameters, dependencies, and builtin functions.
+/// Internal helper for `force_parameter`. Represents the outcome of inspecting (and
+/// conditionally taking ownership of) the memo slot for a parameter.
+enum SlotPeek {
+    /// The parameter has already been evaluated (successfully or with errors).
+    Done(Result<output::Value, Vec<EvalError>>),
+    /// The parameter is currently being evaluated; re-entry signals a cycle.
+    Cycle,
+    /// The parameter was pending; we took ownership of its IR to evaluate it.
+    /// Boxed to keep the enum size small.
+    TakenForEval(Box<ir::Parameter>),
+}
+
+/// Evaluation context that tracks per-instance memo state for lazy parameter evaluation.
 ///
-/// The context maintains state during evaluation, including:
-/// - Evaluated models and their parameters
-/// - Active models
-/// - External context
+/// The context owns the parameter memo table for every instance the evaluator may touch:
+/// declared parameters start as [`ParamSlot::Pending`] and transition to [`ParamSlot::Done`]
+/// (or back through [`ParamSlot::InProgress`] for cycle detection) as evaluation proceeds.
+/// Reference wiring, submodel aliases, and overlay bindings are seeded once from the
+/// [`InstanceGraph`] at construction time; the graph itself is not retained.
 #[derive(Debug)]
 pub struct EvalContext<'external, E: ExternalEvaluationContext> {
-    models: IndexMap<ModelPath, ModelInProgress>,
-    active_models: Vec<ModelPath>,
+    models: IndexMap<EvalInstanceKey, ModelInProgress>,
+    /// Stack of nested evaluation scopes. `.last()` is always the model whose
+    /// parameters/overlays are currently being evaluated.
+    ///
+    /// Pushed by [`Self::force_parameter`] (to evaluate a parameter in its own model's
+    /// scope) and by the overlay-anchor bracket in
+    /// [`crate::eval_parameter::eval_parameter`] (to evaluate an overlay's RHS in the
+    /// design's lexical scope).
+    eval_scope: Vec<EvalInstanceKey>,
     external_context: &'external mut E,
 }
 
 impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
-    /// Creates a new evaluation context with the given builtin functions.
+    /// Creates a new empty evaluation context.
+    ///
+    /// Used by unit tests and expression-level evaluation that don't need a full instance
+    /// graph. Top-level model evaluation should use [`Self::from_graph`] instead so that
+    /// references, submodels, overlays, and pending parameters are seeded from the graph.
     #[must_use]
     pub fn new(external_context: &'external mut E) -> Self {
         Self {
             models: IndexMap::new(),
-            active_models: Vec::new(),
+            eval_scope: Vec::new(),
+            external_context,
+        }
+    }
+
+    /// Seeds an evaluation context from a fully-built [`InstanceGraph`].
+    ///
+    /// Each instance from the graph contributes a [`ModelInProgress`] entry with its
+    /// declared parameters registered as [`ParamSlot::Pending`], its references and
+    /// submodel aliases populated, and its overlay bindings copied in. After
+    /// construction, lazy parameter forcing and test evaluation proceed without further
+    /// reference to the graph.
+    #[must_use]
+    pub fn from_graph(graph: &InstanceGraph, external_context: &'external mut E) -> Self {
+        let mut models: IndexMap<EvalInstanceKey, ModelInProgress> = IndexMap::new();
+        for (key, instanced) in &graph.instances {
+            let parameters: IndexMap<ParameterName, ParamSlot> = instanced
+                .parameters
+                .iter()
+                .map(|(name, param)| (name.clone(), ParamSlot::Pending(param.clone())))
+                .collect();
+            models.insert(
+                key.clone(),
+                ModelInProgress {
+                    parameters,
+                    submodels: instanced.submodels.clone(),
+                    references: instanced.references.clone(),
+                    references_with_errors: IndexSet::new(),
+                    tests: IndexMap::new(),
+                    overlays: instanced.overlays.clone(),
+                },
+            );
+        }
+        Self {
+            models,
+            eval_scope: Vec::new(),
             external_context,
         }
     }
 
     /// Creates a new evaluation context with the given pre-loaded models.
+    ///
+    /// Used by expression-level evaluation against already-evaluated models (e.g. the
+    /// runtime's `eval_expr_in_model` entry point). No overlay seeding happens — the
+    /// preloaded models already contain final values.
     #[must_use]
     pub fn with_preloaded_models(external_context: &'external mut E) -> Self {
-        let models = external_context
+        let models: IndexMap<EvalInstanceKey, ModelInProgress> = external_context
             .get_preloaded_models()
-            .map(|(path, result)| {
+            .map(|(key, result)| {
                 let model = match result {
                     LoadResult::Success(model) => ModelInProgress {
                         parameters: model
                             .parameters
                             .iter()
-                            .map(|(name, parameter)| (name.clone(), Ok(parameter.clone())))
+                            .map(|(name, parameter)| {
+                                (name.clone(), ParamSlot::Done(Ok(parameter.clone())))
+                            })
                             .collect(),
                         submodels: model.submodels.clone(),
                         references: model.references.clone(),
@@ -143,19 +229,19 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                             .iter()
                             .map(|(index, test)| (*index, Ok(test.clone())))
                             .collect(),
+                        overlays: IndexMap::new(),
                     },
 
                     LoadResult::Partial(model, errors) => ModelInProgress {
                         parameters: model
                             .parameters
                             .iter()
-                            .map(|(name, parameter)| (name.clone(), Ok(parameter.clone())))
-                            .chain(
-                                errors
-                                    .parameters
-                                    .iter()
-                                    .map(|(name, errs)| (name.clone(), Err(errs.clone()))),
-                            )
+                            .map(|(name, parameter)| {
+                                (name.clone(), ParamSlot::Done(Ok(parameter.clone())))
+                            })
+                            .chain(errors.parameters.iter().map(|(name, errs)| {
+                                (name.clone(), ParamSlot::Done(Err(errs.clone())))
+                            }))
                             .collect(),
 
                         submodels: model.submodels.clone(),
@@ -172,45 +258,56 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                                     .map(|(index, errs)| (*index, Err(errs.clone()))),
                             )
                             .collect(),
+                        overlays: IndexMap::new(),
                     },
 
                     LoadResult::Failure => ModelInProgress::new(),
                 };
 
-                (path, model)
+                (key, model)
             })
             .collect();
 
         Self {
             models,
-            active_models: Vec::new(),
+            eval_scope: Vec::new(),
             external_context,
         }
     }
 
     /// Consumes the context and returns the accumulated models and errors.
     ///
-    /// Each entry maps a model path to a [`MaybePartialResult`]: either a full
-    /// success with the evaluated [`Model`], or a partial result (the model) and
+    /// Each entry maps an [`EvalInstanceKey`] to a [`MaybePartialResult`]: either a full
+    /// success with the evaluated [`output::Model`], or a partial result (the model) and
     /// any [`EvalErrors`] that occurred during evaluation (e.g. from parameters
     /// or tests that failed).
     #[must_use]
-    pub fn into_result(self) -> IndexMap<ModelPath, MaybePartialResult<output::Model, EvalErrors>> {
+    pub fn into_result(
+        self,
+    ) -> IndexMap<EvalInstanceKey, MaybePartialResult<output::Model, EvalErrors>> {
         let mut result = IndexMap::new();
 
         // for each model, collect the parameters and tests, and any errors
-        for (path, model) in self.models {
+        for (key, model) in self.models {
             // collect the parameters and any errors
             let mut parameters = IndexMap::new();
             let mut parameter_errors = IndexMap::new();
-            for (name, result) in model.parameters {
-                match result {
-                    Ok(param) => {
+            for (name, slot) in model.parameters {
+                match slot {
+                    ParamSlot::Done(Ok(param)) => {
                         parameters.insert(name, param);
                     }
-
-                    Err(errs) => {
+                    ParamSlot::Done(Err(errs)) => {
                         parameter_errors.insert(name, errs);
+                    }
+                    // Pending or InProgress indicates the setup loop skipped this parameter or
+                    // left it mid-force. Either is an evaluator bug — every registered parameter
+                    // should have been forced to Done before `into_result` is called.
+                    ParamSlot::Pending(_) | ParamSlot::InProgress => {
+                        panic!(
+                            "parameter `{}` was never evaluated before into_result was called",
+                            name.as_str()
+                        );
                     }
                 }
             }
@@ -223,6 +320,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                     Ok(test) => {
                         tests.insert(index, test);
                     }
+
                     Err(errs) => {
                         test_errors.insert(index, errs);
                     }
@@ -231,7 +329,8 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
 
             // create the output model
             let output_model = output::Model {
-                path: path.clone(),
+                path: key.model_path.clone(),
+                instance_path: key.instance_path.clone(),
                 submodels: model.submodels,
                 references: model.references,
                 parameters,
@@ -242,10 +341,10 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 && test_errors.is_empty()
                 && model.references_with_errors.is_empty()
             {
-                result.insert(path, MaybePartialResult::ok(output_model));
+                result.insert(key, MaybePartialResult::ok(output_model));
             } else {
                 result.insert(
-                    path,
+                    key,
                     MaybePartialResult::err(
                         output_model,
                         EvalErrors {
@@ -261,17 +360,28 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
         result
     }
 
-    /// Looks up an IR model by path.
+    /// Returns the evaluation key for the innermost active model.
+    #[must_use]
+    pub fn current_eval_instance_key(&self) -> EvalInstanceKey {
+        self.eval_scope
+            .last()
+            .expect("active model should be set")
+            .clone()
+    }
+
+    /// Returns the overlay binding (if any) targeting `parameter_name` at `key`.
     ///
-    /// # Panics
-    ///
-    /// Panics if the model is not found. This should never be the case.
-    pub fn get_ir(&self, path: &ModelPath) -> LoadResult<ir::Model, IrLoadError> {
-        self.external_context
-            .lookup_ir(path)
-            .expect("model should be found")
-            // TODO: figure out how to get rid of this clone
-            .map(ir::Model::clone)
+    /// Overlay bindings carry both the resolved RHS to use in place of the IR default and
+    /// the [`EvalInstanceKey`] of the anchor model that contributed the overlay. Callers
+    /// should evaluate the RHS in the anchor's scope so that names inside it bind to the
+    /// design's lexical environment, not the overridden instance's.
+    #[must_use]
+    pub fn find_matching_overlay(
+        &self,
+        key: &EvalInstanceKey,
+        parameter_name: &ParameterName,
+    ) -> Option<&OverlayBinding> {
+        self.models.get(key)?.overlays.get(parameter_name)
     }
 
     /// Looks up the given builtin variable and returns the corresponding value.
@@ -289,70 +399,185 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
             .clone()
     }
 
-    /// Looks up a parameter value in the current model.
+    /// Looks up a parameter value in the current model, forcing evaluation on demand if
+    /// necessary.
+    ///
+    /// If the parameter hasn't been evaluated yet, it is evaluated lazily in the current
+    /// model's scope. Cycles are detected via the in-progress sentinel in the memo table
+    /// and surface as [`EvalError::CircularParameterEvaluation`].
     ///
     /// # Panics
     ///
-    /// Panics if no current model is set or if the parameter is not defined in the model.
+    /// Panics if no current model is set.
     pub fn lookup_parameter_value(
-        &self,
+        &mut self,
         parameter_name: &ParameterName,
         variable_span: Span,
     ) -> Result<output::Value, Vec<EvalError>> {
-        let current_model = self
-            .active_models
+        let current_key = self
+            .eval_scope
             .last()
-            .expect("current model should be set when looking up a parameter");
+            .expect("current model should be set when looking up a parameter")
+            .clone();
 
-        self.lookup_model_parameter_value_internal(
-            current_model,
-            parameter_name,
-            variable_span,
-            true,
-        )
+        self.force_parameter(&current_key, parameter_name, variable_span, true)
     }
 
-    /// Looks up a parameter value in a specific model.
-    pub fn lookup_model_parameter_value(
-        &self,
-        model: &ModelPath,
+    /// Looks up a parameter on the instance reached via `reference_name` from the active model,
+    /// forcing evaluation on demand if necessary.
+    ///
+    /// Uses the stored instance key from when the reference was added, which correctly
+    /// handles both shared refs (using root instance path) and unique use imports
+    /// (using nested instance path).
+    pub fn lookup_external_parameter_value(
+        &mut self,
+        _child_model_path: &ModelPath,
+        reference_name: &ReferenceName,
         parameter_name: &ParameterName,
         variable_span: Span,
     ) -> Result<output::Value, Vec<EvalError>> {
-        self.lookup_model_parameter_value_internal(model, parameter_name, variable_span, false)
+        let current = self
+            .eval_scope
+            .last()
+            .expect("current model should be set for external lookup");
+        let model = self
+            .models
+            .get(current)
+            .expect("current model should be created when set");
+        let key = model
+            .references
+            .get(reference_name)
+            .expect("reference should be added before lookup")
+            .clone();
+        self.force_parameter(&key, parameter_name, variable_span, false)
     }
 
-    fn lookup_model_parameter_value_internal(
-        &self,
-        model_path: &ModelPath,
+    /// Forces lazy evaluation of a parameter, returning its value.
+    ///
+    /// The memo table at `key` tracks each parameter's state. On a miss (`Pending`), the IR
+    /// is taken out, the slot is transitioned to `InProgress` to detect cycles, and
+    /// [`eval_parameter::eval_parameter`] is invoked with this context. The result is
+    /// memoized as `Done`. Re-entry on an `InProgress` slot surfaces as
+    /// [`EvalError::CircularParameterEvaluation`].
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "missing memo-table entry is a bug, not a user error"
+    )]
+    fn force_parameter(
+        &mut self,
+        key: &EvalInstanceKey,
         parameter_name: &ParameterName,
         variable_span: Span,
         is_current_model: bool,
     ) -> Result<output::Value, Vec<EvalError>> {
-        let model = self
-            .models
-            .get(model_path)
-            .expect("current model should be created when set");
+        let model_path_for_err = if is_current_model {
+            None
+        } else {
+            Some(key.model_path.clone())
+        };
 
-        model
-            .parameters
-            .get(parameter_name)
-            .expect("parameter should be defined")
-            .clone()
-            .map(|parameter| parameter.value)
-            .map_err(|_errors| {
-                let model_path = if is_current_model {
-                    None
-                } else {
-                    Some(model_path.clone())
+        // Inspect and potentially take ownership of the pending IR from the memo slot.
+        let peek = {
+            let slot = self
+                .models
+                .get_mut(key)
+                .expect("model should be created when set")
+                .parameters
+                .get_mut(parameter_name)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "parameter `{}` not registered in memo table for model `{}`",
+                        parameter_name.as_str(),
+                        key.model_path.as_path().display()
+                    )
+                });
+
+            match slot {
+                ParamSlot::Done(Ok(param)) => SlotPeek::Done(Ok(param.value.clone())),
+                ParamSlot::Done(Err(_)) => {
+                    SlotPeek::Done(Err(vec![EvalError::ParameterHasError {
+                        model_path: model_path_for_err.clone(),
+                        parameter_name: parameter_name.clone(),
+                        variable_span,
+                    }]))
+                }
+                ParamSlot::InProgress => SlotPeek::Cycle,
+                ParamSlot::Pending(_) => {
+                    let ParamSlot::Pending(param) = std::mem::replace(slot, ParamSlot::InProgress)
+                    else {
+                        unreachable!("just matched Pending");
+                    };
+                    SlotPeek::TakenForEval(Box::new(param))
+                }
+            }
+        };
+
+        match peek {
+            SlotPeek::Done(r) => r,
+            SlotPeek::Cycle => Err(vec![EvalError::CircularParameterEvaluation {
+                model_path: model_path_for_err,
+                parameter_name: parameter_name.clone(),
+                variable_span,
+            }]),
+            SlotPeek::TakenForEval(param) => {
+                // Evaluate in `key`'s scope so overlay anchor-detection and external lookups use
+                // this model as the innermost active scope.
+                self.push_active_model(key.clone());
+                let eval_result = eval_parameter::eval_parameter(&param, self);
+                self.pop_active_model(key);
+
+                let done_slot: Result<output::Parameter, Vec<EvalError>> = match eval_result {
+                    Ok(epr) => Ok(eval_parameter::build_output_parameter(
+                        epr.value,
+                        epr.expr_span,
+                        param.as_ref(),
+                        self,
+                    )),
+                    Err(errs) => Err(errs),
                 };
 
-                vec![EvalError::ParameterHasError {
-                    model_path,
-                    parameter_name: parameter_name.clone(),
-                    variable_span,
-                }]
+                // Memoize the result.
+                self.models
+                    .get_mut(key)
+                    .expect("model still exists")
+                    .parameters
+                    .insert(parameter_name.clone(), ParamSlot::Done(done_slot.clone()));
+
+                match done_slot {
+                    Ok(p) => Ok(p.value),
+                    Err(_) => Err(vec![EvalError::ParameterHasError {
+                        model_path: model_path_for_err,
+                        parameter_name: parameter_name.clone(),
+                        variable_span,
+                    }]),
+                }
+            }
+        }
+    }
+
+    /// Forces all still-pending parameters on the model identified by `key`.
+    ///
+    /// Used by Pass 2 to drive evaluation of every registered parameter. `force_parameter`
+    /// itself pushes/pops `key` as the evaluation scope, so this function does not need to
+    /// be called from inside any active-model bracket.
+    pub(crate) fn force_all_pending_on(&mut self, key: &EvalInstanceKey) {
+        // Take a snapshot of pending names; the loop mutates state below.
+        let pending_names: Vec<(ParameterName, Span)> = self
+            .models
+            .get(key)
+            .expect("model should be registered before forcing")
+            .parameters
+            .iter()
+            .filter_map(|(name, slot)| match slot {
+                ParamSlot::Pending(param) => Some((name.clone(), param.name_span())),
+                ParamSlot::InProgress | ParamSlot::Done(_) => None,
             })
+            .collect();
+
+        for (name, span) in pending_names {
+            // Errors are already memoized by force_parameter; we ignore the return value.
+            let _ = self.force_parameter(key, &name, span, true);
+        }
     }
 
     /// Evaluates a builtin function with the given arguments.
@@ -407,144 +632,120 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
         self.external_context.lookup_prefix(name)
     }
 
-    /// Pushes the active model for evaluation.
+    /// Pushes `key` as the innermost active evaluation scope.
     ///
-    /// Creates a new model entry if it doesn't exist.
-    pub fn push_active_model(&mut self, model_path: ModelPath) {
-        self.models.entry(model_path.clone()).or_default();
-
-        self.active_models.push(model_path);
+    /// Creates an empty [`ModelInProgress`] entry if `key` hasn't been seeded yet.
+    /// In the normal pipeline every key is seeded by [`Self::from_graph`], so this
+    /// fallback only fires for tests and expression-level entry points that call
+    /// [`Self::new`] directly.
+    pub fn push_active_model(&mut self, key: EvalInstanceKey) {
+        self.models.entry(key.clone()).or_default();
+        self.eval_scope.push(key);
     }
 
     /// Clears the active model.
-    pub fn pop_active_model(&mut self, model_path: &ModelPath) {
-        assert_eq!(self.active_models.last(), Some(model_path));
+    pub fn pop_active_model(&mut self, expected: &EvalInstanceKey) {
+        assert_eq!(self.eval_scope.last(), Some(expected));
 
-        self.active_models.pop();
+        self.eval_scope.pop();
+    }
+
+    /// Returns a snapshot of all registered model instance keys, in insertion order.
+    #[must_use]
+    pub fn model_keys_snapshot(&self) -> Vec<EvalInstanceKey> {
+        self.models.keys().cloned().collect()
+    }
+
+    /// Returns every `(parent, child)` pair implied by the `references` entries on each
+    /// instance, as a snapshot that doesn't borrow `self`.
+    #[must_use]
+    pub fn reference_pairs_snapshot(&self) -> Vec<(EvalInstanceKey, EvalInstanceKey)> {
+        let mut out = Vec::new();
+        for (parent_key, model) in &self.models {
+            for child_key in model.references.values() {
+                out.push((parent_key.clone(), child_key.clone()));
+            }
+        }
+        out
     }
 
     /// Adds a parameter evaluation result to the current model.
     ///
+    /// Inserts the result directly as a `Done` slot, skipping lazy evaluation. Used by tests
+    /// that want to pre-populate parameter values without going through the lazy evaluator.
+    ///
     /// # Panics
     ///
     /// Panics if no current model is set or if the current model was not created.
+    #[cfg(test)]
     pub fn add_parameter_result(
         &mut self,
         parameter_name: ParameterName,
         result: Result<output::Parameter, Vec<EvalError>>,
     ) {
-        // TODO: Maybe use type state pattern to enforce this?
-        let Some(current_model) = self.active_models.last() else {
+        let Some(current_key) = self.eval_scope.last() else {
             panic!("current model should be set when adding a parameter result");
         };
 
         let model = self
             .models
-            .get_mut(current_model)
-            .expect("current model should be created when set");
-
-        model.parameters.insert(parameter_name, result);
-    }
-
-    /// Adds a submodel to the current model.
-    ///
-    /// # Panics
-    ///
-    /// Panics if no current model is set or if the current model was not created.
-    pub(crate) fn add_submodel(
-        &mut self,
-        submodel_name: &SubmodelName,
-        submodel_reference_name: &ReferenceName,
-    ) {
-        let Some(current_model) = self.active_models.last() else {
-            panic!("current model should be set when adding a submodel");
-        };
-
-        let model = self
-            .models
-            .get_mut(current_model)
+            .get_mut(current_key)
             .expect("current model should be created when set");
 
         model
-            .submodels
-            .insert(submodel_name.clone(), submodel_reference_name.clone());
+            .parameters
+            .insert(parameter_name, ParamSlot::Done(result));
     }
 
-    /// Adds a reference to the current model.
-    ///
-    /// # Panics
-    ///
-    /// Panics if no current model is set or if the current model was not created.
-    pub(crate) fn add_reference(
-        &mut self,
-        reference_name: &ReferenceName,
-        reference_path: &ModelPath,
-    ) {
-        let Some(current_model) = self.active_models.last() else {
-            panic!("current model should be set when adding a reference");
-        };
-
-        let model = self
-            .models
-            .get_mut(current_model)
-            .expect("current model should be created when set");
-
-        model
-            .references
-            .insert(reference_name.clone(), reference_path.clone());
-    }
-
-    /// Returns whether the model at the given path has any evaluation errors.
-    ///
-    /// A model has errors if any of its parameters failed to evaluate or any of its tests failed.
+    /// Returns whether the evaluated instance at `key` has any evaluation errors.
     #[must_use]
-    pub fn reference_has_errors(&self, path: &ModelPath) -> bool {
-        let Some(model) = self.models.get(path) else {
+    pub fn reference_has_errors(&self, key: &EvalInstanceKey) -> bool {
+        let Some(model) = self.models.get(key) else {
             return false;
         };
-        let has_parameter_errors = model.parameters.values().any(Result::is_err);
+        let has_parameter_errors = model
+            .parameters
+            .values()
+            .any(|slot| matches!(slot, ParamSlot::Done(Err(_))));
         let has_test_errors = model.tests.iter().any(|(_, result)| result.is_err());
         let has_reference_errors = !model.references_with_errors.is_empty();
 
         has_parameter_errors || has_test_errors || has_reference_errors
     }
 
-    /// Records that the given reference path has errors on the current active model.
+    /// Records that `child_key` has errors on the parent model identified by `parent_key`.
     ///
     /// # Panics
     ///
-    /// Panics if no current model is set or if the current model was not created.
-    pub fn add_reference_error_to_active_model(&mut self, path: &ModelPath) {
-        let Some(current_model) = self.active_models.last() else {
-            panic!("current model should be set when adding a reference error");
-        };
-
+    /// Panics if the parent model has not been registered.
+    pub fn add_reference_error_to(
+        &mut self,
+        parent_key: &EvalInstanceKey,
+        child_key: &EvalInstanceKey,
+    ) {
         let model = self
             .models
-            .get_mut(current_model)
-            .expect("current model should be created when set");
+            .get_mut(parent_key)
+            .expect("parent model should be registered when adding a reference error");
 
-        model.references_with_errors.insert(path.clone());
+        model.references_with_errors.insert(child_key.clone());
     }
 
-    /// Adds a test evaluation result to the current model.
+    /// Adds a test evaluation result to the model identified by `key`.
     ///
     /// # Panics
     ///
-    /// Panics if no current model is set or if the current model was not created.
+    /// Panics if the model has not been registered.
     pub(crate) fn add_test_result(
         &mut self,
+        key: &EvalInstanceKey,
         test_index: TestIndex,
         test_result: Result<output::Test, Vec<EvalError>>,
     ) {
-        let Some(current_model) = self.active_models.last() else {
-            panic!("current model should be set when adding a test result");
-        };
-
         let model = self
             .models
-            .get_mut(current_model)
-            .expect("current model should be created when set");
+            .get_mut(key)
+            .expect("model should be registered when adding a test result");
 
         model.tests.insert(test_index, test_result);
     }

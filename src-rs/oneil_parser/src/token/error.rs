@@ -61,6 +61,10 @@ pub enum ExpectKeyword {
     As,
     /// Expected 'false' keyword
     False,
+    /// Expected `design` keyword
+    Design,
+    /// Expected `for` keyword
+    For,
     /// Expected 'from' keyword
     From,
     /// Expected 'if' keyword

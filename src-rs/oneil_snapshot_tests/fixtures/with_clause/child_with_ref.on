@@ -1,0 +1,6 @@
+# Satellite model with Earth gravity reference
+use ../gravity_earth as inner
+
+# Satellite orbital data
+Altitude: h = 400 :km
+Gravity Reference: g_ref = g.inner :m/s^2

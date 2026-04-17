@@ -18,7 +18,7 @@ pub use crate::context::{
     AstLoadingFailedError, ExternalResolutionContext, ModelResolutionResult,
     PythonImportLoadingFailedError,
 };
-pub use crate::error::{CircularDependencyError, ResolutionErrorCollection};
+pub use crate::error::{CircularDependencyError, DesignResolutionError, ResolutionErrorCollection};
 
 use crate::context::ResolutionContext;
 

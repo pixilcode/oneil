@@ -1,0 +1,9 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 152
+expression: output
+---
+Model: fixtures/extracted_submodels/extract_eval.on
+Tests: 0/0
+Parameters:
+  planned = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(59356800.0)), unit: Unit { dimension_map: DimensionMap({Time: 1.0}), magnitude: 86400.0, is_db: false, display_unit: Unit { name: "day", exponent: 1.0 } } })

@@ -1,0 +1,5 @@
+# Parent model that extracts orbital period from solar system model
+use extract_original as solar_system with orbit
+
+# Use the extracted orbital period for mission planning
+Mission Length: mission_days = period.orbit :day

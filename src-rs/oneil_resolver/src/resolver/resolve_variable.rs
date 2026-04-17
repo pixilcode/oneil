@@ -128,7 +128,16 @@ where
 
     let var_identifier = parameter.clone().take_value();
     let var_identifier_span = parameter.span();
-    if model.get_parameter(&var_identifier).is_none() {
+
+    // Check if parameter exists on the referenced model
+    let exists_on_model = model.get_parameter(&var_identifier).is_some();
+
+    // Check if parameter is a design-augmented parameter for this reference
+    let is_augmented = resolution_context
+        .get_augmented_param_for_reference(&reference_name, &var_identifier)
+        .is_some();
+
+    if !exists_on_model && !is_augmented {
         let best_match = get_best_match_parameter_name_from_given_model(
             resolution_context,
             model,

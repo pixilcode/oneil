@@ -78,7 +78,7 @@ fn parameter_decl(input: InputSpan<'_>) -> Result<'_, ParameterNode, ParserError
         ))
         .parse(rest)?;
 
-    let (rest, value_node) = parameter_value
+    let (rest, value_node) = parse_parameter_value
         .or_fail_with(ParserError::parameter_missing_value(
             equals_token.lexeme_span,
         ))
@@ -203,8 +203,8 @@ fn discrete_limits(input: InputSpan<'_>) -> Result<'_, LimitsNode, ParserError> 
     Ok((rest, node))
 }
 
-/// Parse a parameter value (either simple or piecewise).
-fn parameter_value(input: InputSpan<'_>) -> Result<'_, ParameterValueNode, ParserError> {
+/// Parses the right-hand side of `= …` for a parameter or design shorthand line (simple or piecewise).
+pub fn parse_parameter_value(input: InputSpan<'_>) -> Result<'_, ParameterValueNode, ParserError> {
     simple_value.or(piecewise_value).parse(input)
 }
 

@@ -1,0 +1,4 @@
+# Base design: Moon-like gravity
+design ../gravity_earth
+
+g = 1.62 :m/s^2

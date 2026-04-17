@@ -65,10 +65,10 @@ impl<'runtime> ModelReference<'runtime> {
         self.model
             .references
             .iter()
-            .filter_map(|(reference_name, model_path)| {
+            .filter_map(|(reference_name, child_key)| {
                 let entry = self
                     .eval_cache
-                    .get_entry(model_path)
+                    .get_entry_instance(child_key)
                     .expect("reference should be in cache");
 
                 let model = entry.value()?;

@@ -1,0 +1,17 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 91
+expression: output
+---
+error: cannot replace `gravity` in the same file where it is defined; reference replacements should target references in the design target model
+  at fixtures/reference_replacement/ref_replace_simple.one:8:24
+
+error: `gravity` is defined here
+  at fixtures/reference_replacement/ref_replace_simple.one:5:25
+---
+
+Model: fixtures/reference_replacement/ref_replace_simple.one
+Tests: 0/0
+Parameters:
+  m = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(100.0)), unit: Unit { dimension_map: DimensionMap({Mass: 1.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "kg", exponent: 1.0 } } })
+  w = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(981.0)), unit: Unit { dimension_map: DimensionMap({Mass: 1.0, Distance: 1.0, Time: -2.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "N", exponent: 1.0 } } })

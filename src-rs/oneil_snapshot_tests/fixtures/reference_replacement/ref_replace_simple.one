@@ -1,0 +1,12 @@
+# Error case: cannot ref and use-replace same alias in one file
+# This pattern is disallowed - replacements should target refs in OTHER models
+design ref_replace_simple
+
+ref ../gravity_earth as gravity
+
+# ERROR: cannot replace `gravity` in the same file where it is defined
+use ../gravity_mars as gravity
+
+# Would calculate weight, but replacement is rejected
+Mass: m = 100 :kg
+Weight: w = m * g.gravity :N

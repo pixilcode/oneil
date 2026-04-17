@@ -1,7 +1,7 @@
 use std::iter;
 
 use oneil_ir as ir;
-use oneil_shared::{paths::ModelPath, span::Span};
+use oneil_shared::{EvalInstanceKey, paths::ModelPath, span::Span};
 
 use oneil_output::{Number, Unit, UnitConversionError, Value};
 
@@ -14,23 +14,23 @@ use crate::{
     eval_unit::eval_unit,
 };
 
+/// A per-operand result in a chained comparison: the operator, the right-hand value, and its span.
+type RestComparisonResult = Result<(ir::ComparisonOp, (Value, Span)), Vec<EvalError>>;
+
 /// Evaluates an expression in the context of the given model.
 ///
 /// # Errors
 ///
 /// Returns an error if the expression is invalid.
-// TODO: remove the `&mut`, since the context is never actually mutated.
-//       Maybe add a new kind of context? Also do the same when resolving
-//       an IR expression
 pub fn eval_expr_in_model<E: ExternalEvaluationContext>(
     expr: &ir::Expr,
     model_path: &ModelPath,
     context: &mut E,
 ) -> Result<Value, Vec<EvalError>> {
     let mut eval_context = EvalContext::with_preloaded_models(context);
-    eval_context.push_active_model(model_path.clone());
+    eval_context.push_active_model(EvalInstanceKey::root(model_path.clone()));
 
-    eval_expr(expr, &eval_context).map(|(value, _span)| value)
+    eval_expr(expr, &mut eval_context).map(|(value, _span)| value)
 }
 
 /// Evaluates an expression and returns the resulting value.
@@ -40,7 +40,7 @@ pub fn eval_expr_in_model<E: ExternalEvaluationContext>(
 /// Returns an error if the expression is invalid.
 pub fn eval_expr<'a, E: ExternalEvaluationContext>(
     expr: &'a ir::Expr,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<(Value, &'a Span), Vec<EvalError>> {
     match expr {
         ir::Expr::ComparisonOp {
@@ -125,26 +125,26 @@ fn eval_comparison_subexpressions<E: ExternalEvaluationContext>(
     op: ir::ComparisonOp,
     right: &ir::Expr,
     rest_chained: &[(ir::ComparisonOp, ir::Expr)],
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<ComparisonSubexpressionsResult, Vec<EvalError>> {
     let left_result = eval_expr(left, context);
-    let rest_results = iter::once((op, right))
-        .chain(
-            rest_chained
-                .iter()
-                // convert from `&(_, _)` to `(&_, &_)`
-                .map(|(op, right_operand)| (*op, right_operand)),
-        )
-        .map(|(op, right_operand)| {
-            eval_expr(right_operand, context).map(|(result, span)| (op, (result, span)))
-        });
+    // With `&mut context`, iterators can't re-borrow — collect eagerly.
+    let mut rest_results: Vec<RestComparisonResult> = Vec::with_capacity(rest_chained.len() + 1);
+    for (op, right_operand) in iter::once((op, right)).chain(
+        rest_chained
+            .iter()
+            .map(|(op, right_operand)| (*op, right_operand)),
+    ) {
+        rest_results
+            .push(eval_expr(right_operand, context).map(|(result, span)| (op, (result, *span))));
+    }
 
     let (left_result, left_result_span, rest_results) = match left_result {
         Err(left_errors) => {
             // find all evaluation errors that occurred and return them
             let errors = left_errors
                 .into_iter()
-                .chain(rest_results.filter_map(Result::err).flatten())
+                .chain(rest_results.into_iter().filter_map(Result::err).flatten())
                 .collect();
 
             return Err(errors);
@@ -158,7 +158,7 @@ fn eval_comparison_subexpressions<E: ExternalEvaluationContext>(
             for result in rest_results {
                 match result {
                     Ok((op, (right_operand, right_operand_span))) => {
-                        ok_rest_results.push((op, (right_operand, *right_operand_span)));
+                        ok_rest_results.push((op, (right_operand, right_operand_span)));
                     }
                     Err(mut errors) => err_rest_results.append(&mut errors),
                 }
@@ -284,18 +284,20 @@ struct BinaryOpSubexpressionsResult {
 fn eval_binary_op_subexpressions<E: ExternalEvaluationContext>(
     left: &ir::Expr,
     right: &ir::Expr,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<BinaryOpSubexpressionsResult, Vec<EvalError>> {
-    let left_result = eval_expr(left, context);
-    let right_result = eval_expr(right, context);
+    // Sequentially evaluate each side; `&mut context` means we can't hold two
+    // results tied to borrow-lifetimes at once, so copy out spans as we go.
+    let left_result = eval_expr(left, context).map(|(v, s)| (v, *s));
+    let right_result = eval_expr(right, context).map(|(v, s)| (v, *s));
 
     match (left_result, right_result) {
         (Ok((left_result, left_result_span)), Ok((right_result, right_result_span))) => {
             Ok(BinaryOpSubexpressionsResult {
                 left_result,
-                left_result_span: *left_result_span,
+                left_result_span,
                 right_result,
-                right_result_span: *right_result_span,
+                right_result_span,
             })
         }
         (Err(left_errors), Ok(_)) => Err(left_errors),
@@ -351,16 +353,14 @@ fn eval_unary_op(
 
 fn eval_function_call_args<E: ExternalEvaluationContext>(
     args: &[ir::Expr],
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Vec<(Value, Span)>, Vec<EvalError>> {
-    let args_results = args.iter().map(|arg| eval_expr(arg, context));
-
-    let mut args = vec![];
+    let mut out_args = vec![];
     let mut errors = vec![];
 
-    for result in args_results {
-        match result {
-            Ok((value, value_span)) => args.push((value, *value_span)),
+    for arg in args {
+        match eval_expr(arg, context) {
+            Ok((value, value_span)) => out_args.push((value, *value_span)),
             Err(arg_errors) => errors.extend(arg_errors),
         }
     }
@@ -369,7 +369,7 @@ fn eval_function_call_args<E: ExternalEvaluationContext>(
         return Err(errors);
     }
 
-    Ok(args)
+    Ok(out_args)
 }
 
 fn eval_function_call<E: ExternalEvaluationContext>(
@@ -424,7 +424,7 @@ fn eval_unit_cast(
 
 fn eval_variable<E: ExternalEvaluationContext>(
     variable: &ir::Variable,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Value, Vec<EvalError>> {
     match variable {
         ir::Variable::Builtin {
@@ -437,11 +437,16 @@ fn eval_variable<E: ExternalEvaluationContext>(
         } => context.lookup_parameter_value(parameter_name, *parameter_span),
         ir::Variable::External {
             model_path,
-            reference_name: _,
+            reference_name,
             parameter_name,
             reference_span: _,
             parameter_span,
-        } => context.lookup_model_parameter_value(model_path, parameter_name, *parameter_span),
+        } => context.lookup_external_parameter_value(
+            model_path,
+            reference_name,
+            parameter_name,
+            *parameter_span,
+        ),
     }
 }
 

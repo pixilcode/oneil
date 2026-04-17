@@ -1,269 +1,141 @@
-use std::collections::HashSet;
-
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use oneil_ir as ir;
-use oneil_shared::{
-    partial::MaybePartialResult,
-    paths::ModelPath,
-    symbols::{BuiltinValueName, ReferenceName},
-};
-use oneil_shared::{span::Span, symbols::ParameterName};
+use oneil_shared::{EvalInstanceKey, partial::MaybePartialResult, paths::ModelPath};
 
-use oneil_output::{
-    self as output, BuiltinDependency, DependencySet, ExternalDependency, Model,
-    ParameterDependency, Value,
-};
+use oneil_output::{self as output, Model, Value};
 
 use crate::{
     EvalError,
     context::{EvalContext, ExternalEvaluationContext},
     error::{EvalErrors, ExpectedType},
     eval_expr, eval_parameter,
+    instance_graph::InstanceGraph,
 };
 
-/// Evaluates the model at the given path and all its dependencies, returning a map of
-/// path to evaluated model result for each model that was evaluated.
+/// Evaluates the model at `model_path` and every instance reachable from it.
+///
+/// The function builds an [`InstanceGraph`] from the IR (no runtime-supplied designs),
+/// seeds an [`EvalContext`] from the graph, then drives two passes:
+///
+/// 1. **Force** ([`force_all_models`]): for each instance, force every still-pending
+///    parameter (the lazy memo table handles cross-model demand on the fly) and
+///    evaluate the instance's tests.
+/// 2. **Error propagation** ([`propagate_reference_errors`]): record on each parent
+///    instance any references whose evaluation produced errors so that callers see
+///    transitive failures without searching the tree themselves.
+///
+/// All structural work — reference replacements, design overlays, design-introduced
+/// parameters, extracted submodel wiring — is performed by [`InstanceGraph::build`]
+/// before evaluation begins.
 pub fn eval_model<E: ExternalEvaluationContext>(
     model_path: &ModelPath,
     external_context: &mut E,
-) -> IndexMap<ModelPath, MaybePartialResult<Model, EvalErrors>> {
-    let mut context = EvalContext::new(external_context);
+) -> IndexMap<EvalInstanceKey, MaybePartialResult<Model, EvalErrors>> {
+    eval_model_with_designs(model_path, &[], external_context)
+}
 
-    eval_model_from_context(model_path, &mut context);
+/// Like [`eval_model`], but also applies the given runtime-supplied
+/// [`ir::DesignApplication`]s at the root before evaluation.
+///
+/// These are typically the contributions implied by a CLI `--design <file>` flag.
+pub fn eval_model_with_designs<E: ExternalEvaluationContext>(
+    model_path: &ModelPath,
+    runtime_designs: &[ir::DesignApplication],
+    external_context: &mut E,
+) -> IndexMap<EvalInstanceKey, MaybePartialResult<Model, EvalErrors>> {
+    let graph = InstanceGraph::build(model_path, runtime_designs, external_context);
+    eval_model_from_graph(&graph, external_context)
+}
+
+/// Evaluates every instance in `graph`, returning per-instance results.
+///
+/// Use this entry point when callers want to supply a graph built externally — for
+/// example with runtime-supplied design applications (CLI `--design`).
+pub fn eval_model_from_graph<E: ExternalEvaluationContext>(
+    graph: &InstanceGraph,
+    external_context: &mut E,
+) -> IndexMap<EvalInstanceKey, MaybePartialResult<Model, EvalErrors>> {
+    let mut context = EvalContext::from_graph(graph, external_context);
+
+    force_all_models(graph, &mut context);
+    propagate_reference_errors(&mut context);
 
     context.into_result()
 }
 
-/// Evaluates a model and returns the context with the results of the model.
-fn eval_model_from_context<E: ExternalEvaluationContext>(
-    model_path: &ModelPath,
+/// Drives lazy forcing of every pending parameter on every instance and evaluates tests.
+///
+/// Iteration order over instances doesn't matter: cross-model dependencies are
+/// resolved through [`EvalContext::lookup_external_parameter_value`]'s lazy memo, which
+/// itself manages per-evaluation scope push/pop.
+fn force_all_models<E: ExternalEvaluationContext>(
+    graph: &InstanceGraph,
     context: &mut EvalContext<'_, E>,
 ) {
-    // Set the current model
-    context.push_active_model(model_path.clone());
+    let keys: Vec<EvalInstanceKey> = context.model_keys_snapshot();
 
-    let model = context.get_ir(model_path);
+    for key in keys {
+        context.force_all_pending_on(&key);
 
-    let Some(model) = model.value() else {
-        return;
-    };
-
-    // Recursively evaluate references
-    let references = model.get_references();
-    for reference_import in references.values() {
-        eval_model_from_context(reference_import.path(), context);
-    }
-
-    // Check for errors in references
-    for reference_import in references.values() {
-        if context.reference_has_errors(reference_import.path()) {
-            context.add_reference_error_to_active_model(reference_import.path());
-        }
-    }
-
-    // Bring references into scope
-    for (reference_name, reference_import) in references {
-        context.add_reference(reference_name, reference_import.path());
-    }
-
-    // Add submodels to the current model
-    let submodels = model.get_submodels();
-    for (submodel_name, submodel_import) in submodels {
-        context.add_submodel(submodel_name, submodel_import.reference_name());
-    }
-
-    // Evaluate parameters
-    let parameters = model.get_parameters();
-    let evaluation_order = get_evaluation_order(parameters);
-
-    for parameter_name in evaluation_order {
-        let parameter = parameters
-            .get(&parameter_name)
-            .expect("parameter should exist because it comes from the keys of the parameters map");
-
-        let value = eval_parameter::eval_parameter(parameter, context);
-
-        let parameter_result = value
-            .map(|value| parameter_result_from(value.value, value.expr_span, parameter, context));
-
-        context.add_parameter_result(parameter_name, parameter_result);
-    }
-
-    // Evaluate tests
-    let tests = model.get_tests();
-    for (test_index, test) in tests {
-        let test_result = eval_test(test, context);
-        context.add_test_result(*test_index, test_result);
-    }
-
-    context.pop_active_model(model_path);
-}
-
-fn parameter_result_from<E: ExternalEvaluationContext>(
-    value: Value,
-    expr_span: Span,
-    parameter: &ir::Parameter,
-    context: &EvalContext<'_, E>,
-) -> output::Parameter {
-    let (print_level, debug_info) = match parameter.trace_level() {
-        ir::TraceLevel::Debug if parameter.is_performance() => {
-            let builtin_dependency_values =
-                get_builtin_dependency_values(parameter.dependencies().builtin(), context);
-            let parameter_dependency_values =
-                get_parameter_dependency_values(parameter.dependencies().parameter(), context);
-            let external_dependency_values =
-                get_external_dependency_values(parameter.dependencies().external(), context);
-            (
-                output::PrintLevel::Performance,
-                Some(output::DebugInfo {
-                    builtin_dependency_values,
-                    parameter_dependency_values,
-                    external_dependency_values,
-                }),
-            )
-        }
-        ir::TraceLevel::Trace | ir::TraceLevel::None if parameter.is_performance() => {
-            (output::PrintLevel::Performance, None)
-        }
-        ir::TraceLevel::Debug => {
-            let builtin_dependency_values =
-                get_builtin_dependency_values(parameter.dependencies().builtin(), context);
-            let parameter_dependency_values =
-                get_parameter_dependency_values(parameter.dependencies().parameter(), context);
-            let external_dependency_values =
-                get_external_dependency_values(parameter.dependencies().external(), context);
-            (
-                output::PrintLevel::Trace,
-                Some(output::DebugInfo {
-                    builtin_dependency_values,
-                    parameter_dependency_values,
-                    external_dependency_values,
-                }),
-            )
-        }
-        ir::TraceLevel::Trace => (output::PrintLevel::Trace, None),
-        ir::TraceLevel::None => (output::PrintLevel::None, None),
-    };
-
-    let builtin_dependencies = parameter
-        .dependencies()
-        .builtin()
-        .keys()
-        .map(|builtin_name| BuiltinDependency {
-            name: builtin_name.clone(),
-        })
-        .collect::<IndexSet<_>>();
-
-    let parameter_dependencies = parameter
-        .dependencies()
-        .parameter()
-        .keys()
-        .map(|parameter_name| ParameterDependency {
-            parameter_name: parameter_name.clone(),
-        })
-        .collect::<IndexSet<_>>();
-
-    let external_dependencies = parameter
-        .dependencies()
-        .external()
-        .iter()
-        .map(
-            |((reference_name, parameter_name), (model_path, _))| ExternalDependency {
-                model_path: model_path.clone(),
-                reference_name: reference_name.clone(),
-                parameter_name: parameter_name.clone(),
-            },
-        )
-        .collect::<IndexSet<_>>();
-
-    let dependencies = DependencySet {
-        builtin_dependencies,
-        parameter_dependencies,
-        external_dependencies,
-    };
-
-    output::Parameter {
-        ident: parameter.name().clone(),
-        label: parameter.label().clone(),
-        value,
-        print_level,
-        debug_info,
-        dependencies,
-        expr_span,
-    }
-}
-
-fn get_evaluation_order(parameters: &IndexMap<ParameterName, ir::Parameter>) -> Vec<ParameterName> {
-    let mut evaluation_order = Vec::new();
-    let mut visited = HashSet::new();
-
-    for (parameter_name, parameter) in parameters {
-        if visited.contains(parameter_name) {
-            continue;
-        }
-
-        (evaluation_order, visited) = process_parameter_dependencies(
-            parameter_name,
-            parameter.dependencies(),
-            visited,
-            evaluation_order,
-            parameters,
-        );
-    }
-
-    evaluation_order
-}
-
-fn process_parameter_dependencies(
-    parameter_name: &ParameterName,
-    parameter_dependencies: &ir::Dependencies,
-    mut visited: HashSet<ParameterName>,
-    mut evaluation_order: Vec<ParameterName>,
-    parameters: &IndexMap<ParameterName, ir::Parameter>,
-) -> (Vec<ParameterName>, HashSet<ParameterName>) {
-    for dependency in parameter_dependencies.parameter().keys() {
-        if visited.contains(dependency) {
-            continue;
-        }
-
-        let Some(dependency_parameter) = parameters.get(dependency) else {
-            // dependency is a builtin value, so we don't need to visit it
+        // Tests are read from the graph's instance entry. They need a current scope for
+        // unprefixed parameter lookups inside test expressions.
+        let Some(instanced) = graph.instances.get(&key) else {
             continue;
         };
-
-        (evaluation_order, visited) = process_parameter_dependencies(
-            dependency,
-            dependency_parameter.dependencies(),
-            visited,
-            evaluation_order,
-            parameters,
-        );
+        if instanced.tests.is_empty() {
+            continue;
+        }
+        context.push_active_model(key.clone());
+        let test_pairs: Vec<(_, _)> = instanced
+            .tests
+            .iter()
+            .map(|(idx, test)| (*idx, test.clone()))
+            .collect();
+        for (test_index, test) in test_pairs {
+            let test_result = eval_test(&test, context);
+            context.add_test_result(&key, test_index, test_result);
+        }
+        context.pop_active_model(&key);
     }
-
-    evaluation_order.push(parameter_name.clone());
-    visited.insert(parameter_name.clone());
-
-    (evaluation_order, visited)
 }
 
+/// After forcing, every parent instance inspects its registered references for errors
+/// and records them on itself so downstream consumers can see transitive failure.
+fn propagate_reference_errors<E: ExternalEvaluationContext>(context: &mut EvalContext<'_, E>) {
+    let pairs: Vec<(EvalInstanceKey, EvalInstanceKey)> = context.reference_pairs_snapshot();
+    for (parent_key, child_key) in pairs {
+        if context.reference_has_errors(&child_key) {
+            context.add_reference_error_to(&parent_key, &child_key);
+        }
+    }
+}
+
+/// Evaluates a single test in the context of the currently active scope.
 fn eval_test<E: ExternalEvaluationContext>(
     test: &ir::Test,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<output::Test, Vec<EvalError>> {
     let (test_result, expr_span) = eval_expr::eval_expr(test.expr(), context)?;
+    let expr_span = *expr_span;
 
     match test_result {
         Value::Boolean(true) => Ok(output::Test {
             result: output::TestResult::Passed,
-            expr_span: *expr_span,
+            expr_span,
         }),
         Value::Boolean(false) => {
-            let builtin_dependency_values =
-                get_builtin_dependency_values(test.dependencies().builtin(), context);
-            let parameter_dependency_values =
-                get_parameter_dependency_values(test.dependencies().parameter(), context);
-            let external_dependency_values =
-                get_external_dependency_values(test.dependencies().external(), context);
+            let builtin_dependency_values = eval_parameter::get_builtin_dependency_values(
+                test.dependencies().builtin(),
+                context,
+            );
+            let parameter_dependency_values = eval_parameter::get_parameter_dependency_values(
+                test.dependencies().parameter(),
+                context,
+            );
+            let external_dependency_values = eval_parameter::get_external_dependency_values(
+                test.dependencies().external(),
+                context,
+            );
 
             let debug_info = Box::new(output::DebugInfo {
                 builtin_dependency_values,
@@ -272,83 +144,15 @@ fn eval_test<E: ExternalEvaluationContext>(
             });
             Ok(output::Test {
                 result: output::TestResult::Failed { debug_info },
-                expr_span: *expr_span,
+                expr_span,
             })
         }
         Value::String(_) | Value::Number(_) | Value::MeasuredNumber(_) => {
             Err(vec![EvalError::InvalidType {
                 expected_type: ExpectedType::Boolean,
                 found_type: test_result.type_(),
-                found_span: *expr_span,
+                found_span: expr_span,
             }])
         }
     }
-}
-
-/// Gets the values of the builtin dependencies for debug reporting purposes.
-fn get_builtin_dependency_values<E: ExternalEvaluationContext>(
-    dependencies: &IndexMap<BuiltinValueName, Span>,
-    context: &EvalContext<'_, E>,
-) -> IndexMap<BuiltinValueName, Value> {
-    dependencies
-        .keys()
-        .map(|dependency| {
-            let value = context.lookup_builtin_variable(dependency);
-            (dependency.clone(), value)
-        })
-        .collect::<IndexMap<_, _>>()
-}
-
-/// Gets the values of the dependencies for debug reporting purposes.
-///
-/// This should only be called on expressions that have already been evaluated successfully.
-///
-/// # Panics
-///
-/// This function will panic if any of the dependencies are not found.
-fn get_parameter_dependency_values<E: ExternalEvaluationContext>(
-    dependencies: &IndexMap<ParameterName, Span>,
-    context: &EvalContext<'_, E>,
-) -> IndexMap<ParameterName, Value> {
-    dependencies
-        .iter()
-        .map(|(dependency, dependency_span)| {
-            let value = context
-                .lookup_parameter_value(dependency, *dependency_span)
-                .expect("dependency should be found because the expression evaluated successfully");
-
-            (dependency.clone(), value)
-        })
-        .collect::<IndexMap<_, _>>()
-}
-
-/// Gets the values of the external dependencies for debug reporting purposes.
-///
-/// This should only be called on expressions that have already been evaluated successfully.
-///
-/// # Panics
-///
-/// This function will panic if any of the dependencies are not found.
-fn get_external_dependency_values<E: ExternalEvaluationContext>(
-    dependencies: &IndexMap<(ReferenceName, ParameterName), (ModelPath, Span)>,
-    context: &EvalContext<'_, E>,
-) -> IndexMap<(ReferenceName, ParameterName), Value> {
-    dependencies
-        .iter()
-        .map(
-            |((reference_name, parameter_name), (model_path, dependency_span))| {
-                let value = context.lookup_model_parameter_value(
-                    model_path,
-                    parameter_name,
-                    *dependency_span,
-                );
-
-                let value = value.expect(
-                    "dependency should be found because the expression evaluated successfully",
-                );
-
-                ((reference_name.clone(), parameter_name.clone()), value)
-            },
-        )
-        .collect::<IndexMap<_, _>>()
 }

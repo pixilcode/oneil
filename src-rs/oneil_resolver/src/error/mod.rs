@@ -15,6 +15,7 @@
 //! - **Variable resolution errors**: Errors that occur when resolving variable references within expressions
 
 mod circular_dependency;
+mod design;
 mod errors;
 mod model_import;
 mod parameter;
@@ -24,6 +25,7 @@ mod util;
 mod variable;
 
 pub use circular_dependency::CircularDependencyError;
+pub use design::DesignResolutionError;
 pub use errors::ResolutionErrorCollection;
 pub use model_import::ModelImportResolutionError;
 pub use parameter::ParameterResolutionError;

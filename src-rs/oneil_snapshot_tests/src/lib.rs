@@ -31,13 +31,29 @@ mod util {
     ///
     /// This function does not return a `Result`; parse, resolution, and
     /// evaluation errors are included in the returned string.
-    #[expect(clippy::unwrap_used, reason = "writing to a String is infallible")]
     #[must_use]
     pub fn run_model_and_format(path: &Path, path_prefix: Option<&Path>) -> String {
+        run_model_and_format_with_design(path, None, path_prefix)
+    }
+
+    /// Runs the full evaluation pipeline on an Oneil model file with an optional
+    /// design file applied, and returns a formatted string containing any errors
+    /// and the evaluation output.
+    ///
+    /// When a design path is provided, the design file's parameter overrides are
+    /// applied to the model being evaluated (simulating the CLI `--design` flag).
+    #[expect(clippy::unwrap_used, reason = "writing to a String is infallible")]
+    #[must_use]
+    pub fn run_model_and_format_with_design(
+        path: &Path,
+        design_path: Option<&Path>,
+        path_prefix: Option<&Path>,
+    ) -> String {
         let path = ModelPath::from_path_with_ext(path);
+        let design_path = design_path.map(ModelPath::from_path_with_ext);
 
         let mut runtime = Runtime::new();
-        let (model_opt, errors) = runtime.eval_model(&path);
+        let (model_opt, errors) = runtime.eval_model(&path, design_path.as_ref());
 
         let mut out = String::new();
 

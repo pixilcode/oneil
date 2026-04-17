@@ -1,0 +1,6 @@
+# Evaluate gravity with design inheritance chain
+use ../gravity_earth as gravity
+use design use_design_nofor_derived for gravity
+
+# Should show final overridden value: 5.0 m/s^2 (hypothetical low-g environment)
+Final Gravity: result = g.gravity :m/s^2

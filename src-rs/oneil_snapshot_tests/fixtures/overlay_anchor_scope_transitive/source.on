@@ -1,0 +1,2 @@
+# Sibling ref providing a value the parent's `multiplier` depends on.
+Base: base = 3

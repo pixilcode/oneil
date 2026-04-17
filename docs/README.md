@@ -11,5 +11,7 @@ Oneil programming language.
   made related to the Oneil programming language
 - [Principles](principles.md) - A document defining guiding principles for
   contributing to the Oneil project
-- [Specs](specs/REAME.md) - Specifications that define how the Oneil programming
-  language functions on an implementation-agnostic level
+- [Specs](specs/) - Specifications that define how the Oneil programming language
+  functions on an implementation-agnostic level
+  - [Grammar (EBNF)](specs/grammar.ebnf)
+  - [Designs, overlays, and imports (Rust)](specs/designs-and-imports.md)

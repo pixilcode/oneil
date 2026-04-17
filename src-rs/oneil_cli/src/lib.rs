@@ -349,7 +349,7 @@ fn handle_print_model_result(
     };
 
     let mut runtime = Runtime::new();
-    let (model_opt, errors) = runtime.eval_model(file);
+    let (model_opt, errors) = runtime.eval_model(file, None);
 
     for error in errors.to_vec() {
         print_error::print(error, show_internal_errors);
@@ -367,6 +367,7 @@ fn handle_print_model_result(
 fn handle_eval_command(args: EvalArgs) {
     let EvalArgs {
         file,
+        design,
         params: variables,
         print: print_mode,
         debug: display_partial_results,
@@ -399,6 +400,7 @@ fn handle_eval_command(args: EvalArgs) {
     if watch {
         watch_model(
             &file,
+            design.as_ref(),
             &eval_expressions,
             common.dev_show_internal_errors,
             display_partial_results,
@@ -409,6 +411,7 @@ fn handle_eval_command(args: EvalArgs) {
 
         eval_and_print_model(
             &file,
+            design.as_ref(),
             &eval_expressions,
             common.dev_show_internal_errors,
             display_partial_results,
@@ -420,6 +423,7 @@ fn handle_eval_command(args: EvalArgs) {
 
 fn eval_and_print_model(
     file: &ModelPath,
+    design: Option<&ModelPath>,
     eval_expressions: &[String],
     show_internal_errors: bool,
     display_partial_results: bool,
@@ -427,7 +431,7 @@ fn eval_and_print_model(
     runtime: &mut Runtime,
 ) {
     let (result, model_errors, expr_errors) =
-        runtime.eval_model_and_expressions(file, eval_expressions);
+        runtime.eval_model_and_expressions(file, design, eval_expressions);
 
     for error in model_errors.to_vec() {
         print_error::print(error, show_internal_errors);
@@ -452,6 +456,7 @@ fn eval_and_print_model(
 
 fn watch_model(
     file: &ModelPath,
+    design: Option<&ModelPath>,
     eval_expressions: &[String],
     show_internal_errors: bool,
     display_partial_results: bool,
@@ -479,6 +484,7 @@ fn watch_model(
 
     eval_and_print_model(
         file,
+        design,
         eval_expressions,
         show_internal_errors,
         display_partial_results,
@@ -500,6 +506,7 @@ fn watch_model(
 
                     eval_and_print_model(
                         file,
+                        design,
                         eval_expressions,
                         show_internal_errors,
                         display_partial_results,
@@ -594,6 +601,7 @@ fn clear_screen() {
 fn handle_test_command(args: TestArgs) {
     let TestArgs {
         file,
+        design,
         recursive,
         debug: display_partial_results,
         no_header,
@@ -613,7 +621,7 @@ fn handle_test_command(args: TestArgs) {
     };
 
     let mut runtime = Runtime::new();
-    let (model_opt, errors) = runtime.eval_model(&file);
+    let (model_opt, errors) = runtime.eval_model(&file, design.as_ref());
 
     for error in errors.to_vec() {
         print_error::print(error, common.dev_show_internal_errors);

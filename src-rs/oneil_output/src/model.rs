@@ -11,6 +11,7 @@ use oneil_shared::span::Span;
 use oneil_shared::symbols::{
     BuiltinValueName, ParameterName, ReferenceName, SubmodelName, TestIndex,
 };
+use oneil_shared::{EvalInstanceKey, InstancePath};
 
 use crate::Value;
 use crate::dependency::DependencySet;
@@ -25,13 +26,16 @@ use crate::dependency::DependencySet;
 pub struct Model {
     /// The file path of the model that was evaluated.
     pub path: ModelPath,
+    /// Import chain from the evaluation root to this model instance.
+    pub instance_path: InstancePath,
     /// A map of submodel names to their reference names.
     pub submodels: IndexMap<SubmodelName, ReferenceName>,
-    /// A map of reference names to their evaluated results.
+    /// A map of reference names to evaluated child instances.
     ///
-    /// References are evaluated recursively, so each entry contains a fully
-    /// evaluated `Model` structure.
-    pub references: IndexMap<ReferenceName, ModelPath>,
+    /// Each value identifies a distinct evaluation of a model file (path plus
+    /// instance path), so the same file imported twice under different aliases
+    /// can coexist in the evaluation cache.
+    pub references: IndexMap<ReferenceName, EvalInstanceKey>,
     /// A map of parameter identifiers to their evaluated results.
     ///
     /// Parameters are stored by their identifier (name) and contain their

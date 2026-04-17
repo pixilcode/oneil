@@ -137,6 +137,50 @@ impl ParserError {
         }
     }
 
+    /// Missing model name after `design`.
+    pub(crate) fn design_missing_target(design_kw_span: Span) -> impl Fn(TokenError) -> Self {
+        move |error: TokenError| {
+            Self::new_from_token_error(
+                error,
+                ParserErrorReason::design_missing_target(design_kw_span),
+            )
+        }
+    }
+
+    /// Missing design file identifier after `use design`.
+    pub(crate) fn use_design_missing_file(after_kw: Span) -> impl Fn(TokenError) -> Self {
+        move |error: TokenError| {
+            Self::new_from_token_error(error, ParserErrorReason::use_design_missing_file(after_kw))
+        }
+    }
+
+    /// `design <model>` used in a non-design (`.on`) source file.
+    #[must_use]
+    pub(crate) const fn design_header_wrong_file(line_span: Span) -> Self {
+        Self {
+            error_offset: line_span.start().offset,
+            reason: ParserErrorReason::design_header_wrong_file(line_span),
+        }
+    }
+
+    /// Duplicate `design <model>` in a `.one` design bundle.
+    #[must_use]
+    pub(crate) const fn design_header_duplicate(line_span: Span) -> Self {
+        Self {
+            error_offset: line_span.start().offset,
+            reason: ParserErrorReason::design_header_duplicate(line_span),
+        }
+    }
+
+    /// First top-level declaration in a `.one` design bundle is not `design <model>`.
+    #[must_use]
+    pub(crate) const fn design_header_not_first(cause_span: Span) -> Self {
+        Self {
+            error_offset: cause_span.start().offset,
+            reason: ParserErrorReason::design_header_not_first(cause_span),
+        }
+    }
+
     /// Creates a new `ParserError` for a missing subcomponent in a model path
     pub(crate) fn model_path_missing_subcomponent(dot_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {

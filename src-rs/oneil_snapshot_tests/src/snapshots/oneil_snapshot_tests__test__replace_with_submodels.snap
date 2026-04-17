@@ -1,0 +1,9 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 126
+expression: output
+---
+Model: fixtures/reference_replacement/with_submodels/replace_submodel_eval.on
+Tests: 0/0
+Parameters:
+  result = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(2.6881720430107525)), unit: Unit { dimension_map: DimensionMap({}), magnitude: 1.0, is_db: false, display_unit: Divide(Unit { name: "N", exponent: 1.0 }, Multiply(Unit { name: "kg", exponent: 1.0 }, Divide(Unit { name: "m", exponent: 1.0 }, Unit { name: "s", exponent: 2.0 }))) } })

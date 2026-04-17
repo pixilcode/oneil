@@ -135,6 +135,15 @@ pub struct EvalArgs {
     #[arg(value_name = "FILE", value_parser = parse_model_path, required = true)]
     pub file: Option<ModelPath>,
 
+    /// Path to a design file (.one) to apply to the model
+    ///
+    /// When provided, the design file's parameter overrides and reference
+    /// replacements are applied to the model being evaluated. The design
+    /// file must target the model being evaluated (i.e., contain
+    /// `design <model_name>`).
+    #[arg(long, short = 'd', value_name = "DESIGN", value_parser = parse_design_path)]
+    pub design: Option<ModelPath>,
+
     /// When provided, selects which parameters to print
     ///
     /// The value should be a comma-separated list of parameters. A parameter
@@ -229,6 +238,15 @@ pub struct TestArgs {
     /// Path to the Oneil model file to run tests in
     #[arg(value_name = "FILE", value_parser = parse_model_path)]
     pub file: ModelPath,
+
+    /// Path to a design file (.one) to apply to the model
+    ///
+    /// When provided, the design file's parameter overrides and reference
+    /// replacements are applied to the model being tested. The design
+    /// file must target the model being tested (i.e., contain
+    /// `design <model_name>`).
+    #[arg(long, short = 'd', value_name = "DESIGN", value_parser = parse_design_path)]
+    pub design: Option<ModelPath>,
 
     /// Print submodel test results recursively
     ///
@@ -686,14 +704,30 @@ impl fmt::Display for Variable {
 }
 
 /// Parses a CLI argument into a [`ModelPath`].
-/// Accepts either a path with `.on` extension or a path with no extension.
+/// Accepts a path with `.on` or `.one` extension, or a path with no extension (treated as `.on`).
+///
+/// Design files (`.one`) are accepted because they can be evaluated directly - the `design <model>`
+/// declaration specifies which model to evaluate with the design applied.
 fn parse_model_path(s: &str) -> Result<ModelPath, String> {
     let path = Path::new(s);
     match path.extension().and_then(|e| e.to_str()) {
-        Some("on") => Ok(ModelPath::from_path_with_ext(path)),
+        Some("on" | "one") => Ok(ModelPath::from_path_with_ext(path)),
         None => Ok(ModelPath::from_str_no_ext(s)),
         Some(_) => Err(format!(
-            "path must have `.on` extension or no extension, got {}",
+            "path must have `.on`, `.one`, or no extension, got {}",
+            path.display()
+        )),
+    }
+}
+
+/// Parses a CLI argument into a [`ModelPath`] for a design file.
+/// Accepts a path with `.one` extension only.
+fn parse_design_path(s: &str) -> Result<ModelPath, String> {
+    let path = Path::new(s);
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("one") => Ok(ModelPath::from_path_with_ext(path)),
+        _ => Err(format!(
+            "design file must have `.one` extension, got {}",
             path.display()
         )),
     }

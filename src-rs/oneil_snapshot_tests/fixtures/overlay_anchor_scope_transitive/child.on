@@ -1,0 +1,3 @@
+# Simple child with a single parameter, later overridden by a design to depend on a
+# parent-local parameter whose own RHS references an external reference.
+Base: base = 5

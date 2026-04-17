@@ -1,0 +1,5 @@
+# Direct test of mission with extracted submodel
+use mid_with_matching as propulsion with [inner]
+
+# Performance should be Earth-based
+Earth Mission: result = ratio.propulsion

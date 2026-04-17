@@ -1,4 +1,0 @@
-Length: x = 2 :m
-Double: y = 1 :m
-
-test: x < y

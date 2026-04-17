@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use oneil_eval::{self as eval, IrLoadError};
 use oneil_output::{Unit, Value};
 use oneil_shared::{
+    EvalInstanceKey,
     error::OneilError,
     load_result::LoadResult,
     paths::ModelPath,
@@ -14,6 +15,8 @@ use oneil_shared::{
 };
 #[cfg(feature = "python")]
 use oneil_shared::{paths::PythonPath, symbols::PyFunctionName};
+
+use oneil_resolver as resolver;
 
 use super::Runtime;
 use crate::output::{self, error::RuntimeErrors, ir};
@@ -28,17 +31,24 @@ type EvalModelAndExpressionsResult<'runtime, 'expr> = (
 );
 
 impl Runtime {
-    /// Evaluates a model and returns the result.
+    /// Evaluates a model with an optional design file applied.
+    ///
+    /// When a design path is provided, the design bundle from that file is applied
+    /// to the model being evaluated. The design file must target the model being
+    /// evaluated (i.e., contain `design <model_name>`).
     ///
     /// # Errors
     ///
-    /// Returns [`RuntimeErrors`] (via [`get_model_errors`](super::Runtime::get_model_errors)) if the model could not be evaluated.
+    /// Returns [`RuntimeErrors`] if the model or design file could not be evaluated.
     pub fn eval_model(
         &mut self,
         path: &ModelPath,
+        design_path: Option<&ModelPath>,
     ) -> (Option<output::reference::ModelReference<'_>>, RuntimeErrors) {
-        self.eval_model_internal(path);
+        // Evaluate the model (with optional design) - populates caches
+        self.eval_model_internal(path, design_path);
 
+        // Look up the model reference from cache
         let model_opt = self
             .eval_cache
             .get_entry(path)
@@ -46,13 +56,18 @@ impl Runtime {
             .map(|model| output::reference::ModelReference::new(model, &self.eval_cache));
 
         let include_indirect_errors = true;
+        let mut errors = self.get_model_errors(path, include_indirect_errors);
 
-        let errors = self.get_model_errors(path, include_indirect_errors);
+        // Also include design file errors if present
+        if let Some(design_path) = design_path {
+            let design_errors = self.get_model_errors(design_path, include_indirect_errors);
+            errors.extend(design_errors);
+        }
 
         (model_opt, errors)
     }
 
-    /// Evaluates a model and a list of expressions in the context of
+    /// Evaluates a model (with optional design) and a list of expressions in the context of
     /// the given model and returns the result.
     ///
     /// # Errors
@@ -62,14 +77,16 @@ impl Runtime {
     pub fn eval_model_and_expressions<'runtime, 'expr>(
         &'runtime mut self,
         path: &ModelPath,
+        design_path: Option<&ModelPath>,
         expressions: &'expr [String],
     ) -> EvalModelAndExpressionsResult<'runtime, 'expr> {
-        // evaluate the model and its dependencies
-        self.eval_model_internal(path);
+        // Evaluate the model (with optional design) - populates caches
+        self.eval_model_internal(path, design_path);
 
-        // evaluate the expressions
+        // Evaluate the expressions
         let (expr_results, expr_errors) = self.eval_expressions_internal(expressions, path);
 
+        // Look up the model reference from cache
         let model_opt = self
             .eval_cache
             .get_entry(path)
@@ -79,41 +96,72 @@ impl Runtime {
         let result = model_opt.map(|model| (model, expr_results));
 
         let include_indirect_errors = true;
+        let mut model_errors = self.get_model_errors(path, include_indirect_errors);
 
-        let model_errors = self.get_model_errors(path, include_indirect_errors);
+        // Also include design file errors if present
+        if let Some(design_path) = design_path {
+            let design_errors = self.get_model_errors(design_path, include_indirect_errors);
+            model_errors.extend(design_errors);
+        }
 
         (result, model_errors, expr_errors)
     }
 
-    pub(super) fn eval_model_internal(
-        &mut self,
-        path: &ModelPath,
-    ) -> &LoadResult<output::Model, eval::EvalErrors> {
-        // make sure the IR is loaded for the model and its dependencies
-        // TODO: once caching works, evaluating the model should load the IR as it goes
-        let _ir_results = self.load_ir_internal(path);
+    /// Internal evaluation that populates caches without returning references.
+    fn eval_model_internal(&mut self, path: &ModelPath, design_path: Option<&ModelPath>) {
+        // Load the model IR
+        self.load_ir_internal(path);
 
-        // evaluate the model and its dependencies
-        let eval_result = eval::eval_model(path, self);
+        // If design path provided, load it (without overwriting the target model) and
+        // build a runtime DesignApplication targeting the root model.
+        let runtime_designs: Vec<oneil_ir::DesignApplication> =
+            if let Some(design_path) = design_path {
+                let design_results = resolver::load_model(design_path, self);
+                for (model_path_result, result) in design_results {
+                    // Skip if this is not the design file itself (avoid overwriting target models)
+                    if model_path_result != *design_path {
+                        continue;
+                    }
+                    let (model, model_errors) = result.into_parts();
+                    if model_errors.is_empty() {
+                        self.ir_cache
+                            .insert(model_path_result, LoadResult::success(model));
+                    } else {
+                        self.ir_cache
+                            .insert(model_path_result, LoadResult::partial(model, model_errors));
+                    }
+                }
 
-        for (model_path, maybe_partial) in eval_result {
+                vec![oneil_ir::DesignApplication {
+                    design_path: design_path.clone(),
+                    applied_to: None,
+                    span: oneil_shared::span::Span::empty(oneil_shared::span::SourceLocation {
+                        offset: 0,
+                        line: 1,
+                        column: 1,
+                    }),
+                }]
+            } else {
+                Vec::new()
+            };
+
+        // Evaluate the model and its dependencies
+        let eval_result = eval::eval_model_with_designs(path, &runtime_designs, self);
+
+        for (instance_key, maybe_partial) in eval_result {
             match maybe_partial.into_result() {
                 Ok(model) => {
                     self.eval_cache
-                        .insert(model_path, LoadResult::success(model));
+                        .insert(instance_key.clone(), LoadResult::success(model));
                 }
                 Err(partial) => {
                     self.eval_cache.insert(
-                        model_path,
+                        instance_key,
                         LoadResult::partial(partial.partial_result, partial.error_collection),
                     );
                 }
             }
         }
-
-        self.eval_cache
-            .get_entry(path)
-            .expect("eval_model populates cache for requested path and dependencies")
     }
 
     /// Evaluates a list of expressions in the context of
@@ -230,9 +278,14 @@ impl eval::ExternalEvaluationContext for Runtime {
 
     fn get_preloaded_models(
         &self,
-    ) -> impl Iterator<Item = (ModelPath, &LoadResult<output::Model, eval::EvalErrors>)> {
+    ) -> impl Iterator<
+        Item = (
+            EvalInstanceKey,
+            &LoadResult<output::Model, eval::EvalErrors>,
+        ),
+    > {
         self.eval_cache
             .iter()
-            .map(|(path, result)| (path.clone(), result))
+            .map(|(key, result)| (key.clone(), result))
     }
 }

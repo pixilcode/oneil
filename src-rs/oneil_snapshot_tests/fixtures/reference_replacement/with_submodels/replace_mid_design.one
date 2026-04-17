@@ -1,0 +1,4 @@
+# Replace Earth propulsion with Mars propulsion
+design parent_with_submodel
+
+use mid_with_different as propulsion
