@@ -3,42 +3,36 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts.url = "github:hercules-ci/flake-parts";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = import nixpkgs {
-          inherit system;
-          config.allowUnfree = true;
-        };
-      in
-      {
-        devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            # Rust tools
-            rustc
-            cargo
-            clippy
-            rustfmt
-            rust-analyzer
+  outputs = inputs: inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+    systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+    perSystem = { pkgs, ... }: {
+      devShells.default = pkgs.mkShell {
+        packages = with pkgs; [
+          # Rust tools
+          rustc
+          cargo
+          clippy
+          rustfmt
+          rust-analyzer
 
-            # VSCode extension tools
-            nodejs_20
-            pnpm
-            vsce # "Visual Studio Code Extension Manager"
-          ];
-        };
+          # VSCode extension tools
+          nodejs_20
+          pnpm
+          vsce # "Visual Studio Code Extension Manager"
+        ];
+      };
 
-        packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "oneil";
-          version = "0.16.0";
-          src = ./.;
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
+      packages.default = pkgs.rustPlatform.buildRustPackage {
+        pname = "oneil";
+        version = "0.16.0";
+        src = ./.;
+        cargoLock = {
+          lockFile = ./Cargo.lock;
         };
-      });
+      };
+    };
+  };
 }
-
