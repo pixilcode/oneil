@@ -125,12 +125,20 @@ fn format_model_hover(
     workspace_roots: &[PathBuf],
 ) -> HoverContents {
     let path = path_as_marked_string(model.path().as_path(), workspace_roots);
+    let mut contents = vec![path];
+
+    if let Some(name) = model.name() {
+        contents.push(model_name_as_marked_string(name));
+    }
 
     if let Some(note) = model.note() {
-        let note = note_as_marked_string(note);
-        HoverContents::Array(vec![path, note])
+        contents.push(note_as_marked_string(note));
+    }
+
+    if contents.len() == 1 {
+        HoverContents::Scalar(contents.remove(0))
     } else {
-        HoverContents::Scalar(path)
+        HoverContents::Array(contents)
     }
 }
 
@@ -237,6 +245,13 @@ fn path_as_marked_string(path: &Path, workspace_roots: &[PathBuf]) -> MarkedStri
 
 fn note_as_marked_string(note: &ir::Note) -> MarkedString {
     text_to_markdown_string(note.content())
+}
+
+fn model_name_as_marked_string(name: &ir::ModelName) -> MarkedString {
+    MarkedString::from_language_code(
+        PLAINTEXT_LANG_CODE.to_string(),
+        name.clone().into_string(),
+    )
 }
 
 fn text_to_markdown_string(prose: &str) -> MarkedString {
