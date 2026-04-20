@@ -22,7 +22,7 @@ pub enum Decl {
     /// Model usage declaration for referencing other models
     UseModel(UseModelNode),
 
-    /// Declares that this file is a design bundle for another model (`design <name>`).
+    /// Declares that this file is a design file for another model (`design <name>`).
     DesignTarget(DesignTargetNode),
 
     /// Applies a design file to the current design target or to a specific import (`use design …`).

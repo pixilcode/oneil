@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 /// The extension for ordinary Oneil model files.
 const ON_EXTENSION: &str = "on";
 
-/// The extension for Oneil design bundle files (`use design` targets).
+/// The extension for Oneil design files (`use design` targets).
 const ONE_EXTENSION: &str = "one";
 
 #[must_use]
@@ -94,34 +94,31 @@ impl ModelPath {
         })
     }
 
-    /// Returns `true` when this path uses the `.one` design bundle extension.
+    /// Returns `true` when this path is a `.one` design file.
     #[must_use]
-    pub fn is_design_bundle(&self) -> bool {
+    pub fn is_design_file(&self) -> bool {
         self.0
             .extension()
             .and_then(|e| e.to_str())
             .is_some_and(|s| s == ONE_EXTENSION)
     }
 
+    /// Returns a path for a sibling model relative to the current model's path
+    /// with a `.on` extension.
+    #[must_use]
+    pub fn get_sibling_model_path(&self, sibling_path: Self) -> Self {
+        Self::new(self.join_sibling(sibling_path.into_path_buf()))
+    }
+
     /// Returns a path for a sibling design file relative to the current model's path
     /// with a `.one` extension.
-    ///
-    /// This is similar to `get_sibling_model_path` but for design files.
     ///
     /// # Panics
     ///
     /// Panics if the resulting path does not have a `.one` extension.
     #[must_use]
     pub fn get_sibling_design_path(&self, sibling_path: Self) -> Self {
-        let parent = self.0.parent();
-        let sibling_path = sibling_path.into_path_buf().with_extension(ONE_EXTENSION);
-
-        let joined = if let Some(parent) = parent {
-            parent.join(&sibling_path)
-        } else {
-            sibling_path
-        };
-
+        let joined = self.join_sibling(sibling_path.into_path_buf().with_extension(ONE_EXTENSION));
         Self::try_from(joined.as_path()).unwrap_or_else(|()| {
             panic!(
                 "expected design path with `.{ONE_EXTENSION}` extension, got {}",
@@ -142,31 +139,21 @@ impl ModelPath {
         self.0
     }
 
-    /// Returns a path for a sibling model relative to the current model's path
-    /// with a `.on` extension.
-    #[must_use]
-    pub fn get_sibling_model_path(&self, sibling_path: Self) -> Self {
-        let parent = self.0.parent();
-        let sibling_path = sibling_path.into_path_buf();
-
-        if let Some(parent) = parent {
-            Self::new(parent.join(sibling_path))
-        } else {
-            Self::new(sibling_path)
+    /// Resolves `sibling` relative to the directory that contains this path.
+    ///
+    /// If this path has no parent component (e.g. it is a bare filename), the
+    /// sibling is returned unchanged.
+    fn join_sibling(&self, sibling: PathBuf) -> PathBuf {
+        match self.0.parent() {
+            Some(parent) => parent.join(&sibling),
+            None => sibling,
         }
     }
 
     /// Returns a path for a sibling Python module relative to the current model's path.
     #[must_use]
     pub fn get_sibling_python_path(&self, sibling_path: PythonPath) -> PythonPath {
-        let parent = self.0.parent();
-        let sibling_path = sibling_path.into_path_buf();
-
-        if let Some(parent) = parent {
-            PythonPath::new(parent.join(sibling_path))
-        } else {
-            PythonPath::new(sibling_path)
-        }
+        PythonPath::new(self.join_sibling(sibling_path.into_path_buf()))
     }
 }
 

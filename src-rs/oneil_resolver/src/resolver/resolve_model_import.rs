@@ -445,6 +445,8 @@ mod tests {
 
     /// Asserts that the submodel map contains the expected extracted submodels.
     /// Extracted submodels are those created via `with` clauses.
+    // This is a macro so that assertion failures point to the call site in the
+    // test rather than to a line inside a helper function.
     macro_rules! assert_has_extracted_submodels {
         ($submodel_map:expr, $expected_extractions:expr $(,)?) => {
             let submodel_map: &IndexMap<SubmodelName, ir::SubmodelImport> = $submodel_map;

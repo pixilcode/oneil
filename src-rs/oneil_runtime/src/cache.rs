@@ -173,9 +173,14 @@ impl EvalCache {
         self.entries.insert(key, result);
     }
 
-    /// Removes every cached evaluation whose on-disk model path equals `path`.
-    pub fn remove(&mut self, path: &ModelPath) {
-        self.entries.retain(|key, _| key.model_path != *path);
+    /// Clears all cached evaluations.
+    ///
+    /// The eval cache cannot be selectively invalidated: when any source file
+    /// changes, models that transitively depend on it hold stale results. A full
+    /// clear is the only safe option; re-evaluation is always done fresh by
+    /// [`eval_model_with_designs`](oneil_eval::eval_model_with_designs) anyway.
+    pub fn clear(&mut self) {
+        self.entries.clear();
     }
 
     /// Returns whether the root instance of `path` has a cached entry.

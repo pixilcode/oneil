@@ -153,18 +153,18 @@ fn handle_model_note_failure(
 
 /// Parses top-level declarations after the optional note.
 ///
-/// For `.one` design bundles (when [`Config::allow_design_header`](crate::Config::allow_design_header)
+/// For `.one` design files (when [`Config::require_design_header`](crate::Config::require_design_header)
 /// is set), a `design <model>` line is parsed eagerly before other declarations; whitespace-only
-/// input skips that so an empty bundle still parses.
+/// input skips that so an empty design file still parses.
 fn parse_top_level_decls(input: InputSpan<'_>) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
-    if input.extra.allow_design_header && !input.fragment().chars().all(char::is_whitespace) {
-        parse_design_bundle_decls(input)
+    if input.extra.require_design_header && !input.fragment().chars().all(char::is_whitespace) {
+        parse_design_file_decls(input)
     } else {
         parse_decls_top_level(input)
     }
 }
 
-fn parse_design_bundle_decls(
+fn parse_design_file_decls(
     input: InputSpan<'_>,
 ) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
     match parse_design_target_line(input) {
@@ -187,7 +187,7 @@ fn parse_design_bundle_decls(
     }
 }
 
-/// Parses top-level declarations for ordinary models (and empty design bundles).
+/// Parses top-level declarations for ordinary models (and empty design files).
 fn parse_decls_top_level(input: InputSpan<'_>) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
     parse_decls_recur(input, vec![], vec![], false, false)
 }
@@ -755,11 +755,11 @@ mod tests {
         use super::*;
 
         #[test]
-        fn design_bundle_requires_design_first_declaration() {
+        fn design_file_requires_design_first_declaration() {
             let input = InputSpan::new_extra(
                 "import foo\ndesign bar\n",
                 Config {
-                    allow_design_header: true,
+                    require_design_header: true,
                     ..Config::new()
                 },
             );
@@ -777,23 +777,23 @@ mod tests {
         }
 
         #[test]
-        fn design_bundle_accepts_empty_body() {
+        fn design_file_accepts_empty_body() {
             let input = InputSpan::new_extra(
                 "",
                 Config {
-                    allow_design_header: true,
+                    require_design_header: true,
                     ..Config::new()
                 },
             );
-            parse_complete(input).expect("empty design bundle should parse");
+            parse_complete(input).expect("empty design file should parse");
         }
 
         #[test]
-        fn design_bundle_rejects_duplicate_design() {
+        fn design_file_rejects_duplicate_design() {
             let input = InputSpan::new_extra(
                 "design foo\ndesign bar\n",
                 Config {
-                    allow_design_header: true,
+                    require_design_header: true,
                     ..Config::new()
                 },
             );
@@ -825,7 +825,7 @@ mod tests {
         }
 
         #[test]
-        fn design_header_rejected_without_allow_design_header() {
+        fn design_header_rejected_without_require_design_header() {
             let input = InputSpan::new_extra("design foo\n", Config::default());
             let result = parse_complete(input);
             let Err(nom::Err::Failure(e)) = result else {
@@ -848,7 +848,7 @@ mod tests {
             let input = InputSpan::new_extra(
                 "design foo\n",
                 Config {
-                    allow_design_header: true,
+                    require_design_header: true,
                     ..Config::new()
                 },
             );
@@ -957,18 +957,18 @@ mod tests {
 
             assert_eq!(model.decls().len(), 0);
             assert_eq!(errors.len(), 1);
-            assert_eq!(errors[0].error_offset, 10);
-            match &errors[0].reason {
-                ParserErrorReason::Incomplete {
-                    kind: IncompleteKind::Test(_),
-                    cause,
-                } => {
-                    assert_eq!(cause.start().offset, 0);
-                    assert_eq!(cause.end().offset, 4);
-                }
-                ParserErrorReason::Expect(ExpectKind::Decl) => {}
-                other => panic!("Unexpected reason {other:?}"),
-            }
+            // error_offset points to the token where `:` was expected (`x` at
+            // offset 5 in `"test x > 0\n"`), not somewhere later in the expr.
+            assert_eq!(errors[0].error_offset, 5);
+            let ParserErrorReason::Incomplete {
+                kind: IncompleteKind::Test(_),
+                cause,
+            } = &errors[0].reason
+            else {
+                panic!("Unexpected reason {:?}", errors[0].reason);
+            };
+            assert_eq!(cause.start().offset, 0);
+            assert_eq!(cause.end().offset, 4);
         }
     }
 

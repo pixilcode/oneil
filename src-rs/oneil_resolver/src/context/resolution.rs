@@ -537,7 +537,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     ///
     /// The parameter is visible to variable lookups while the target model is active
     /// but is not persisted into the target model's IR. Design-locals are ultimately
-    /// stored in the design bundle's `parameter_additions`, not on the target itself.
+    /// stored in the design's `parameter_additions`, not on the target itself.
     pub fn register_design_local_parameter(
         &mut self,
         target_model_path: ModelPath,
@@ -580,33 +580,33 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
         ParameterResult::NotFound
     }
 
-    /// Adds a design bundle that augments a reference with new parameters.
+    /// Records a design that augments a reference with new parameters.
     ///
     /// When `use design D for ref` is processed and D has `parameter_additions`,
     /// those parameters become accessible via `ref.param` syntax.
     pub fn add_augmented_reference_to_active_model(
         &mut self,
         reference: ReferenceName,
-        bundle: ir::Design,
+        design: ir::Design,
     ) {
         self.active_model_mut()
-            .add_augmented_reference(reference, bundle);
+            .add_augmented_reference(reference, design);
     }
 
     /// Checks if a parameter is an augmented parameter for a reference in the active model.
     ///
-    /// Returns the design bundle if the parameter is found, None otherwise.
+    /// Returns the augmenting design if the parameter is found, `None` otherwise.
     #[must_use]
     pub fn get_augmented_param_for_reference(
         &self,
         reference_name: &ReferenceName,
         parameter_name: &ParameterName,
     ) -> Option<&ir::Design> {
-        let bundle = self.active_model().get_augmented_design(reference_name)?;
-        bundle
+        let design = self.active_model().get_augmented_design(reference_name)?;
+        design
             .parameter_additions
             .contains_key(parameter_name)
-            .then_some(bundle)
+            .then_some(design)
     }
 
     /// Adds a parameter error to the active model.

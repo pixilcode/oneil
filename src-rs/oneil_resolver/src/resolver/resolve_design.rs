@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// Loads sibling models referenced by `use design` and design reference replacements
-/// so their bundles exist before resolution.
+/// so their IR exists before resolution.
 pub fn preload_design_files<E: ExternalResolutionContext>(
     model_path: &ModelPath,
     model_ast: &ast::Model,
@@ -32,7 +32,7 @@ pub fn preload_design_files<E: ExternalResolutionContext>(
     if let Some(target_path) = collect_design_target_path(model_path, model_ast) {
         super::load_model(&target_path, resolution_context);
     }
-    // Load design bundle files
+    // Load design files
     for path in collect_use_design_paths(model_path, model_ast) {
         super::load_model(&path, resolution_context);
     }
@@ -174,7 +174,7 @@ fn iter_use_designs(model_ast: &ast::Model) -> impl Iterator<Item = &ast::UseDes
 /// This lets design-local parameters reference each other during resolution without
 /// polluting the target model's IR. The scratch entry is only visible to parameter
 /// lookups; the real `ir::Parameter` (with its resolved value) is stored in the
-/// design bundle's `parameter_additions`.
+    /// design's `parameter_additions`.
 fn register_design_local_scratch<E: ExternalResolutionContext>(
     model_path: &ModelPath,
     name: ParameterName,
@@ -374,7 +374,7 @@ fn handle_design_parameter<E: ExternalResolutionContext>(
         resolution_context.push_active_model(&tgt);
     }
     let resolved_value =
-        resolve_parameter::resolve_ast_parameter_value(p.value().deref(), resolution_context);
+        resolve_parameter::resolve_parameter_value(p.value().deref(), resolution_context);
     if pushed {
         resolution_context.pop_active_model(&tgt);
     }
@@ -450,7 +450,7 @@ fn handle_use_design<E: ExternalResolutionContext>(
 ) {
     let relative_path = ud.get_design_relative_path();
     let dpath = model_path.get_sibling_design_path(relative_path);
-    let imported_bundle = match resolution_context.lookup_model(&dpath) {
+    let imported_design = match resolution_context.lookup_model(&dpath) {
         ModelResult::Found(m) => m.design_export().clone(),
         ModelResult::HasError | ModelResult::NotFound => return,
     };
@@ -464,18 +464,18 @@ fn handle_use_design<E: ExternalResolutionContext>(
                 );
                 return;
             }
-            running.merge_later_wins(&imported_bundle);
+            running.merge_later_wins(&imported_design);
         }
         Some(id_node) => {
             let rn = ReferenceName::new(id_node.as_str().to_string());
             let prefix = InstancePath::root().child(rn.clone());
-            running.merge_prefixed(&prefix, &imported_bundle);
+            running.merge_prefixed(&prefix, &imported_design);
 
             // Record augmented params so `ref.new_param` lookups succeed during
             // resolution. The instancing pass consumes them at eval time.
-            if !imported_bundle.parameter_additions.is_empty() {
+            if !imported_design.parameter_additions.is_empty() {
                 resolution_context
-                    .add_augmented_reference_to_active_model(rn, imported_bundle.clone());
+                    .add_augmented_reference_to_active_model(rn, imported_design.clone());
             }
         }
     }

@@ -4,10 +4,11 @@ use oneil_shared::paths::ModelPath;
 /// Options that affect parsing of whole-model input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Config {
-    /// When `true`, a top-level `design <model>` line is accepted (`.one` design bundles).
+    /// When `true`, a top-level `design <model>` line is required (`.one` design bundles).
     ///
-    /// Ordinary `.on` model files keep this `false` so `design` is only available via `use design`.
-    pub allow_design_header: bool,
+    /// Ordinary `.on` model files keep this `false`; encountering a `design` header there
+    /// is an error. `.one` files set this to `true`, so a missing header is also an error.
+    pub require_design_header: bool,
 }
 
 impl Config {
@@ -15,7 +16,7 @@ impl Config {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            allow_design_header: false,
+            require_design_header: false,
         }
     }
 
@@ -23,7 +24,7 @@ impl Config {
     #[must_use]
     pub fn for_model_path(path: &ModelPath) -> Self {
         Self {
-            allow_design_header: path.is_design_bundle(),
+            require_design_header: path.is_design_file(),
         }
     }
 }

@@ -1,6 +1,4 @@
-# Designs, overlays, and imports (Rust Oneil)
-
-This document describes **what the Rust implementation supports** for design parameterizations and model composition. It is the source of truth for this branch.
+# Designs, overlays, and imports
 
 ## Design files and `design`
 
@@ -18,9 +16,9 @@ design sensors/radar
 ```
 
 - The rest of the file is interpreted relative to that **target model** (resolves like a normal model path, relative to this file's location).
-- Parameter lines may use the **shorthand** form `id = expr` (optional `: unit`), without the full preamble (`Label:` …) used in ordinary model files. Metadata (limits, display name, etc.) comes from the target model's IR when the design is applied.
+- Parameter lines use the **shorthand** form `id = expr` (optional `: unit`), without the full preamble (`Label:` …) used in ordinary model files. Metadata (limits, display name, etc.) comes from the target model's definition.
 - **Scoped overrides:** use `param.ref = value` to override a parameter on a nested reference instance (e.g., `thrust.main_engine = 500 :N` overrides `thrust` on the instance bound to `main_engine`).
-- Design files can set parameters that don't exist on the target model; these are silently ignored at evaluation time.
+- Parameters set in a design file that don't exist on the target model are introduced as new parameters on the target at evaluation time (see [parameter additions](#parameter-additions)).
 
 ## Direct evaluation of design files
 
@@ -51,7 +49,7 @@ use design antenna_design for a
 use design balloon_main
 ```
 
-Multiple `use design` lines stack; **later** entries win for the same parameter (same merge idea as layering design files).
+Multiple `use design` lines stack; **later** entries win for the same parameter.
 
 ## Reference replacement in design files
 
@@ -83,7 +81,19 @@ thrust.aux_thruster = 200 :N
 - `main_engine` is the reference alias in the target model (e.g., `use thruster as main_engine`).
 - The value `1000 :N` replaces the evaluated value for the `thrust` parameter on the `main_engine` instance.
 
-This is useful for overriding parameters on submodels without replacing the entire reference.
+## Parameter additions
+
+A design file may introduce parameters that do not exist on the target model:
+
+```oneil
+design cylinder
+
+radius = 3 :m
+diameter = 2 * radius       # new — not on cylinder.on
+circumference = pi * diameter
+```
+
+These parameters are added to the target instance at evaluation time and are accessible from an enclosing model via `new_param.ref` syntax.
 
 ## Submodel replacement vs design overlay
 
@@ -96,16 +106,10 @@ This is useful for overriding parameters on submodels without replacing the enti
 
 ## Evaluation model
 
-- Resolved IR remains **one structure per on-disk model file**.
-- Before evaluation, an **instance graph** is built that walks the model tree
-  once and stamps out one composed instance per `(model_path, instance_path)`.
-  Design composition — overrides, parameter additions, and reference
-  replacements — is performed exclusively in that build pass.
-- **Evaluation** then drives the graph lazily: each parameter starts pending
-  in a memo table and is forced on demand, with cycle detection by
-  re-entrance. External references `alias.param` use `alias` to look up the
-  correct child instance, so the same file imported under two aliases can
-  yield two different evaluated results when overlays differ.
+- Resolved IR keeps one structure per on-disk model file.
+- Before evaluation, an **instance graph** is built that walks the model tree once and stamps out one composed instance per `(model_path, instance_path)`. Design composition — overrides, parameter additions, and reference replacements — is performed exclusively in that build pass.
+- **Evaluation** drives the graph lazily: each parameter starts pending in a memo table and is forced on demand, with cycle detection on re-entrance. External references `alias.param` use `alias` to look up the correct child instance, so the same file imported under two aliases yields two different evaluated results when overlays differ.
 
-See `design-overlays-implementation.md` for the developer-facing implementation
-guide, and [grammar.ebnf](grammar.ebnf) for the formal syntax updates.
+See [`../architecture/design-overlays.md`](../architecture/design-overlays.md) for the
+developer-facing implementation guide, and [grammar.ebnf](grammar.ebnf) for the formal
+syntax.

@@ -155,12 +155,21 @@ fn split_model_ast<'a>(
 
     // In design files, `use model as alias` is a reference replacement, not a regular import.
     // Note: `ref model as alias` is a regular reference declaration, not a replacement.
-    let is_design_file = model_path.is_design_bundle();
+    let is_design_file = model_path.is_design_file();
     let should_skip = |um: &ast::UseModel| -> bool {
         is_design_file && resolve_design::is_reference_replacement(um)
     };
 
-    for decl in model_ast.decls() {
+    let top_level = model_ast
+        .decls()
+        .iter()
+        .map(|d| (d, None));
+    let in_sections = model_ast
+        .sections()
+        .iter()
+        .flat_map(|s| s.decls().iter().map(move |d| (d, Some(s.header().label()))));
+
+    for (decl, section_label) in top_level.chain(in_sections) {
         match &**decl {
             ast::Decl::Import(import) => imports.push(import),
             ast::Decl::UseModel(use_model) if !should_skip(use_model) => {
@@ -168,42 +177,17 @@ fn split_model_ast<'a>(
             }
             ast::Decl::Parameter(parameter) => parameters.push(ParameterWithSection {
                 parameter,
-                section_label: None,
+                section_label,
             }),
             ast::Decl::Test(test) => tests.push(TestWithSection {
                 test,
-                section_label: None,
+                section_label,
             }),
-            // Reference replacement in design file, design declarations - handled by resolve_design_surface
+            // Reference replacements and design declarations are handled by resolve_design_surface.
             ast::Decl::UseModel(_)
             | ast::Decl::DesignTarget(_)
             | ast::Decl::UseDesign(_)
             | ast::Decl::DesignParameter(_) => {}
-        }
-    }
-
-    for section in model_ast.sections() {
-        let section_label = section.header().label();
-        for decl in section.decls() {
-            match &**decl {
-                ast::Decl::Import(import) => imports.push(import),
-                ast::Decl::UseModel(use_model) if !should_skip(use_model) => {
-                    use_models.push(use_model);
-                }
-                ast::Decl::Parameter(parameter) => parameters.push(ParameterWithSection {
-                    parameter,
-                    section_label: Some(section_label),
-                }),
-                ast::Decl::Test(test) => tests.push(TestWithSection {
-                    test,
-                    section_label: Some(section_label),
-                }),
-                // Reference replacement in design file, design declarations - handled by resolve_design_surface
-                ast::Decl::UseModel(_)
-                | ast::Decl::DesignTarget(_)
-                | ast::Decl::UseDesign(_)
-                | ast::Decl::DesignParameter(_) => {}
-            }
         }
     }
 

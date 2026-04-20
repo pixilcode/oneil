@@ -36,7 +36,7 @@ pub fn parse_design_target_complete(input: InputSpan<'_>) -> Result<'_, DeclNode
 /// Parses a declaration at the top level of a model or inside a `section`.
 ///
 /// When `allow_design_shorthand` is `true` (after a successful `design <model>` line in a `.one`
-/// bundle), design-body shorthand lines are parsed before ordinary parameters.
+/// design file), design-body shorthand lines are parsed before ordinary parameters.
 pub fn parse(
     input: InputSpan<'_>,
     allow_design_shorthand: bool,
@@ -67,76 +67,40 @@ fn decl_inner(
     input: InputSpan<'_>,
     allow_design_shorthand: bool,
 ) -> Result<'_, DeclNode, ParserError> {
-    let import_start = input.location_offset();
-    match import_decl.parse(input) {
-        Ok(v) => return Ok(v),
-        Err(nom::Err::Incomplete(n)) => return Err(nom::Err::Incomplete(n)),
-        Err(nom::Err::Error(e)) => {
-            if e.error_offset > import_start {
-                return Err(nom::Err::Error(e));
-            }
-        }
-        Err(nom::Err::Failure(e)) => {
-            if e.error_offset > import_start {
-                return Err(nom::Err::Failure(e));
-            }
-        }
+    // `design …` in body position is always an error (duplicate or wrong file).
+    // Check before `alt` because a successful parse needs to become an error.
+    if let Ok((_, node)) = parse_design_target_line.parse(input) {
+        let err = if input.extra.require_design_header {
+            ParserError::design_header_duplicate(node.span())
+        } else {
+            ParserError::design_header_wrong_file(node.span())
+        };
+        return Err(nom::Err::Error(err));
     }
 
-    match use_design_decl.parse(input) {
-        Ok(v) => return Ok(v),
-        Err(nom::Err::Incomplete(n)) => return Err(nom::Err::Incomplete(n)),
-        Err(nom::Err::Error(_) | nom::Err::Failure(_)) => {}
-    }
-
-    match parse_design_target_line.parse(input) {
-        Ok((_, node)) => {
-            let err = if input.extra.allow_design_header {
-                ParserError::design_header_duplicate(node.span())
-            } else {
-                ParserError::design_header_wrong_file(node.span())
-            };
-            return Err(nom::Err::Error(err));
-        }
-        Err(nom::Err::Incomplete(n)) => return Err(nom::Err::Incomplete(n)),
-        Err(nom::Err::Error(_) | nom::Err::Failure(_)) => {}
-    }
-
-    let use_decl_start = input.location_offset();
-    match use_decl.parse(input) {
-        Ok(v) => return Ok(v),
-        Err(nom::Err::Incomplete(n)) => return Err(nom::Err::Incomplete(n)),
-        Err(nom::Err::Error(e)) => {
-            // If `use`/`ref` matched but the declaration is invalid, propagate the
-            // error — do not fall through to `test`/`parameter`.
-            if e.error_offset > use_decl_start {
-                return Err(nom::Err::Error(e));
-            }
-        }
-        Err(nom::Err::Failure(e)) => {
-            if e.error_offset > use_decl_start {
-                return Err(nom::Err::Failure(e));
-            }
-        }
-    }
-    match test_decl.parse(input) {
-        Ok(v) => return Ok(v),
-        Err(nom::Err::Incomplete(n)) => return Err(nom::Err::Incomplete(n)),
-        Err(nom::Err::Error(_) | nom::Err::Failure(_)) => {}
-    }
-
+    // `alt` tries each parser in order. Sub-parsers use `or_fail_with` to
+    // convert `Error → Failure` once they have consumed their leading keyword,
+    // which stops `alt` from trying further alternatives on a committed branch.
     if allow_design_shorthand {
-        // Then try design parameter (`id = value` or `id.instance = value`)
-        match design_parameter_decl.parse(input) {
-            Ok(v) => return Ok(v),
-            Err(nom::Err::Incomplete(n)) => return Err(nom::Err::Incomplete(n)),
-            Err(nom::Err::Error(_) | nom::Err::Failure(_)) => {}
-        }
-    }
-
-    parameter_decl
-        .convert_error_to(ParserError::expect_decl)
+        alt((
+            import_decl,
+            use_design_decl,
+            use_decl,
+            test_decl,
+            design_parameter_decl,
+            parameter_decl.convert_error_to(ParserError::expect_decl),
+        ))
         .parse(input)
+    } else {
+        alt((
+            import_decl,
+            use_design_decl,
+            use_decl,
+            test_decl,
+            parameter_decl.convert_error_to(ParserError::expect_decl),
+        ))
+        .parse(input)
+    }
 }
 
 /// Parses an import declaration
@@ -167,7 +131,7 @@ fn import_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
     Ok((rest, decl_node))
 }
 
-/// Parses a top-level `design [path/to/]<model>` line (`.one` design bundles and wrong-file probe on `.on`).
+/// Parses a top-level `design [path/to/]<model>` line (`.one` design files and wrong-file probe on `.on`).
 pub fn parse_design_target_line(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
     let (rest, design_token) = design.convert_errors().parse(input)?;
 

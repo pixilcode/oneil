@@ -33,7 +33,7 @@ type EvalModelAndExpressionsResult<'runtime, 'expr> = (
 impl Runtime {
     /// Evaluates a model with an optional design file applied.
     ///
-    /// When a design path is provided, the design bundle from that file is applied
+    /// When a design path is provided, the design from that file is applied
     /// to the model being evaluated. The design file must target the model being
     /// evaluated (i.e., contain `design <model_name>`).
     ///

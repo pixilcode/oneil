@@ -36,8 +36,10 @@ impl Runtime {
         if let Ok(model_path) = ModelPath::try_from(path.clone()) {
             self.ast_cache.remove(&model_path);
             self.ir_cache.remove(&model_path);
-            self.eval_cache.remove(&model_path);
         }
+        // Any file change can invalidate transitive dependents, so the entire
+        // eval cache must be cleared rather than just the changed path's entries.
+        self.eval_cache.clear();
 
         #[cfg(feature = "python")]
         if let Ok(python_path) = PythonPath::try_from(path.clone()) {
