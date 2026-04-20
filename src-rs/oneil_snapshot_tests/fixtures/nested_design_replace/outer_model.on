@@ -1,0 +1,4 @@
+# Wraps inner_model so we can apply nested designs through `r`.
+use inner_model as r
+
+Outer gravity: g_outer = g_local.r :m/s^2

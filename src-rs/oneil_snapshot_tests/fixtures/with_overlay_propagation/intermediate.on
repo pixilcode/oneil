@@ -1,0 +1,8 @@
+# Intermediate model that owns the deep child as a submodel and exposes
+# parameters that forward / derive from it. The parent reads these to peek
+# at the deep child *through* the intermediate, which must agree with the
+# parent's own with-extracted view.
+use child as inner
+
+Forwarded inner: forwarded = value.inner
+Doubled inner value: doubled = 2 * value.inner

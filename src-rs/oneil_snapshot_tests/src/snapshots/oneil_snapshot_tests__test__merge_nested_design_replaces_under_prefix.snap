@@ -1,0 +1,8 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+expression: output
+---
+Model: fixtures/nested_design_replace/eval.on
+Tests: 0/0
+Parameters:
+  result = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(3.72)), unit: Unit { dimension_map: DimensionMap({Distance: 1.0, Time: -2.0}), magnitude: 1.0, is_db: false, display_unit: Divide(Unit { name: "m", exponent: 1.0 }, Unit { name: "s", exponent: 2.0 }) } })

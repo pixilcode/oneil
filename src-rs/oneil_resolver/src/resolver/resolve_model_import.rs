@@ -28,12 +28,14 @@ pub fn resolve_model_imports<E>(
 
         let (reference_name, reference_name_span) =
             get_reference_name_and_span(model_import.model_info());
-        let (submodel_name, submodel_name_span) =
-            get_submodel_name_and_span(model_import.model_info());
+        // The "source name" carried on the `SubmodelImport` for diagnostics
+        // is the model file name as written (`foo` in `use foo as bar`).
+        let (source_name, source_name_span) =
+            get_source_name_and_span(model_import.model_info());
 
         let is_submodel = model_import.model_kind() == ast::ModelKind::Submodel;
 
-        // check for duplicates
+        // check for duplicates — both maps key by the alias (reference name).
         let maybe_reference_duplicate_error = resolution_context
             .get_reference_from_active_model(&reference_name)
             .map(|original_reference| {
@@ -44,22 +46,27 @@ pub fn resolve_model_imports<E>(
                 )
             });
 
-        let maybe_submodel_duplicate_error = resolution_context
-            .get_submodel_from_active_model(&submodel_name)
-            .map(|original_submodel| {
-                ModelImportResolutionError::duplicate_submodel(
-                    submodel_name.clone(),
-                    *original_submodel.name_span(),
-                    submodel_name_span,
-                )
-            });
+        let maybe_submodel_duplicate_error = is_submodel
+            .then(|| {
+                resolution_context
+                    .get_submodel_from_active_model(&reference_name)
+                    .map(|original_submodel| {
+                        ModelImportResolutionError::duplicate_submodel(
+                            SubmodelName::from(reference_name.as_str()),
+                            *original_submodel.name_span(),
+                            reference_name_span,
+                        )
+                    })
+            })
+            .flatten();
 
         let had_duplicate = maybe_reference_duplicate_error.is_some()
-            || (is_submodel && maybe_submodel_duplicate_error.is_some());
+            || maybe_submodel_duplicate_error.is_some();
 
         // handle duplicate references
         if let Some(reference_duplicate_error) = maybe_reference_duplicate_error {
-            let submodel_name = (is_submodel).then(|| submodel_name.clone());
+            let submodel_name =
+                is_submodel.then(|| SubmodelName::from(reference_name.as_str()));
             resolution_context.add_model_import_resolution_error_to_active_model(
                 reference_name.clone(),
                 submodel_name,
@@ -71,7 +78,7 @@ pub fn resolve_model_imports<E>(
         if let Some(submodel_duplicate_error) = maybe_submodel_duplicate_error {
             resolution_context.add_model_import_resolution_error_to_active_model(
                 reference_name.clone(),
-                Some(submodel_name.clone()),
+                Some(SubmodelName::from(reference_name.as_str())),
                 submodel_duplicate_error,
             );
         }
@@ -83,10 +90,9 @@ pub fn resolve_model_imports<E>(
 
         // resolve the path for the use model
         let subcomponents = model_import.model_info().subcomponents();
-        let model_name_span = submodel_name_span;
         let resolved_path = resolve_model_path(
             import_path,
-            model_name_span,
+            reference_name_span,
             subcomponents,
             resolution_context,
         );
@@ -95,12 +101,16 @@ pub fn resolve_model_imports<E>(
         let resolved_path = match resolved_path {
             Ok(resolved_path) => resolved_path,
             Err(error) => {
+                // Errors continue to surface the alias under the
+                // `Option<SubmodelName>` slot for stability with existing
+                // diagnostics — the alias is what the user typed at this
+                // declaration site.
                 handle_resolution_error(
                     *error,
                     model_import,
-                    reference_name,
-                    submodel_name,
-                    submodel_name_span,
+                    reference_name.clone(),
+                    SubmodelName::from(reference_name.as_str()),
+                    reference_name_span,
                     is_submodel,
                     resolution_context,
                 );
@@ -109,12 +119,12 @@ pub fn resolve_model_imports<E>(
             }
         };
 
-        // add the submodel to the active model if it's a submodel
+        // add the submodel to the active model if it's a submodel — keyed by alias.
         if is_submodel {
             resolution_context.add_submodel_to_active_model(
-                submodel_name,
-                submodel_name_span,
                 reference_name.clone(),
+                source_name,
+                source_name_span,
             );
         }
 
@@ -158,8 +168,9 @@ fn resolve_extracted_submodels<E>(
         let mut submodel_subcomponents = submodel_info.subcomponents().to_vec();
         submodel_subcomponents.insert(0, submodel_info.top_component().clone());
 
-        // get the reference name for the extracted submodel
+        // get the reference name (alias) for the extracted submodel
         let (reference_name, reference_name_span) = get_reference_name_and_span(submodel_info);
+        let (source_name, source_name_span) = get_source_name_and_span(submodel_info);
 
         // check for duplicate references
         let maybe_original_reference =
@@ -190,17 +201,19 @@ fn resolve_extracted_submodels<E>(
 
         match resolved_reference_path {
             Ok(resolved_path) => {
-                // Convert IdentifierNodes to SubmodelNames for the path
-                let submodel_path: Vec<SubmodelName> = submodel_subcomponents
+                // The navigation path is a chain of *aliases* — each segment
+                // resolves through the corresponding parent's reference map at
+                // eval time, picking up any per-instance reference replacements.
+                let submodel_path: Vec<ReferenceName> = submodel_subcomponents
                     .iter()
-                    .map(|id| SubmodelName::from(id.as_str()))
+                    .map(|id| ReferenceName::from(id.as_str()))
                     .collect();
 
-                // Add SubmodelImport with relative path (for eval-time re-resolution)
-                let submodel_name = SubmodelName::from(reference_name.as_str());
+                // Register the extraction on the submodel map keyed by alias.
                 resolution_context.add_extracted_submodel_to_active_model(
-                    submodel_name,
-                    reference_name_span,
+                    reference_name.clone(),
+                    source_name,
+                    source_name_span,
                     parent_reference_name.clone(),
                     submodel_path,
                 );
@@ -223,10 +236,13 @@ fn resolve_extracted_submodels<E>(
     }
 }
 
-fn get_submodel_name_and_span(model_info: &ast::ModelInfo) -> (SubmodelName, Span) {
-    // Use get_alias() to get the effective name (alias if provided, else model name)
-    // This ensures `use foo as bar` creates submodel "bar", not "foo"
-    let model_name = model_info.get_alias();
+/// Returns the source-level model name and its span — the `foo` in
+/// `use foo as bar` (or just `foo` when no alias is given). This is the value
+/// stored on `SubmodelImport.name` for diagnostics; the *map key* on the
+/// owning model is the alias (a `ReferenceName`), produced separately by
+/// [`get_reference_name_and_span`].
+fn get_source_name_and_span(model_info: &ast::ModelInfo) -> (SubmodelName, Span) {
+    let model_name = model_info.get_model_name();
     let name = SubmodelName::from(model_name.as_str());
     let span = model_name.span();
     (name, span)
@@ -290,17 +306,19 @@ where
         return Ok(model_path);
     }
 
-    let submodel_name = SubmodelName::from(model_subcomponents[0].as_str());
-    let submodel_name_span = model_subcomponents[0].span();
+    // Submodels are keyed by alias (= reference name) on the model, so we
+    // navigate dotted paths by alias as well.
+    let alias = ReferenceName::from(model_subcomponents[0].as_str());
+    let alias_span = model_subcomponents[0].span();
     let submodel_reference = model
-        .get_submodel_reference(&submodel_name)
+        .get_submodel_reference(&alias)
         .ok_or_else(|| {
-            let best_match = get_best_match_submodel_name_in_model(model, &submodel_name);
+            let best_match = get_best_match_submodel_alias_in_model(model, &alias);
 
             ModelImportResolutionError::undefined_submodel_in_submodel(
                 model_path,
-                submodel_name,
-                submodel_name_span,
+                SubmodelName::from(alias.as_str()),
+                alias_span,
                 best_match,
             )
         })?
@@ -310,23 +328,23 @@ where
 
     resolve_model_path(
         submodel_reference.path().clone(),
-        submodel_name_span,
+        alias_span,
         submodel_subcomponents,
         resolution_context,
     )
 }
 
-fn get_best_match_submodel_name_in_model(
+fn get_best_match_submodel_alias_in_model(
     model: &ir::Model,
-    submodel_name: &SubmodelName,
+    alias: &ReferenceName,
 ) -> Option<String> {
-    let submodels: Vec<&str> = model
+    let aliases: Vec<&str> = model
         .get_submodels()
         .keys()
-        .map(SubmodelName::as_str)
+        .map(ReferenceName::as_str)
         .collect();
 
-    search(submodel_name.as_str(), &submodels)
+    search(alias.as_str(), &aliases)
         .and_then(|result| result.some_if_within_distance(MAX_BEST_MATCH_DISTANCE))
         .map(String::from)
 }
@@ -398,10 +416,10 @@ mod tests {
 
     /// Asserts that the submodel map contains exactly the expected direct submodels.
     /// Direct submodels are those with empty `submodel_path` (not extracted via `with`).
-    /// Uses the reference map to resolve each submodel's path via its reference name.
+    /// The submodel map is keyed by alias (= reference name).
     macro_rules! assert_has_submodels {
         ($submodel_map:expr, $reference_map:expr, $expected_submodels:expr $(,)?) => {
-            let submodel_map: &IndexMap<SubmodelName, ir::SubmodelImport> = $submodel_map;
+            let submodel_map: &IndexMap<ReferenceName, ir::SubmodelImport> = $submodel_map;
             let reference_map: &IndexMap<ReferenceName, ir::ReferenceImport> = $reference_map;
             let expected_submodels: Vec<(&'static str, &ModelPath)> =
                 $expected_submodels.into_iter().collect();
@@ -419,15 +437,15 @@ mod tests {
                 "length of *actual* direct submodel map differs from *expected* submodel map",
             );
 
-            for (submodel_name, expected_path) in expected_submodels {
-                let submodel_name = SubmodelName::from(submodel_name);
-                let submodel_import = submodel_map.get(&submodel_name).expect(
-                    format!("did not find submodel for '{}'", submodel_name.as_str()).as_str(),
+            for (alias, expected_path) in expected_submodels {
+                let alias = ReferenceName::from(alias);
+                let submodel_import = submodel_map.get(&alias).expect(
+                    format!("did not find submodel for '{}'", alias.as_str()).as_str(),
                 );
                 assert!(
                     !submodel_import.is_extracted(),
                     "expected '{}' to be a direct submodel, not extracted",
-                    submodel_name.as_str()
+                    alias.as_str()
                 );
                 let reference_import = reference_map
                     .get(submodel_import.reference_name())
@@ -437,19 +455,20 @@ mod tests {
                     reference_import.path(),
                     expected_path,
                     "actual submodel path for '{}' differs from expected",
-                    submodel_name.as_str(),
+                    alias.as_str(),
                 );
             }
         };
     }
 
     /// Asserts that the submodel map contains the expected extracted submodels.
-    /// Extracted submodels are those created via `with` clauses.
+    /// Extracted submodels are those created via `with` clauses; each segment
+    /// of the navigation path is an alias (= reference name).
     // This is a macro so that assertion failures point to the call site in the
     // test rather than to a line inside a helper function.
     macro_rules! assert_has_extracted_submodels {
         ($submodel_map:expr, $expected_extractions:expr $(,)?) => {
-            let submodel_map: &IndexMap<SubmodelName, ir::SubmodelImport> = $submodel_map;
+            let submodel_map: &IndexMap<ReferenceName, ir::SubmodelImport> = $submodel_map;
             let expected_extractions: Vec<(&'static str, &'static str, Vec<&'static str>)> =
                 $expected_extractions.into_iter().collect();
 
@@ -466,25 +485,25 @@ mod tests {
                 "length of *actual* extracted submodel map differs from *expected*",
             );
 
-            for (submodel_name, parent_ref, expected_path) in expected_extractions {
-                let submodel_name = SubmodelName::from(submodel_name);
-                let submodel_import = submodel_map.get(&submodel_name).expect(
+            for (alias, parent_ref, expected_path) in expected_extractions {
+                let alias = ReferenceName::from(alias);
+                let submodel_import = submodel_map.get(&alias).expect(
                     format!(
                         "did not find extracted submodel '{}'",
-                        submodel_name.as_str()
+                        alias.as_str()
                     )
                     .as_str(),
                 );
                 assert!(
                     submodel_import.is_extracted(),
                     "expected '{}' to be an extracted submodel",
-                    submodel_name.as_str()
+                    alias.as_str()
                 );
                 assert_eq!(
                     submodel_import.reference_name().as_str(),
                     parent_ref,
                     "parent reference for '{}' differs from expected",
-                    submodel_name.as_str()
+                    alias.as_str()
                 );
                 let actual_path: Vec<&str> = submodel_import
                     .submodel_path()
@@ -495,7 +514,7 @@ mod tests {
                     actual_path,
                     expected_path,
                     "submodel_path for '{}' differs from expected",
-                    submodel_name.as_str()
+                    alias.as_str()
                 );
             }
         };

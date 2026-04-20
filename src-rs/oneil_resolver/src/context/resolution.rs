@@ -385,39 +385,50 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
             .add_reference(reference_name, import);
     }
 
-    /// Adds a submodel to the active model.
+    /// Adds a direct submodel to the active model.
+    ///
+    /// `alias` is the alias used to refer to the submodel (`bar` in
+    /// `use foo as bar`); it becomes the map key on the model. `source_name`
+    /// is the source-level model name (`foo`), stored on the `SubmodelImport`
+    /// for diagnostics and the runtime API.
     pub fn add_submodel_to_active_model(
         &mut self,
-        submodel_name: SubmodelName,
-        submodel_name_span: Span,
-        reference_name: ReferenceName,
+        alias: ReferenceName,
+        source_name: SubmodelName,
+        source_name_span: Span,
     ) {
-        let import =
-            ir::SubmodelImport::new(submodel_name.clone(), submodel_name_span, reference_name);
+        let import = ir::SubmodelImport::new(source_name, source_name_span, alias.clone());
 
-        self.active_model_mut().add_submodel(submodel_name, import);
+        self.active_model_mut().add_submodel(alias, import);
     }
 
     /// Adds an extracted submodel (from a `with` clause) to the active model.
     ///
-    /// Unlike direct submodels, extracted submodels store a relative path within the
-    /// parent reference that is resolved at evaluation time, allowing design replacements
-    /// to properly propagate.
+    /// Unlike direct submodels, extracted submodels store a chain of *aliases*
+    /// (reference names) within the parent reference that is resolved at
+    /// evaluation time, allowing design replacements to properly propagate.
+    ///
+    /// `alias` is the alias under which this extraction is exposed (`g` in
+    /// `with [grav as g]` or just `grav`); it is the map key on the model.
+    /// `source_name` is the leaf identifier as written in source (`grav`),
+    /// kept for diagnostics. `submodel_path` is the chain of aliases to walk
+    /// inside the parent reference at eval time.
     pub fn add_extracted_submodel_to_active_model(
         &mut self,
-        submodel_name: SubmodelName,
-        submodel_name_span: Span,
+        alias: ReferenceName,
+        source_name: SubmodelName,
+        source_name_span: Span,
         parent_reference: ReferenceName,
-        submodel_path: Vec<SubmodelName>,
+        submodel_path: Vec<ReferenceName>,
     ) {
         let import = ir::SubmodelImport::extracted(
-            submodel_name.clone(),
-            submodel_name_span,
+            source_name,
+            source_name_span,
             parent_reference,
             submodel_path,
         );
 
-        self.active_model_mut().add_submodel(submodel_name, import);
+        self.active_model_mut().add_submodel(alias, import);
     }
 
     /// Gets a reference from the active model.
@@ -429,13 +440,13 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
         self.active_model().get_references().get(reference_name)
     }
 
-    /// Gets a submodel from the active model.
+    /// Gets a submodel from the active model by its alias (= reference name).
     #[must_use]
     pub fn get_submodel_from_active_model(
         &self,
-        submodel_name: &SubmodelName,
+        alias: &ReferenceName,
     ) -> Option<&ir::SubmodelImport> {
-        self.active_model().get_submodels().get(submodel_name)
+        self.active_model().get_submodels().get(alias)
     }
 
     /// Returns the resolved references for the active model.
@@ -696,9 +707,9 @@ impl<E: ExternalResolutionContext> ResolutionContext<'_, E> {
         self.active_model_errors().get_parameter_resolution_errors()
     }
 
-    /// Returns the resolved submodels for the active model.
+    /// Returns the resolved submodels for the active model, keyed by alias.
     #[must_use]
-    pub fn get_active_model_submodels(&self) -> &IndexMap<SubmodelName, ir::SubmodelImport> {
+    pub fn get_active_model_submodels(&self) -> &IndexMap<ReferenceName, ir::SubmodelImport> {
         self.active_model().get_submodels()
     }
 

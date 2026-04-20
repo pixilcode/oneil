@@ -314,25 +314,15 @@ fn get_parameter_from_model<'runtime>(
             return model_ref.parameters().get(parameter.as_str()).map(|p| &**p);
         };
 
-        // check if the submodel is a reference or a submodel
-        // NOTE: although all submodels are also references, we need to check both since
-        //       the submodel name might be different from the reference name
+        // The references map is keyed by alias (= reference name) and
+        // already covers every submodel import — both `use` direct submodels
+        // and `with`-extracted ones — so a single alias-based lookup is all
+        // we need.
         let references = model_ref.references();
-        let submodels = model_ref.submodels();
         let model = references
             .iter()
             .find(|(name, _)| name.as_str() == submodel.as_str())
-            .map(|(_, m)| *m)
-            .or_else(|| {
-                let (_, ref_name) = submodels
-                    .iter()
-                    .find(|(name, _)| name.as_str() == submodel.as_str())?;
-
-                references
-                    .iter()
-                    .find(|(name, _)| *name == ref_name)
-                    .map(|(_, m)| *m)
-            })?;
+            .map(|(_, m)| *m)?;
 
         recurse(model, parameter, param_vec)
     }

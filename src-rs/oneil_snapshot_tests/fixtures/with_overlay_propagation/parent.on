@@ -1,0 +1,10 @@
+# Parent uses `with [inner]` to extract the deep child out of `mid`. After
+# the instance-graph fix, `parent.inner` and `parent.mid.inner` point at the
+# *same* instance, so an overlay applied through `inner` is visible from the
+# `mid` side as well — observed indirectly here through `mid`'s own
+# parameters that read `value.inner`.
+use intermediate as mid with [inner]
+
+Direct from inner: direct = value.inner
+Forwarded via mid: via_mid = forwarded.mid
+Doubled via mid: doubled_mid = doubled.mid

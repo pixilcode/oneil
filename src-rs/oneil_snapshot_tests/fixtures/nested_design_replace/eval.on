@@ -1,0 +1,7 @@
+# Applies `outer_design` to `outer_model`. The design pulls `inner_design`
+# in under `r`, so `inner_design`'s replacement of `planet` reaches
+# `out.r.planet` and `g_outer` reads Mars gravity (3.72 m/s^2).
+use outer_model as out
+use design outer_design for out
+
+Result: result = g_outer.out :m/s^2

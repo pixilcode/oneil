@@ -105,13 +105,15 @@ pub fn find_symbol_at_offset(
         }
     }
 
-    // Check if cursor is on a submodel import name
-    for (submodel_name, submodel_import) in model.submodel_models() {
+    // Check if cursor is on a submodel import name. The submodel map is keyed
+    // by alias (= reference name); the underlying source-level model name
+    // surfaced to the LSP comes from the `SubmodelImport.name()` field.
+    for (_alias, submodel_import) in model.submodel_models() {
         if span_contains_offset(*submodel_import.name_span(), offset) {
             let submodel_path = submodel_import.reference_import().path().clone();
 
             return Some(SymbolAtPosition::ModelImportDefinition {
-                name: ModelImportName::Submodel(submodel_name.clone()),
+                name: ModelImportName::Submodel(submodel_import.name().clone()),
                 path: submodel_path,
                 span: *submodel_import.name_span(),
             });

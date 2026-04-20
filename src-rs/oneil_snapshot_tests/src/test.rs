@@ -167,6 +167,24 @@ fn extract_through_replaced_parent() {
     insta::assert_snapshot!(output);
 }
 
+#[test]
+fn with_overlay_propagation() {
+    // A `with [inner]` clause aliases the extracted submodel onto the same
+    // instance as the deeper child it was lifted from — `parent.inner` and
+    // `parent.mid.inner` are two reference-name aliases for one
+    // `EvalInstanceKey`. An overlay setting `value.inner = 99` on the parent
+    // must therefore land on that single shared instance, so all three reads
+    // observe the overridden value:
+    //   direct      = value.inner      = 99
+    //   via_mid     = value.mid.inner  = 99   (same instance reached via mid)
+    //   doubled_mid = doubled.mid      = 198  (mid's own param reads inner)
+    let model = fixture_path("with_overlay_propagation/parent.on");
+    let design = fixture_path("with_overlay_propagation/overlay.one");
+    let output =
+        run_model_and_format_with_design(&model, Some(&design), Some(manifest_dir().as_path()));
+    insta::assert_snapshot!(output);
+}
+
 // =============================================================================
 // Design Merge Tests
 // =============================================================================
@@ -175,6 +193,30 @@ fn extract_through_replaced_parent() {
 fn merge_use_design_without_for() {
     // use design file (without for) to merge designs
     let path = fixture_path("use_design_merge/use_design_nofor_parent.on");
+    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn merge_nested_design_replaces_under_prefix() {
+    // When an outer design declares `use design Y for r` and `Y` declares a
+    // reference replacement, that replacement targets `r`'s reference (not
+    // the outer model's). Here `inner_design` replaces `inner_model.planet`
+    // with Mars; pulled in under `r` from `outer_design`, it must reach
+    // `out.r.planet` and produce Mars gravity (3.72 m/s^2).
+    let path = fixture_path("nested_design_replace/eval.on");
+    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn merge_propagates_parameter_additions() {
+    // When one design inherits another via `use design Y` (no `for`, same
+    // target), `Y`'s `parameter_additions` are visible to the consumer's own
+    // overlays. Here the consumer overrides `output = derived` where
+    // `derived` is added by the imported design, so the override resolves to
+    // `2 * base = 10` at eval time.
+    let path = fixture_path("design_addition_propagation/eval.on");
     let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
     insta::assert_snapshot!(output);
 }

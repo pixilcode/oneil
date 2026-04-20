@@ -10,7 +10,7 @@ use oneil_shared::{
     span::Span,
     symbols::{
         BuiltinFunctionName, BuiltinValueName, ParameterName, PyFunctionName, ReferenceName,
-        SubmodelName, TestIndex, UnitBaseName, UnitPrefix,
+        TestIndex, UnitBaseName, UnitPrefix,
     },
 };
 
@@ -92,7 +92,10 @@ enum ParamSlot {
 #[derive(Debug, Clone)]
 struct ModelInProgress {
     parameters: IndexMap<ParameterName, ParamSlot>,
-    submodels: IndexMap<SubmodelName, ReferenceName>,
+    /// Aliases of submodel imports on this instance (= subset of `references`
+    /// keys). Carried through so the output model can preserve the
+    /// submodel/reference distinction declared in source.
+    submodels: IndexSet<ReferenceName>,
     references: IndexMap<ReferenceName, EvalInstanceKey>,
     references_with_errors: IndexSet<EvalInstanceKey>,
     tests: IndexMap<TestIndex, Result<output::Test, Vec<EvalError>>>,
@@ -104,7 +107,7 @@ impl ModelInProgress {
     pub fn new() -> Self {
         Self {
             parameters: IndexMap::new(),
-            submodels: IndexMap::new(),
+            submodels: IndexSet::new(),
             references: IndexMap::new(),
             references_with_errors: IndexSet::new(),
             tests: IndexMap::new(),

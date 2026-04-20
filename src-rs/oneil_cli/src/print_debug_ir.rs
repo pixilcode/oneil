@@ -8,7 +8,7 @@ use oneil_runtime::output::{
 };
 use oneil_shared::{
     paths::PythonPath,
-    symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex},
+    symbols::{ParameterName, ReferenceName, TestIndex},
 };
 
 use crate::stylesheet::debug as dbg_style;
@@ -252,12 +252,15 @@ fn print_python_imports(imports: &IndexMap<PythonPath, ir::PythonImport>, indent
     }
 }
 
-/// Prints submodels, showing the reference path each submodel refers to.
+/// Prints submodels, showing the source-level model name behind each alias.
+///
+/// The map is keyed by alias (= reference name); the source-level model name
+/// (e.g., the `foo` in `use foo as bar`) is taken from `SubmodelImport.name`.
 fn print_submodels(
-    submodels: &IndexMap<&SubmodelName, SubmodelImportReference<'_>>,
+    submodels: &IndexMap<&ReferenceName, SubmodelImportReference<'_>>,
     indent: usize,
 ) {
-    for (i, (identifier, submodel)) in submodels.iter().enumerate() {
+    for (i, (alias, submodel)) in submodels.iter().enumerate() {
         let is_last = i == submodels.len() - 1;
         let prefix = if is_last { "└──" } else { "├──" };
         println!(
@@ -265,8 +268,8 @@ fn print_submodels(
             "    ".repeat(indent),
             dbg_style::TREE.style(prefix),
             dbg_style::LABEL.style("Submodel:"),
-            dbg_style::IDENTIFIER.style(identifier.as_str()),
-            dbg_style::IDENTIFIER.style(submodel.reference_name().as_str())
+            dbg_style::IDENTIFIER.style(alias.as_str()),
+            dbg_style::IDENTIFIER.style(submodel.name().as_str())
         );
     }
 }

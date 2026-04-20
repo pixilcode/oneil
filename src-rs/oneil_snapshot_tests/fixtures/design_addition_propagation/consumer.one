@@ -1,0 +1,7 @@
+# Inherits `addition.one` (no `for`, same target) and uses the `derived`
+# parameter it adds to redirect `output`.
+design target
+
+use design addition
+
+output = derived

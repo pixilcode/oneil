@@ -6,7 +6,7 @@
 //! [`ResolutionErrorReference`] for inspecting resolution failures.
 
 use crate::output;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use oneil_ir as ir;
 use oneil_shared::{
     paths::{ModelPath, PythonPath},
@@ -39,17 +39,14 @@ impl<'runtime> ModelReference<'runtime> {
         &self.model.path
     }
 
-    /// Returns a map of submodel names to their model references or evaluation errors.
+    /// Returns the set of aliases declared as submodels on this model.
     ///
-    /// # Panics
-    ///
-    /// Panics if any submodel has not been visited and
-    /// added to the model collection. This should never be
-    /// the case as long as creating the `EvalResult`
-    /// resolves successfully.
+    /// Each alias is also a key in [`Self::references`]. The set is provided
+    /// so consumers can preserve the submodel-vs-reference distinction
+    /// declared in source.
     #[must_use]
-    pub fn submodels(&self) -> IndexMap<&'runtime SubmodelName, &'runtime ReferenceName> {
-        self.model.submodels.iter().collect()
+    pub const fn submodels(&self) -> &'runtime IndexSet<ReferenceName> {
+        &self.model.submodels
     }
 
     /// Returns a map of reference names to their model references or evaluation errors.
@@ -145,17 +142,19 @@ impl<'runtime> ModelIrReference<'runtime> {
         self.model.note()
     }
 
-    /// Returns a map of submodel names to their `SubmodelImport`s.
+    /// Returns a map of submodel aliases (= reference names) to their
+    /// `SubmodelImport`s.
     ///
     /// If you need the model reference itself, use `submodel_models` instead.
     #[must_use]
     pub fn submodel_imports(
         &self,
-    ) -> IndexMap<&'runtime SubmodelName, &'runtime ir::SubmodelImport> {
+    ) -> IndexMap<&'runtime ReferenceName, &'runtime ir::SubmodelImport> {
         self.model.get_submodels().iter().collect()
     }
 
-    /// Returns a map of submodel names to their IR model references.
+    /// Returns a map of submodel aliases (= reference names) to their IR
+    /// model references.
     ///
     /// # Panics
     ///
@@ -164,13 +163,13 @@ impl<'runtime> ModelIrReference<'runtime> {
     #[must_use]
     pub fn submodel_models(
         &self,
-    ) -> IndexMap<&'runtime SubmodelName, SubmodelImportReference<'runtime>> {
+    ) -> IndexMap<&'runtime ReferenceName, SubmodelImportReference<'runtime>> {
         self.model
             .get_submodels()
             .iter()
-            .map(|(name, submodel_import)| {
+            .map(|(alias, submodel_import)| {
                 (
-                    name,
+                    alias,
                     SubmodelImportReference::new(
                         submodel_import,
                         self.ir_cache,

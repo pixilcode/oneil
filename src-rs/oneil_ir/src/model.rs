@@ -3,7 +3,7 @@
 use indexmap::IndexMap;
 use oneil_shared::{
     paths::{ModelPath, PythonPath},
-    symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex},
+    symbols::{ParameterName, ReferenceName, TestIndex},
 };
 
 use crate::{
@@ -20,7 +20,13 @@ use crate::{
 pub struct Model {
     path: ModelPath,
     python_imports: IndexMap<PythonPath, PythonImport>,
-    submodels: IndexMap<SubmodelName, SubmodelImport>,
+    /// Submodels declared by this model file, keyed by alias.
+    ///
+    /// The key is the submodel's *alias* (a [`ReferenceName`]) — the same
+    /// string used as the key in [`Self::references`]. Keying by alias is
+    /// what makes `use foo as a` and `use foo as b` distinguishable so they
+    /// can be replaced or overlaid independently.
+    submodels: IndexMap<ReferenceName, SubmodelImport>,
     references: IndexMap<ReferenceName, ReferenceImport>,
     parameters: IndexMap<ParameterName, Parameter>,
     tests: IndexMap<TestIndex, Test>,
@@ -47,7 +53,7 @@ impl Model {
     pub fn new(
         path: ModelPath,
         python_imports: IndexMap<PythonPath, PythonImport>,
-        submodels: IndexMap<SubmodelName, SubmodelImport>,
+        submodels: IndexMap<ReferenceName, SubmodelImport>,
         references: IndexMap<ReferenceName, ReferenceImport>,
         parameters: IndexMap<ParameterName, Parameter>,
         tests: IndexMap<TestIndex, Test>,
@@ -82,9 +88,9 @@ impl Model {
         &self.python_imports
     }
 
-    /// Looks up a submodel by its identifier.
+    /// Looks up a submodel by its alias (= reference name).
     #[must_use]
-    pub fn get_submodel(&self, identifier: &SubmodelName) -> Option<&SubmodelImport> {
+    pub fn get_submodel(&self, identifier: &ReferenceName) -> Option<&SubmodelImport> {
         self.submodels.get(identifier)
     }
 
@@ -94,7 +100,7 @@ impl Model {
         clippy::missing_panics_doc,
         reason = "the panic is only caused by breaking an internal invariant"
     )]
-    pub fn get_submodel_reference(&self, identifier: &SubmodelName) -> Option<&ReferenceImport> {
+    pub fn get_submodel_reference(&self, identifier: &ReferenceName) -> Option<&ReferenceImport> {
         let submodel = self.submodels.get(identifier)?;
         let reference: &ReferenceImport = self
             .references
@@ -103,9 +109,9 @@ impl Model {
         Some(reference)
     }
 
-    /// Returns a reference to all submodels in this model.
+    /// Returns a reference to all submodels in this model, keyed by alias.
     #[must_use]
-    pub const fn get_submodels(&self) -> &IndexMap<SubmodelName, SubmodelImport> {
+    pub const fn get_submodels(&self) -> &IndexMap<ReferenceName, SubmodelImport> {
         &self.submodels
     }
 
@@ -211,9 +217,9 @@ impl Model {
         self.references.insert(name, import);
     }
 
-    /// Adds a submodel to this model.
-    pub fn add_submodel(&mut self, name: SubmodelName, import: SubmodelImport) {
-        self.submodels.insert(name, import);
+    /// Adds a submodel to this model under the given alias (reference name).
+    pub fn add_submodel(&mut self, alias: ReferenceName, import: SubmodelImport) {
+        self.submodels.insert(alias, import);
     }
 
     /// Adds a parameter to this model.

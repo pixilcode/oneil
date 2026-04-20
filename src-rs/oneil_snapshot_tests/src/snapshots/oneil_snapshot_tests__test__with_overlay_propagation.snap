@@ -1,0 +1,10 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+expression: output
+---
+Model: fixtures/with_overlay_propagation/parent.on
+Tests: 0/0
+Parameters:
+  direct = Number(Scalar(99.0))
+  via_mid = Number(Scalar(99.0))
+  doubled_mid = Number(Scalar(198.0))

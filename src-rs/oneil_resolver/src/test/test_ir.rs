@@ -56,7 +56,7 @@ pub fn empty_model() -> ir::Model {
 
 pub struct ModelBuilder {
     python_imports: IndexMap<PythonPath, ir::PythonImport>,
-    submodels: IndexMap<SubmodelName, ir::SubmodelImport>,
+    submodels: IndexMap<ReferenceName, ir::SubmodelImport>,
     references: IndexMap<ReferenceName, ir::ReferenceImport>,
     parameters: IndexMap<ParameterName, ir::Parameter>,
     tests: IndexMap<TestIndex, ir::Test>,
@@ -74,23 +74,22 @@ impl ModelBuilder {
     }
 
     pub fn with_submodel(mut self, submodel_name: &str, submodel_path: &ModelPath) -> Self {
-        let submodel_name = SubmodelName::new(submodel_name.to_string());
-        let submodel_name_span = unimportant_span();
+        let span = unimportant_span();
 
-        // the reference name is the same as the submodel name
-        let reference_name = ReferenceName::new(submodel_name.as_str().to_string());
+        // The alias (= map key on both maps) and the source-level model name
+        // happen to coincide here because the test helper does not exercise
+        // `use foo as bar` aliasing.
+        let reference_name = ReferenceName::new(submodel_name.to_string());
+        let source_name = SubmodelName::new(submodel_name.to_string());
         let reference_path = submodel_path.clone();
 
-        let submodel_import = ir::SubmodelImport::new(
-            submodel_name.clone(),
-            submodel_name_span,
-            reference_name.clone(),
-        );
+        let submodel_import =
+            ir::SubmodelImport::new(source_name, span, reference_name.clone());
 
         let reference_import =
-            ir::ReferenceImport::new(reference_name.clone(), submodel_name_span, reference_path);
+            ir::ReferenceImport::new(reference_name.clone(), span, reference_path);
 
-        self.submodels.insert(submodel_name, submodel_import);
+        self.submodels.insert(reference_name.clone(), submodel_import);
         self.references.insert(reference_name, reference_import);
         self
     }

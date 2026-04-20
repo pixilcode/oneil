@@ -166,11 +166,11 @@ impl<'external> ResolutionContextBuilder<'external> {
                     import.path().clone(),
                 );
             }
-            for (name, import) in model.get_submodels() {
+            for (alias, import) in model.get_submodels() {
                 ctx.add_submodel_to_active_model(
-                    name.clone(),
+                    alias.clone(),
+                    import.name().clone(),
                     *import.name_span(),
-                    import.reference_name().clone(),
                 );
             }
             ctx.pop_active_model(path);
@@ -195,11 +195,11 @@ impl<'external> ResolutionContextBuilder<'external> {
                     import.path().clone(),
                 );
             }
-            for (name, import) in ref_model.get_submodels() {
+            for (alias, import) in ref_model.get_submodels() {
                 ctx.add_submodel_to_active_model(
-                    name.clone(),
+                    alias.clone(),
+                    import.name().clone(),
                     *import.name_span(),
-                    import.reference_name().clone(),
                 );
             }
             ctx.pop_active_model(ref_path);

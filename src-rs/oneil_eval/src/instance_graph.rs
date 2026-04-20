@@ -22,7 +22,7 @@ use oneil_shared::{
     load_result::LoadResult,
     paths::ModelPath,
     span::Span,
-    symbols::{ParameterName, ReferenceName, SubmodelName},
+    symbols::{ParameterName, ReferenceName},
 };
 
 use crate::context::ExternalEvaluationContext;
@@ -40,12 +40,17 @@ pub struct InstancedModel {
     /// parameter additions from designs landed here.
     pub parameters: IndexMap<ParameterName, ir::Parameter>,
     /// References on this instance, mapped to the child instance they point to
-    /// (post-replacement). Includes both true references and synthetic
-    /// references from extracted submodels.
+    /// (post-replacement). Includes both true references and aliases from
+    /// extracted submodels — extracted aliases reuse the existing
+    /// [`EvalInstanceKey`] of the deep instance they navigate to, so overlays
+    /// applied to that instance via any path are observed consistently.
     pub references: IndexMap<ReferenceName, EvalInstanceKey>,
-    /// Submodel-name → reference-name aliases (both `use` direct submodels and
-    /// `with`-extracted submodels).
-    pub submodels: IndexMap<SubmodelName, ReferenceName>,
+    /// Aliases of submodel imports declared on this model file (both
+    /// direct `use … as alias` submodels and `with`-extracted submodels).
+    /// Each element is the same alias used as a key in
+    /// [`Self::references`]; the set is provided so consumers can preserve
+    /// the submodel-vs-reference distinction.
+    pub submodels: IndexSet<ReferenceName>,
     /// Tests on this instance (copied from the IR).
     pub tests: IndexMap<oneil_shared::symbols::TestIndex, ir::Test>,
     /// Overlays that apply to this instance, keyed by parameter name.
@@ -155,8 +160,9 @@ impl DesignContribution {
     }
 
     /// Lifts a [`Design`](ir::Design) into a contribution anchored at
-    /// `anchor_key`, splitting `scoped_overrides` by their first path segment
-    /// for propagation.
+    /// `anchor_key`, splitting all three scoped maps (`scoped_overrides`,
+    /// `scoped_replacements`, `scoped_additions`) by their first path segment
+    /// for propagation through `nested_by_ref`.
     fn from_design(design: &ir::Design, anchor_key: &EvalInstanceKey) -> Self {
         let mut out = Self {
             anchor_key: anchor_key.clone(),
@@ -166,49 +172,152 @@ impl DesignContribution {
             nested_by_ref: IndexMap::new(),
         };
         for (path, params) in &design.scoped_overrides {
-            push_scoped(&mut out, path.segments(), params, anchor_key);
+            let leaf = descend_or_create(&mut out, path.segments(), anchor_key);
+            for (k, v) in params {
+                leaf.overrides.insert(k.clone(), v.clone());
+            }
+        }
+        for (path, repls) in &design.scoped_replacements {
+            let leaf = descend_or_create(&mut out, path.segments(), anchor_key);
+            for (k, v) in repls {
+                leaf.replacements.insert(k.clone(), v.clone());
+            }
+        }
+        for (path, adds) in &design.scoped_additions {
+            let leaf = descend_or_create(&mut out, path.segments(), anchor_key);
+            for (k, v) in adds {
+                leaf.additions.insert(k.clone(), v.clone());
+            }
         }
         out
     }
 }
 
-/// Inserts a scoped-override entry into the right place inside `target`,
-/// drilling through `nested_by_ref` until `segments` is empty. New nested
-/// nodes inherit the design's `anchor_key` so the override RHS can still be
-/// evaluated in the design's lexical scope.
-fn push_scoped(
-    target: &mut DesignContribution,
+/// Walks down `target.nested_by_ref` along `segments`, creating empty
+/// intermediate contributions as needed, and returns a mutable reference to
+/// the leaf. New nodes inherit the supplied `anchor_key` so that anything
+/// landed at the leaf preserves the design's lexical scope.
+fn descend_or_create<'a>(
+    target: &'a mut DesignContribution,
     segments: &[ReferenceName],
-    params: &IndexMap<ParameterName, ir::OverlayParameterValue>,
     anchor_key: &EvalInstanceKey,
+) -> &'a mut DesignContribution {
+    let Some((first, rest)) = segments.split_first() else {
+        return target;
+    };
+    let child = target
+        .nested_by_ref
+        .entry(first.clone())
+        .or_insert_with(|| DesignContribution::empty(anchor_key.clone()));
+    descend_or_create(child, rest, anchor_key)
+}
+
+/// Rewrites a contribution's `nested_by_ref` so that any entry keyed by a
+/// `with`-extracted alias on the consuming model is spliced into the
+/// extraction chain — `nested_by_ref[parent_ref].nested_by_ref[seg1]…[segN]`.
+///
+/// Applied recursively into each retained child so multi-level overrides like
+/// `a.b.c = …` are also rewritten when `a` happens to be extracted.
+fn rewrite_extracted_aliases(
+    contribution: &mut DesignContribution,
+    submodels: &IndexMap<ReferenceName, ir::SubmodelImport>,
 ) {
-    if let Some((first, rest)) = segments.split_first() {
-        let child = target
+    let extracted_keys: Vec<ReferenceName> = contribution
+        .nested_by_ref
+        .keys()
+        .filter(|name| {
+            submodels
+                .get(*name)
+                .is_some_and(ir::SubmodelImport::is_extracted)
+        })
+        .cloned()
+        .collect();
+
+    // Each extracted alias is replaced with its extraction chain in turn.
+    // Deeper levels of nesting belong to descendant models and are rewritten
+    // when those models are visited (each visit() rewrites contributions in
+    // its own model's namespace).
+    for alias in extracted_keys {
+        let Some(import) = submodels.get(&alias) else {
+            continue;
+        };
+        let Some(child) = contribution.nested_by_ref.shift_remove(&alias) else {
+            continue;
+        };
+        let mut chain: Vec<ReferenceName> = vec![import.reference_name().clone()];
+        chain.extend(import.submodel_path().iter().cloned());
+        splice_into_chain(contribution, &chain, child);
+    }
+}
+
+/// Splices `payload` into `target.nested_by_ref` along `chain`, merging into
+/// any pre-existing entries at intermediate steps.
+fn splice_into_chain(
+    target: &mut DesignContribution,
+    chain: &[ReferenceName],
+    payload: DesignContribution,
+) {
+    let anchor = payload.anchor_key.clone();
+    let mut cursor = target;
+    let Some((last, prefix)) = chain.split_last() else {
+        return;
+    };
+    for seg in prefix {
+        cursor = cursor
             .nested_by_ref
-            .entry(first.clone())
-            .or_insert_with(|| DesignContribution::empty(anchor_key.clone()));
-        if rest.is_empty() {
-            for (k, v) in params {
-                child.overrides.insert(k.clone(), v.clone());
-            }
-        } else {
-            push_scoped(child, rest, params, anchor_key);
+            .entry(seg.clone())
+            .or_insert_with(|| DesignContribution::empty(anchor.clone()));
+    }
+    match cursor.nested_by_ref.shift_remove(last) {
+        Some(existing) => {
+            let merged = merge_contributions(existing, payload);
+            cursor.nested_by_ref.insert(last.clone(), merged);
         }
-    } else {
-        // Empty path: treat as a root-level override.
-        for (k, v) in params {
-            target.overrides.insert(k.clone(), v.clone());
+        None => {
+            cursor.nested_by_ref.insert(last.clone(), payload);
         }
     }
 }
 
+/// Merges two contributions targeting the same instance. `b` wins for
+/// conflicting keys (mirrors the "later landings win" semantics elsewhere).
+fn merge_contributions(mut a: DesignContribution, b: DesignContribution) -> DesignContribution {
+    for (k, v) in b.overrides {
+        a.overrides.insert(k, v);
+    }
+    for (k, v) in b.additions {
+        a.additions.insert(k, v);
+    }
+    for (k, v) in b.replacements {
+        a.replacements.insert(k, v);
+    }
+    for (k, v) in b.nested_by_ref {
+        match a.nested_by_ref.shift_remove(&k) {
+            Some(existing) => {
+                a.nested_by_ref.insert(k, merge_contributions(existing, v));
+            }
+            None => {
+                a.nested_by_ref.insert(k, v);
+            }
+        }
+    }
+    a
+}
+
 /// Resolves a [`DesignApplication`](ir::DesignApplication) to a
-/// [`DesignContribution`]: looks up the design IR and lifts it, anchoring it at
-/// the consuming instance (the model whose `use design` declaration applied
-/// the design). If the application targets a specific reference, the
-/// contribution is wrapped so it lands on that reference's child instance —
-/// the anchor stays at the consuming instance, which is the design's lexical
-/// scope.
+/// [`DesignContribution`]: looks up the design IR and lifts it, anchoring it
+/// at the design's target instance — the place where the design's overlays
+/// and additions logically live. The anchor matters for overlay RHS
+/// evaluation (see [`OverlayBinding::anchor_key`]): a design's RHSes refer
+/// to parameters in its target's lexical scope, not in the consumer's.
+///
+/// - For `use design X` (no `for`): the target instance is the consumer
+///   itself, so the anchor is `consuming_key`.
+/// - For `use design X for r`: the target instance is `r` on the consumer
+///   (a child instance for direct submodels, a shared instance for `ref`s).
+///   The contribution is wrapped under `nested_by_ref[r]` so it lands on
+///   that instance, but the anchor inside the wrap points at the target
+///   instance so RHSes resolve against the target's parameters.
 ///
 /// Returns `None` if the design IR cannot be loaded.
 fn contribution_for_application<E: ExternalEvaluationContext>(
@@ -217,13 +326,59 @@ fn contribution_for_application<E: ExternalEvaluationContext>(
     external: &E,
 ) -> Option<DesignContribution> {
     let design = load_design(&app.design_path, external)?;
-    let mut contribution = DesignContribution::from_design(&design, consuming_key);
+    let inner_anchor = app.applied_to.as_ref().map_or_else(
+        || consuming_key.clone(),
+        |ref_name| {
+            target_instance_key_for(&design, ref_name, consuming_key, external)
+                .unwrap_or_else(|| consuming_key.clone())
+        },
+    );
+    let mut contribution = DesignContribution::from_design(&design, &inner_anchor);
     if let Some(ref_name) = &app.applied_to {
         let mut wrapped = DesignContribution::empty(consuming_key.clone());
         wrapped.nested_by_ref.insert(ref_name.clone(), contribution);
         contribution = wrapped;
     }
     Some(contribution)
+}
+
+/// Computes the [`EvalInstanceKey`] of a design's target instance when it is
+/// applied via `use design X for ref_name` on the consumer at `consuming_key`.
+///
+/// The design's target model comes from the design IR; the instance path is
+/// derived from how the consumer declares `ref_name`:
+/// - direct submodel (`use M as ref`): the target instance lives at
+///   `consuming_key.instance_path.child(ref_name)`.
+/// - shared reference (`ref M as ref`): the target instance lives at the
+///   root instance path (shared instances are not nested under the consumer).
+///
+/// Returns `None` if the design has no declared target, the consumer model IR
+/// can't be loaded, or `ref_name` isn't declared on the consumer (resolution
+/// emits diagnostics for the latter; we just fall back to `consuming_key`
+/// upstream so eval doesn't crash on already-flagged input).
+fn target_instance_key_for<E: ExternalEvaluationContext>(
+    design: &ir::Design,
+    ref_name: &ReferenceName,
+    consuming_key: &EvalInstanceKey,
+    external: &E,
+) -> Option<EvalInstanceKey> {
+    let target_model = design.target_model.clone()?;
+    let consumer_ir = match external.lookup_ir(&consuming_key.model_path)? {
+        LoadResult::Success(m) | LoadResult::Partial(m, _) => m,
+        LoadResult::Failure => return None,
+    };
+    let is_direct_submodel = consumer_ir.get_submodels().contains_key(ref_name);
+    let instance_path = if is_direct_submodel {
+        consuming_key.instance_path.child(ref_name.clone())
+    } else if consumer_ir.get_references().contains_key(ref_name) {
+        InstancePath::root()
+    } else {
+        return None;
+    };
+    Some(EvalInstanceKey {
+        model_path: target_model,
+        instance_path,
+    })
 }
 
 /// Loads a design IR from `external`. Returns `None` if the design isn't
@@ -316,13 +471,33 @@ fn visit<E: ExternalEvaluationContext>(
         }
     }
 
+    let model_refs = model.get_references();
+    let model_subs = model.get_submodels();
+
+    // Re-route contributions that target a `with`-extracted alias through
+    // their extraction chain (e.g. `value.inner = …` becomes
+    // `mid.inner.value = …` when `inner` is extracted via `mid.inner`), so
+    // that when forwarded to children the contribution reaches the same deep
+    // instance that the alias is wired to point at.
+    for c in &mut all_landed {
+        rewrite_extracted_aliases(c, model_subs);
+    }
+
     let parameters = compose_parameters(model.get_parameters(), &all_landed);
     let overlays = compose_overlays(&all_landed);
     let replacements = collect_replacements(&all_landed);
 
-    // Build the references map (post-replacement) and submodel aliases.
-    let model_refs = model.get_references();
-    let model_subs = model.get_submodels();
+    // Build the post-replacement references map for *true* references first.
+    // Extracted submodels are wired afterwards by walking the live graph so
+    // they reuse the same `EvalInstanceKey` as the deep instance.
+
+    // The submodel map is keyed by alias; an alias points at a *direct*
+    // submodel iff its `SubmodelImport.submodel_path` is empty.
+    let mut submodels: IndexSet<ReferenceName> = model_subs
+        .iter()
+        .filter(|(_, import)| !import.is_extracted())
+        .map(|(alias, _)| alias.clone())
+        .collect();
 
     let mut references: IndexMap<ReferenceName, EvalInstanceKey> = IndexMap::new();
     for (ref_name, ref_import) in model_refs {
@@ -330,9 +505,7 @@ fn visit<E: ExternalEvaluationContext>(
             .get(ref_name)
             .cloned()
             .unwrap_or_else(|| ref_import.path().clone());
-        let is_direct_submodel = model_subs
-            .values()
-            .any(|s| s.reference_name() == ref_name && !s.is_extracted());
+        let is_direct_submodel = submodels.contains(ref_name);
         let child_instance = if is_direct_submodel {
             key.instance_path.child(ref_name.clone())
         } else {
@@ -345,95 +518,71 @@ fn visit<E: ExternalEvaluationContext>(
         references.insert(ref_name.clone(), child_key);
     }
 
-    let mut submodels: IndexMap<SubmodelName, ReferenceName> = model_subs
-        .iter()
-        .map(|(name, import)| (name.clone(), import.reference_name().clone()))
-        .collect();
-
-    // Wire extracted submodels (`with` clauses) — synthetic references on this
-    // instance that point at navigation-derived child instances.
-    let mut extracted_targets: Vec<(ReferenceName, EvalInstanceKey)> = Vec::new();
-    for (sub_name, sub_import) in model_subs {
-        if !sub_import.is_extracted() {
-            continue;
-        }
-        // Parent reference must already be in `references` (we just built it).
-        let Some(parent_key) = references.get(sub_import.reference_name()).cloned() else {
-            continue;
-        };
-        let child_path =
-            navigate_submodel_path(&parent_key.model_path, sub_import.submodel_path(), external);
-        let child_instance = key
-            .instance_path
-            .child(ReferenceName::from(sub_name.as_str()));
-        let extracted_ref = ReferenceName::from(sub_name.as_str());
-        let child_key = EvalInstanceKey {
-            model_path: child_path,
-            instance_path: child_instance,
-        };
-        references.insert(extracted_ref.clone(), child_key.clone());
-        // Make the extracted submodel name visible as a submodel alias too,
-        // so that `submodels` callers can find it without special-casing.
-        submodels
-            .entry(sub_name.clone())
-            .or_insert_with(|| extracted_ref.clone());
-        extracted_targets.push((extracted_ref, child_key));
-    }
-
     let tests = model.get_tests().clone();
 
+    // Insert the partial instance now (with just true references) so that
+    // descendants can see it during recursion — the extracted-submodel
+    // wiring updates `references` and `submodels` in place after children
+    // have been visited.
     graph.instances.insert(
         key.clone(),
         InstancedModel {
             model_path: key.model_path.clone(),
             parameters,
             references: references.clone(),
-            submodels,
+            submodels: submodels.clone(),
             tests,
             overlays,
         },
     );
 
     // Recurse into each true reference, forwarding only the matching nested
-    // contributions to that child.
-    for (ref_name, child_key) in references {
+    // contributions to that child. After this loop, every transitive
+    // descendant has been added to `graph.instances`.
+    for (ref_name, child_key) in &references {
         let child_landed: Vec<DesignContribution> = all_landed
             .iter()
-            .filter_map(|c| c.nested_by_ref.get(&ref_name).cloned())
+            .filter_map(|c| c.nested_by_ref.get(ref_name).cloned())
             .collect();
-        visit(&child_key, child_landed, graph, visited, external);
+        visit(child_key, child_landed, graph, visited, external);
     }
 
-    // Extracted submodels recurse with no inherited contributions (mirrors
-    // current behavior — `with` extractions don't carry overlays through).
-    for (_extracted_ref, child_key) in extracted_targets {
-        visit(&child_key, Vec::new(), graph, visited, external);
+    // Wire extracted submodels (`with` clauses) by walking the *live* graph
+    // references chain — each segment is an alias that the parent's
+    // already-built instance has resolved (with replacements applied). The
+    // extracted alias on this instance reuses the existing
+    // `EvalInstanceKey` of the deep instance, so overlays applied via any
+    // path to that instance are observed here.
+    for (alias, sub_import) in model_subs {
+        if !sub_import.is_extracted() {
+            continue;
+        }
+        let Some(parent_key) = references.get(sub_import.reference_name()).cloned() else {
+            continue;
+        };
+        let mut current_key = parent_key;
+        let mut resolved = true;
+        for segment in sub_import.submodel_path() {
+            let Some(current_inst) = graph.instances.get(&current_key) else {
+                resolved = false;
+                break;
+            };
+            let Some(next_key) = current_inst.references.get(segment).cloned() else {
+                resolved = false;
+                break;
+            };
+            current_key = next_key;
+        }
+        if resolved {
+            references.insert(alias.clone(), current_key);
+            submodels.insert(alias.clone());
+        }
     }
-}
 
-/// Navigates a chain of submodel names from `parent_path`, returning the
-/// terminal model path. Mirrors the previous evaluator helper.
-fn navigate_submodel_path<E: ExternalEvaluationContext>(
-    parent_path: &ModelPath,
-    submodel_path: &[SubmodelName],
-    external: &E,
-) -> ModelPath {
-    let mut current_path = parent_path.clone();
-    for submodel_name in submodel_path {
-        let Some(load) = external.lookup_ir(&current_path) else {
-            return current_path;
-        };
-        let model_ir = match load {
-            LoadResult::Success(m) | LoadResult::Partial(m, _) => m,
-            LoadResult::Failure => return current_path,
-        };
-        let Some(submodel) = model_ir.get_submodel(submodel_name) else {
-            return current_path;
-        };
-        let Some(reference) = model_ir.get_reference(submodel.reference_name()) else {
-            return current_path;
-        };
-        current_path = reference.path().clone();
+    // Patch the previously-inserted instance with the now-complete
+    // references and submodels (including any `with`-extracted aliases).
+    if let Some(inst) = graph.instances.get_mut(key) {
+        inst.references = references;
+        inst.submodels = submodels;
     }
-    current_path
 }

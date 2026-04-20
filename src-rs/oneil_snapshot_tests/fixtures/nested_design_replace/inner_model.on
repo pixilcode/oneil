@@ -1,0 +1,4 @@
+# Reads gravity from `planet`. Defaults to Earth so designs can replace it.
+use ../gravity_earth as planet
+
+Local gravity: g_local = g.planet :m/s^2

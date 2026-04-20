@@ -293,8 +293,14 @@ pub fn resolve_design_surface<E: ExternalResolutionContext>(
         }
     }
 
+    let exported_target = explicit_target.clone();
     store_design_export(&surface, explicit_target, running, resolution_context);
-    record_applied_designs(&surface, model_path, resolution_context);
+    record_applied_designs(
+        &surface,
+        model_path,
+        exported_target.as_ref(),
+        resolution_context,
+    );
 }
 
 /// Scans the design surface for the target declaration and design-local
@@ -639,6 +645,7 @@ fn store_design_export<E: ExternalResolutionContext>(
 fn record_applied_designs<E: ExternalResolutionContext>(
     surface: &[DesignSurfaceItem<'_>],
     model_path: &ModelPath,
+    explicit_target: Option<&ModelPath>,
     resolution_context: &mut ResolutionContext<'_, E>,
 ) {
     for item in surface {
@@ -651,25 +658,24 @@ fn record_applied_designs<E: ExternalResolutionContext>(
 
         let rn = ReferenceName::new(id_node.as_str().to_string());
         // Resolve the reference and capture the model path it points to so
-        // we can validate the design's target against it.
-        let referenced_model_path = match resolution_context
-            .lookup_reference_path_in_active_model(&rn)
-        {
-            ReferencePathResult::Found(_, path) => path.clone(),
-            ReferencePathResult::ReferenceNotFound
-            | ReferencePathResult::ReferenceHasResolutionError
-            | ReferencePathResult::ModelHasResolutionError(_)
-            | ReferencePathResult::ModelNotFound(_) => {
-                resolution_context.add_design_resolution_error_to_active_model(
-                    format!(
-                        "`use design … for {}`: reference `{}` not found on this model",
-                        rn.as_str(),
-                        rn.as_str()
-                    ),
-                    id_node.span(),
-                );
-                continue;
-            }
+        // we can validate the design's target against it. For design files
+        // (`.one`) the active model is the design itself, which inherits its
+        // references from its `design <target>`; resolve via the target so
+        // `use design X for r` can refer to refs declared on the target model.
+        let Some(referenced_model_path) = lookup_referenced_model_path_for_use_design(
+            resolution_context,
+            explicit_target,
+            &rn,
+        ) else {
+            resolution_context.add_design_resolution_error_to_active_model(
+                format!(
+                    "`use design … for {}`: reference `{}` not found on this model",
+                    rn.as_str(),
+                    rn.as_str()
+                ),
+                id_node.span(),
+            );
+            continue;
         };
 
         let relative_path = ud.get_design_relative_path();
@@ -717,6 +723,46 @@ fn record_applied_designs<E: ExternalResolutionContext>(
     }
 }
 
+/// Returns the model path that reference `rn` resolves to from the perspective
+/// of a `use design X for rn` declaration.
+///
+/// When the active model is a design file (`explicit_target` is `Some`), the
+/// reference is resolved on the design's target model rather than on the
+/// design file itself. A design file's own reference declarations are
+/// *replacements* / *augmentations* of its target's reference graph; the
+/// target supplies the baseline set of references that the design's overlays
+/// and applied designs run against. Resolving against the design alone would
+/// miss every reference the design didn't itself touch — including the
+/// common case of forwarding `use design Y for r` where `r` is just an
+/// inherited reference on the target.
+///
+/// Returns `None` when the reference cannot be resolved (missing, has an
+/// upstream error, etc.).
+fn lookup_referenced_model_path_for_use_design<E: ExternalResolutionContext>(
+    resolution_context: &ResolutionContext<'_, E>,
+    explicit_target: Option<&ModelPath>,
+    rn: &ReferenceName,
+) -> Option<ModelPath> {
+    if let Some(target_path) = explicit_target {
+        let target_model = match resolution_context.lookup_model(target_path) {
+            ModelResult::Found(m) => m,
+            ModelResult::HasError | ModelResult::NotFound => return None,
+        };
+        return target_model
+            .get_references()
+            .get(rn)
+            .map(|r| r.path().clone());
+    }
+
+    match resolution_context.lookup_reference_path_in_active_model(rn) {
+        ReferencePathResult::Found(_, path) => Some(path.clone()),
+        ReferencePathResult::ReferenceNotFound
+        | ReferencePathResult::ReferenceHasResolutionError
+        | ReferencePathResult::ModelHasResolutionError(_)
+        | ReferencePathResult::ModelNotFound(_) => None,
+    }
+}
+
 /// Validates that submodel extractions in a reference replacement are compatible.
 ///
 /// This checks:
@@ -754,12 +800,15 @@ fn validate_reference_replacement_submodels<E: ExternalResolutionContext>(
             return;
         };
 
-        // Collect submodels that were imported from the original reference
-        let original_submodels: Vec<SubmodelName> = target_ir
+        // Collect submodel aliases that were imported from the original
+        // reference. The submodel map is keyed by alias (= reference name),
+        // and the alias is also what an extracted submodel exposes on the
+        // replacement, so this is the right set to validate against.
+        let original_submodels: Vec<String> = target_ir
             .get_submodels()
             .iter()
             .filter(|(_, import)| import.reference_name() == alias)
-            .map(|(name, _)| name.clone())
+            .map(|(alias, _)| alias.as_str().to_string())
             .collect();
 
         (original_ref.path().clone(), original_submodels)
@@ -793,15 +842,18 @@ fn validate_reference_replacement_submodels<E: ExternalResolutionContext>(
     // Determine which submodels need to be checked:
     // - If design specifies `with`, use those
     // - Otherwise, use the original submodels that were imported
-    let required_submodels = if design_submodels.is_empty() {
-        &original_submodels
+    let design_submodel_names: Vec<&str> =
+        design_submodels.iter().map(SubmodelName::as_str).collect();
+    let original_submodel_names: Vec<&str> =
+        original_submodels.iter().map(String::as_str).collect();
+    let required_submodels: &[&str] = if design_submodel_names.is_empty() {
+        &original_submodel_names
     } else {
-        design_submodels
+        &design_submodel_names
     };
 
     // Validate each required submodel exists on the replacement model
-    for submodel_name in required_submodels {
-        let name_str = submodel_name.as_str();
+    for &name_str in required_submodels {
         // Check if the original model has this parameter (which would be the submodel)
         // The submodel must exist on the replacement model
         if original_model_params.iter().any(|p| p == name_str)
