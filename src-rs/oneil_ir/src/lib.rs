@@ -5,6 +5,7 @@ mod debug_info;
 mod expr;
 mod model;
 mod model_import;
+mod model_name;
 mod note;
 mod parameter;
 mod python_import;
@@ -17,6 +18,7 @@ pub use expr::{
 };
 pub use model::Model;
 pub use model_import::{ReferenceImport, SubmodelImport};
+pub use model_name::ModelName;
 pub use note::Note;
 pub use parameter::{Dependencies, Limits, Parameter, ParameterValue, PiecewiseExpr};
 pub use python_import::PythonImport;

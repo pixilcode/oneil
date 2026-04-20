@@ -75,6 +75,11 @@ where
     };
     let model_ast = (*model_ast).clone();
 
+    let model_name = model_ast
+        .name()
+        .map(|n| ir::ModelName::new(n.as_str().to_string(), n.span()));
+    resolution_context.set_active_model_name(model_name);
+
     let model_note = model_ast
         .note()
         .map(|n| ir::Note::new(n.value().to_string()));
@@ -302,6 +307,30 @@ mod tests {
 
         // check the model errors
         assert!(results.values().all(|r| r.model_errors().is_empty()));
+    }
+
+    #[test]
+    fn load_model_sets_model_name() {
+        let model_path = test_model_path("test");
+        let model = test_ast::ModelBuilder::new()
+            .with_name("Test Model")
+            .build();
+        let mut external =
+            TestExternalContext::new().with_model_asts([("test.on", test_ast::model_node(model))]);
+        let mut resolution_context = ResolutionContext::new(&mut external);
+
+        load_model(&model_path, &mut resolution_context);
+
+        let results = resolution_context.into_result();
+        let model = results
+            .get(&model_path)
+            .expect("model should resolve")
+            .model();
+
+        assert_eq!(
+            model.name().expect("model should have a name").as_str(),
+            "Test Model"
+        );
     }
 
     #[test]

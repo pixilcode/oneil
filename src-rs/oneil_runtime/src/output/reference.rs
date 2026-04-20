@@ -139,6 +139,12 @@ impl<'runtime> ModelIrReference<'runtime> {
         self.model.get_path()
     }
 
+    /// Returns the declared model name, if one was provided in source.
+    #[must_use]
+    pub const fn name(&self) -> Option<&'runtime ir::ModelName> {
+        self.model.name()
+    }
+
     /// Returns the optional model-level documentation note.
     #[must_use]
     pub const fn note(&self) -> Option<&'runtime ir::Note> {

@@ -117,6 +117,16 @@ fn print_model(
         dbg_style::IDENTIFIER.style(model_ref.path().as_path().display())
     );
 
+    if let Some(name) = model_ref.name() {
+        println!(
+            "{}    {} {} \"{}\"",
+            "    ".repeat(indent),
+            dbg_style::TREE.style("├──"),
+            dbg_style::DETAIL.style("Name:"),
+            dbg_style::IDENTIFIER.style(name.as_str())
+        );
+    }
+
     let sections = &config.sections;
     let mut section_list: Vec<(&str, usize, SectionTag)> = Vec::new();
 

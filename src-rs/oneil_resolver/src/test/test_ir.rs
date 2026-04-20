@@ -41,6 +41,7 @@ pub fn expr_literal_number(value: f64) -> ir::Expr {
 pub fn empty_model() -> ir::Model {
     ir::Model::new(
         unimportant_model_path(),
+        None,
         IndexMap::new(),
         IndexMap::new(),
         IndexMap::new(),
@@ -108,6 +109,7 @@ impl ModelBuilder {
     pub fn build(self) -> ir::Model {
         ir::Model::new(
             unimportant_model_path(),
+            None,
             self.python_imports,
             self.submodels,
             self.references,

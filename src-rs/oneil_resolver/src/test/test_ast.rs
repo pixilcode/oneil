@@ -57,6 +57,11 @@ pub fn parameter_name_node(parameter_name: &'static str) -> ast::Node<ParameterN
     ast::Node::new(parameter_name, unimportant_span(), unimportant_span())
 }
 
+pub fn model_name_node(model_name: &'static str) -> ast::ModelNameNode {
+    let model_name = ast::ModelName::from(model_name);
+    ast::Node::new(model_name, unimportant_span(), unimportant_span())
+}
+
 pub fn directory_name_node(directory_name: &'static str) -> ast::Node<ast::Directory> {
     let directory = ast::Directory::Name(directory_name.to_string());
     ast::Node::new(directory, unimportant_span(), unimportant_span())
@@ -255,6 +260,7 @@ pub fn unit_one_node() -> ast::Node<ast::UnitExpr> {
 // BUILDERS
 
 pub struct ModelBuilder {
+    name: Option<ast::ModelNameNode>,
     note: Option<ast::NoteNode>,
     decls: Vec<ast::DeclNode>,
     sections: Vec<ast::SectionNode>,
@@ -263,10 +269,16 @@ pub struct ModelBuilder {
 impl ModelBuilder {
     pub fn new() -> Self {
         Self {
+            name: None,
             note: None,
             decls: vec![],
             sections: vec![],
         }
+    }
+
+    pub fn with_name(mut self, name: &'static str) -> Self {
+        self.name = Some(model_name_node(name));
+        self
     }
 
     pub fn with_submodel(self, submodel: &'static str) -> Self {
@@ -337,7 +349,7 @@ impl ModelBuilder {
     }
 
     pub fn build(self) -> ast::Model {
-        ast::Model::new(None, self.note, self.decls, self.sections)
+        ast::Model::new(self.name, self.note, self.decls, self.sections)
     }
 }
 

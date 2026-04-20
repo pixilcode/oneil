@@ -37,6 +37,7 @@ impl ModelResolutionResult {
     pub fn new(model_path: ModelPath) -> Self {
         let empty_model = ir::Model::new(
             model_path,
+            None,
             IndexMap::new(),
             IndexMap::new(),
             IndexMap::new(),
@@ -542,6 +543,13 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     pub fn set_active_model_note(&mut self, note: Option<ir::Note>) {
         if let Some(note) = note {
             self.active_model_mut().set_note(note);
+        }
+    }
+
+    /// Sets the declared name on the active model when `name` is `Some`.
+    pub fn set_active_model_name(&mut self, name: Option<ir::ModelName>) {
+        if let Some(name) = name {
+            self.active_model_mut().set_name(name);
         }
     }
 }

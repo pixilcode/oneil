@@ -7,7 +7,7 @@ use oneil_shared::{
 };
 
 use crate::{
-    Note,
+    ModelName, Note,
     model_import::{ReferenceImport, SubmodelImport},
     parameter::Parameter,
     python_import::PythonImport,
@@ -18,6 +18,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct Model {
     path: ModelPath,
+    name: Option<ModelName>,
     python_imports: IndexMap<PythonPath, PythonImport>,
     submodels: IndexMap<SubmodelName, SubmodelImport>,
     references: IndexMap<ReferenceName, ReferenceImport>,
@@ -31,6 +32,7 @@ impl Model {
     #[must_use]
     pub const fn new(
         path: ModelPath,
+        name: Option<ModelName>,
         python_imports: IndexMap<PythonPath, PythonImport>,
         submodels: IndexMap<SubmodelName, SubmodelImport>,
         references: IndexMap<ReferenceName, ReferenceImport>,
@@ -40,6 +42,7 @@ impl Model {
     ) -> Self {
         Self {
             path,
+            name,
             python_imports,
             submodels,
             references,
@@ -53,6 +56,12 @@ impl Model {
     #[must_use]
     pub const fn get_path(&self) -> &ModelPath {
         &self.path
+    }
+
+    /// Returns the optional declared name of this model.
+    #[must_use]
+    pub const fn name(&self) -> Option<&ModelName> {
+        self.name.as_ref()
     }
 
     /// Returns a reference to the set of Python imports for this model.
@@ -127,6 +136,11 @@ impl Model {
     /// Adds a Python import to this model.
     pub fn add_python_import(&mut self, path: PythonPath, import: PythonImport) {
         self.python_imports.insert(path, import);
+    }
+
+    /// Sets the declared name of this model.
+    pub fn set_name(&mut self, name: ModelName) {
+        self.name = Some(name);
     }
 
     /// Adds a reference to this model.
