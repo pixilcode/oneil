@@ -1,4 +1,6 @@
-# Replace Earth gravity with Mars gravity
-design shared_ref
+# Override gravity to Mars-like value on whatever planet instance this is
+# applied to. Targets gravity_earth so it can be applied `for` any reference
+# whose model is gravity_earth.
+design ../gravity_earth
 
-use ../gravity_mars as planet
+g = 3.72 :m/s^2

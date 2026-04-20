@@ -51,8 +51,9 @@ fn basic_failing_test() {
 
 #[test]
 fn overlay_shared_ref() {
-    // Both refs share the same instance, overlay affects both
-    // Expected: s = 99 + 99 = 198
+    // `ref` makes `planet` a shared instance, so an overlay on it is observed
+    // by both reads.
+    // Expected: w_a = 372 N, w_b = 372 N, total = 744 N (Mars gravity overlay)
     let path = fixture_path("design_overlay/shared_ref.on");
     let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
     insta::assert_snapshot!(output);
@@ -60,9 +61,20 @@ fn overlay_shared_ref() {
 
 #[test]
 fn overlay_two_instances() {
-    // `use` creates unique instances, overlay affects only one
-    // Expected: s = 99 + 10 = 109
+    // `use` creates unique instances, so an overlay applied `for planet_a`
+    // affects only planet_a; planet_b retains the default Earth gravity.
+    // Expected: w_a = 372 N (Mars), w_b = 981 N (Earth), total = 1353 N
     let path = fixture_path("design_overlay/two_instances.on");
+    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn overlay_wrong_target_for_ref() {
+    // Error case: applying a design `for r` whose declared target model does
+    // not match the model that `r` resolves to should produce a clear
+    // resolution error (instead of silently doing nothing).
+    let path = fixture_path("design_overlay/wrong_target/parent.on");
     let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
     insta::assert_snapshot!(output);
 }
@@ -134,8 +146,9 @@ fn replace_with_submodels() {
 
 #[test]
 fn with_base_case() {
-    // with [inner] clause without replacement
-    // Expected: s = 10 (from design_child's x)
+    // `with [inner]` extracts the gravity submodel out of the satellite,
+    // making `g.inner` available on the parent.
+    // Expected: weight = 100 kg * 9.81 m/s^2 = 981 N
     let path = fixture_path("with_clause/with_parent_direct.on");
     let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
     insta::assert_snapshot!(output);

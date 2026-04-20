@@ -96,7 +96,7 @@ impl Model {
     )]
     pub fn get_submodel_reference(&self, identifier: &SubmodelName) -> Option<&ReferenceImport> {
         let submodel = self.submodels.get(identifier)?;
-        let reference = self
+        let reference: &ReferenceImport = self
             .references
             .get(submodel.reference_name())
             .expect("reference corresponding to submodel should exist");

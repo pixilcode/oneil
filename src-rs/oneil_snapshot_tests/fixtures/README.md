@@ -18,21 +18,26 @@ These planetary constants are shared across multiple test categories for weight/
 - `syntax_error.on` - Model with syntax error for error handling
 - `failing_test.on` - Model with intentionally failing test (49.05N < 100N)
 
-### `design_overlay/` - Design Overlay Tests (3 tests)
+### `design_overlay/` - Design Overlay Tests (4 tests)
 Tests for `use design` and parameter overlay features using planetary gravity.
 
-- `shared_ref.on` - Shared refs with gravity overlay
-  - Uses `ref` to create shared gravity reference
-  - Applies Mars gravity overlay
-  - Both w_a and w_b reference the same gravity
-- `two_instances.on` - Two unique instances with overlay on one
-  - Uses `use` to create separate gravity instances  
-  - Applies Mars overlay to planet_a only
-  - Tests: unique instances maintain independence
+- `shared_ref.on` + `shared_ref_design.one` - Shared refs with gravity overlay
+  - Design targets `gravity_earth` and overrides `g`
+  - Parent uses `ref ../gravity_earth as planet` so all reads share one instance
+  - Applied `for planet`, the overlay is observed by both `g.planet` reads
+- `two_instances.on` + `two_instances_design.one` - Two unique instances with overlay on one
+  - Design targets `gravity_earth` and overrides `g`
+  - Parent uses `use ../gravity_earth as planet_a`/`planet_b` (distinct instances)
+  - Applied `for planet_a`, the overlay only affects `planet_a`
 - `nested_param/` - Spacecraft thruster override (uses --design flag pattern)
   - Tests `thrust.main_thruster = 1000 :N` syntax to override child instance params
   - Child thruster: 500N default, overridden to 1000N
   - No wrapper file needed - design applied directly via test harness
+- `wrong_target/` - Error case: design's `design <model>` target does not match
+  the model the reference resolves to
+  - Design targets `gravity_mars` but is applied `for planet` (which is bound
+    to `gravity_earth`)
+  - Resolver should produce a clear "design target / reference mismatch" error
 
 ### `reference_replacement/` - Reference Replacement Tests (5 tests)
 Tests for `use model as alias` replacement in design files.
@@ -71,12 +76,12 @@ Tests for `use design` without `for` (design inheritance/merge).
 - `use_design_nofor_base.one` - Base design: Moon gravity (1.62 m/s²)
 - `use_design_nofor_derived.one` - Derived: custom low-g (5.0 m/s²)
 
-## Test Coverage Summary (14 tests)
+## Test Coverage Summary (15 tests)
 
 | Category | Tests | What's Tested |
 |----------|-------|---------------|
 | Basic | 3 | Parsing, evaluation, syntax errors, test failures |
-| Design Overlay | 3 | Shared refs, unique instances, nested param override |
+| Design Overlay | 4 | Shared refs, unique instances, nested param override, wrong-target error |
 | Reference Replacement | 5 | `use model as alias` replacement, with submodels |
 | With Clause | 1 | `with [submodel]` extraction base case |
 | Extracted Submodels | 1 | Extracted submodels resolve through replaced parent |

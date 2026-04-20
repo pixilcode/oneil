@@ -1,13 +1,14 @@
-# Test: use creates unique instances, overlay affects only one
-# Planet A gets overlay (Mars), Planet B keeps default (Earth)
+# Test: `use` creates unique instances, so an overlay applied `for` one of
+# them does not bleed into the other.
 use ../gravity_earth as planet_a
 use ../gravity_earth as planet_b
 
+# Apply the Mars-gravity overlay only to planet_a.
 use design two_instances_design for planet_a
 
-# Calculate 100kg weight on each planet
-# Planet A (Mars): w = 100 * 3.72 = 372 N
-# Planet B (Earth): w = 100 * 9.81 = 981 N
+# Calculate 100kg weight on each planet.
+# Planet A (overlaid Mars): w = 100 * 3.72 = 372 N
+# Planet B (unchanged Earth): w = 100 * 9.81 = 981 N
 # Total: 1353 N
 Payload: mass = 100 :kg
 Weight A: w_a = mass * g.planet_a :N

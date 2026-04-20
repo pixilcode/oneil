@@ -1,5 +1,8 @@
-# Mission model that extracts gravity reference from satellite
+# Mission model that extracts the gravity reference from satellite using
+# `with [inner]`. The extracted submodel is reachable here as `g.inner`.
 use child_with_ref as satellite with [inner]
 
-# Use extracted gravity for surface calculations (100kg object)
-Surface Weight: weight = 100 * g.inner :N
+# Use the extracted gravity for a surface-weight calculation on a 100 kg
+# payload. Mass needs kg units so the product has force units (N).
+Payload Mass: mass = 100 :kg
+Surface Weight: weight = mass * g.inner :N

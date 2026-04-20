@@ -42,6 +42,33 @@ pub fn preload_design_files<E: ExternalResolutionContext>(
     }
 }
 
+/// Renders a [`ModelPath`] for inclusion in user-facing messages.
+///
+/// Two model paths can carry equivalent locations through different syntactic
+/// forms (e.g. one fully resolved and one still containing `..`); using the
+/// canonicalized form when available — and falling back to the file name —
+/// keeps error messages readable and stable in snapshot tests.
+fn display_model_path(path: &ModelPath) -> String {
+    let raw = path.as_path();
+    if let Some(name) = raw.file_name().and_then(|s| s.to_str()) {
+        return name.to_string();
+    }
+    raw.display().to_string()
+}
+
+/// Returns `true` when two [`ModelPath`]s point at the same on-disk file,
+/// canonicalizing where possible so equivalent paths that differ syntactically
+/// (e.g. one with `..` segments) compare equal.
+fn same_model_path(a: &ModelPath, b: &ModelPath) -> bool {
+    if a == b {
+        return true;
+    }
+    match (a.as_path().canonicalize(), b.as_path().canonicalize()) {
+        (Ok(ca), Ok(cb)) => ca == cb,
+        _ => false,
+    }
+}
+
 /// Returns the path to the design target model if there's a `design <target>` declaration.
 fn collect_design_target_path(model_path: &ModelPath, model_ast: &ast::Model) -> Option<ModelPath> {
     for item in collect_design_surface(model_ast) {
@@ -457,9 +484,28 @@ fn handle_use_design<E: ExternalResolutionContext>(
 
     match ud.instance() {
         None => {
-            if explicit_target.is_none() {
+            let Some(consuming_target) = explicit_target else {
                 resolution_context.add_design_resolution_error_to_active_model(
                     "`use design` without `for` requires a preceding `design <model>` declaration",
+                    ud.span(),
+                );
+                return;
+            };
+            // Design inheritance only makes sense when both designs target
+            // the same model. Otherwise the imported overrides apply to
+            // unrelated parameters.
+            if let Some(imported_target) = imported_design.target_model.as_ref()
+                && !same_model_path(imported_target, consuming_target)
+            {
+                resolution_context.add_design_resolution_error_to_active_model(
+                    format!(
+                        "`use design {design}` cannot inherit from a design that targets a \
+                         different model: this design targets `{consuming}`, but `{design}` \
+                         targets `{imported}`.",
+                        design = display_model_path(&dpath),
+                        consuming = display_model_path(consuming_target),
+                        imported = display_model_path(imported_target),
+                    ),
                     ud.span(),
                 );
                 return;
@@ -586,9 +632,10 @@ fn store_design_export<E: ExternalResolutionContext>(
 }
 
 /// Records a declarative [`ir::DesignApplication`] for every
-/// `use design … for <ref>` after validating that the reference exists and
-/// the design file loaded successfully. The actual stamping happens in the
-/// instancing pass during evaluation.
+/// `use design … for <ref>` after validating that the reference exists,
+/// the design file loaded successfully, and the design's declared target
+/// matches the model that the reference resolves to. The actual stamping
+/// happens in the instancing pass during evaluation.
 fn record_applied_designs<E: ExternalResolutionContext>(
     surface: &[DesignSurfaceItem<'_>],
     model_path: &ModelPath,
@@ -603,30 +650,60 @@ fn record_applied_designs<E: ExternalResolutionContext>(
         };
 
         let rn = ReferenceName::new(id_node.as_str().to_string());
-        if !matches!(
-            resolution_context.lookup_reference_path_in_active_model(&rn),
-            ReferencePathResult::Found(..)
-        ) {
-            resolution_context.add_design_resolution_error_to_active_model(
-                format!(
-                    "`use design … for {}`: reference `{}` not found on this model",
-                    rn.as_str(),
-                    rn.as_str()
-                ),
-                id_node.span(),
-            );
-            continue;
-        }
+        // Resolve the reference and capture the model path it points to so
+        // we can validate the design's target against it.
+        let referenced_model_path = match resolution_context
+            .lookup_reference_path_in_active_model(&rn)
+        {
+            ReferencePathResult::Found(_, path) => path.clone(),
+            ReferencePathResult::ReferenceNotFound
+            | ReferencePathResult::ReferenceHasResolutionError
+            | ReferencePathResult::ModelHasResolutionError(_)
+            | ReferencePathResult::ModelNotFound(_) => {
+                resolution_context.add_design_resolution_error_to_active_model(
+                    format!(
+                        "`use design … for {}`: reference `{}` not found on this model",
+                        rn.as_str(),
+                        rn.as_str()
+                    ),
+                    id_node.span(),
+                );
+                continue;
+            }
+        };
 
         let relative_path = ud.get_design_relative_path();
         let dpath = model_path.get_sibling_design_path(relative_path);
 
         // Skip applications targeting a design we couldn't load — diagnostics
         // for that come from elsewhere.
-        if !matches!(
-            resolution_context.lookup_model(&dpath),
-            ModelResult::Found(_)
-        ) {
+        let design_target = match resolution_context.lookup_model(&dpath) {
+            ModelResult::Found(m) => m.design_export().target_model.clone(),
+            ModelResult::HasError | ModelResult::NotFound => continue,
+        };
+
+        // Validate that the design's declared target model matches the model
+        // that the referenced alias resolves to. Without this check, applying
+        // `use design X for r` against a design X targeting a different model
+        // is silently ineffective: its overrides land on the wrong instance
+        // and its reference replacements would (if propagated) rewrite a
+        // different model's references.
+        if let Some(design_target) = design_target.as_ref()
+            && !same_model_path(design_target, &referenced_model_path)
+        {
+            resolution_context.add_design_resolution_error_to_active_model(
+                format!(
+                    "`use design … for {ref_name}`: design `{design}` targets `{design_target}`, \
+                     but reference `{ref_name}` resolves to `{ref_target}`. \
+                     Apply this design without `for`, or use a design whose \
+                     `design <model>` matches `{ref_target}`.",
+                    ref_name = rn.as_str(),
+                    design = display_model_path(&dpath),
+                    design_target = display_model_path(design_target),
+                    ref_target = display_model_path(&referenced_model_path),
+                ),
+                ud.span(),
+            );
             continue;
         }
 

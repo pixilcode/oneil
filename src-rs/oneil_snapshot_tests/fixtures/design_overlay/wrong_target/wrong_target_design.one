@@ -1,0 +1,5 @@
+# This design targets gravity_mars, so applying it `for planet` (which is
+# bound to gravity_earth) is a target mismatch and should error.
+design ../../gravity_mars
+
+g = 1.62 :m/s^2

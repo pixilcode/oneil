@@ -1,13 +1,16 @@
-# Test: shared refs both see the same overlay
-# Both probes share same gravity reference
-# Overlay changes the shared reference, affecting both
+# Test: shared refs both see the same overlay.
+# `ref ../gravity_earth as planet` is a shared reference (no `use`), so any
+# overlay applied to `planet` is observed by everything that reads `g.planet`.
 ref ../gravity_earth as planet
 
+# The design targets gravity_earth and overrides `g`, so applying it `for
+# planet` drops the override onto the shared planet instance.
 use design shared_ref_design for planet
 
-# Both use same (replaced) gravity - Mars
-# Weight = 100 * 3.72 = 372 N each
-# Total = 744 N
+# Both weight readings see the overlaid (Mars) gravity.
+# Weight A = 100kg * 3.72 m/s^2 = 372 N
+# Weight B = 100kg * 3.72 m/s^2 = 372 N
+# Total    = 744 N
 Payload: mass = 100 :kg
 Weight A: w_a = mass * g.planet :N
 Weight B: w_b = mass * g.planet :N
