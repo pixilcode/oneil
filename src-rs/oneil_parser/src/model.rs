@@ -12,8 +12,8 @@ use nom::{
     combinator::{eof, opt, value},
 };
 use oneil_ast::{
-    DeclNode, Model, ModelNode, Node, Section, SectionHeader, SectionHeaderNode, SectionLabelNode,
-    SectionNode,
+    DeclNode, Model, ModelNameNode, ModelNode, Node, Section, SectionHeader, SectionHeaderNode,
+    SectionLabelNode, SectionNode,
 };
 use oneil_shared::span::Span;
 
@@ -26,7 +26,11 @@ use crate::{
         reason::{ExpectKind, ParserErrorReason},
     },
     note::parse as parse_note,
-    token::{keyword::section, naming::label, structure::end_of_line},
+    token::{
+        keyword::{model as model_keyword, section},
+        naming::label,
+        structure::end_of_line,
+    },
     util::{InputSpan, Result, source_location_from},
 };
 
@@ -55,6 +59,10 @@ pub fn parse_complete(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserP
 fn model(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserPartialModelError>> {
     let (rest, end_of_line_token) = opt(end_of_line).parse(input).expect("should always parse");
 
+    let (rest, name) = opt(parse_model_name)
+        .parse(rest)
+        .map_err(|error| handle_model_name_failure(rest, error))?;
+
     let (rest, note) = opt(parse_note)
         .parse(rest)
         .map_err(|error| handle_model_note_failure(rest, error))?;
@@ -73,6 +81,9 @@ fn model(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserPartialModelEr
     // get the last span/whitespace span of the model
     let last_end_of_line_spans =
         end_of_line_token.map(|token| (token.lexeme_span, token.whitespace_span));
+    let last_name_spans = name
+        .as_ref()
+        .map(|name| (name.span(), name.whitespace_span()));
     let last_note_spans = note
         .as_ref()
         .map(|note| (note.span(), note.whitespace_span()));
@@ -85,6 +96,7 @@ fn model(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserPartialModelEr
 
     let (last_node_span, last_node_whitespace_span) = [
         last_end_of_line_spans,
+        last_name_spans,
         last_note_spans,
         last_decl_spans,
         last_section_spans,
@@ -112,7 +124,7 @@ fn model(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserPartialModelEr
         .unwrap_or_else(|| Span::new(*model_span.end(), *model_span.end()));
 
     let model_node = Node::new(
-        Model::new(note, decls, sections),
+        Model::new(name, note, decls, sections),
         model_span,
         model_whitespace_span,
     );
@@ -124,6 +136,30 @@ fn model(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserPartialModelEr
         Err(nom::Err::Failure(Box::new(ParserPartialModelError::new(
             model_node, errors,
         ))))
+    }
+}
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the parameter *is* in fact consumed..."
+)]
+fn handle_model_name_failure(
+    input: InputSpan<'_>,
+    error: nom::Err<ParserError>,
+) -> nom::Err<Box<ParserPartialModelError>> {
+    match error {
+        nom::Err::Error(e) => panic!("should not be able to fail with an error: {e:?}"),
+
+        nom::Err::Failure(e) => {
+            let source_location = source_location_from(input);
+            let span = Span::empty(source_location);
+            let model_node = ModelNode::new(Model::empty(), span, span);
+            let errors = vec![e];
+            let partial_error = ParserPartialModelError::new(model_node, errors);
+            nom::Err::Failure(Box::new(partial_error))
+        }
+
+        nom::Err::Incomplete(e) => nom::Err::Incomplete(e),
     }
 }
 
@@ -335,6 +371,31 @@ fn parse_section_header(input: InputSpan<'_>) -> Result<'_, SectionHeaderNode, P
     Ok((rest, header_node))
 }
 
+/// Parses a model name header.
+fn parse_model_name(input: InputSpan<'_>) -> Result<'_, ModelNameNode, ParserError> {
+    let (rest, model_token) = model_keyword.convert_errors().parse(input)?;
+
+    let (rest, name_token) = label
+        .or_fail_with(ParserError::model_name_missing_name(
+            model_token.lexeme_span,
+        ))
+        .parse(rest)?;
+    let name_node = ModelNameNode::from(name_token);
+
+    let (rest, end_of_line_token) = end_of_line
+        .or_fail_with(ParserError::model_name_missing_end_of_line(
+            name_token.lexeme_span,
+        ))
+        .parse(rest)?;
+
+    let name_span =
+        Span::from_start_and_end(&model_token.lexeme_span, &end_of_line_token.lexeme_span);
+    let name_whitespace_span = end_of_line_token.whitespace_span;
+    let name_node = Node::new(name_node.take_value(), name_span, name_whitespace_span);
+
+    Ok((rest, name_node))
+}
+
 /// Attempts to recover from a parsing error by skipping to the next line
 ///
 /// This function is used for error recovery when parsing declarations or
@@ -377,6 +438,7 @@ mod tests {
     fn empty_model() {
         let input = InputSpan::new_extra("", Config::default());
         let (rest, model) = parse_complete(input).expect("should parse empty model");
+        assert!(model.name().is_none());
         assert!(model.note().is_none());
         assert!(model.decls().is_empty());
         assert!(model.sections().is_empty());
@@ -384,9 +446,42 @@ mod tests {
     }
 
     #[test]
+    fn model_with_name() {
+        let input = InputSpan::new_extra("model Example Model\n", Config::default());
+        let (rest, model) = parse_complete(input).expect("should parse named model");
+        assert_eq!(
+            model.name().expect("model should have a name").as_str(),
+            "Example Model"
+        );
+        assert!(model.note().is_none());
+        assert!(model.decls().is_empty());
+        assert!(model.sections().is_empty());
+        assert_eq!(rest.fragment(), &"");
+    }
+
+    #[test]
+    fn model_with_name_and_declarations() {
+        let input = InputSpan::new_extra(
+            "model Example Model\nimport foo\nsection Inputs\nbar: x = 1\n",
+            Config::default(),
+        );
+        let (rest, model) =
+            parse_complete(input).expect("should parse named model with declarations");
+        assert_eq!(
+            model.name().expect("model should have a name").as_str(),
+            "Example Model"
+        );
+        assert_eq!(model.decls().len(), 1);
+        assert_eq!(model.sections().len(), 1);
+        assert_eq!(model.sections()[0].header().label().as_str(), "Inputs");
+        assert_eq!(rest.fragment(), &"");
+    }
+
+    #[test]
     fn model_with_note() {
         let input = InputSpan::new_extra("~ This is a note\n", Config::default());
         let (rest, model) = parse_complete(input).expect("should parse model with note");
+        assert!(model.name().is_none());
         assert!(model.note().is_some());
         assert!(model.decls().is_empty());
         assert!(model.sections().is_empty());

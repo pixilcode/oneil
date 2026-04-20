@@ -19,8 +19,8 @@ use crate::token::{
 
 /// Keywords that are valid in the Oneil language.
 pub const KEYWORDS: &[&str] = &[
-    "and", "as", "false", "from", "if", "import", "not", "or", "ref", "section", "test", "true",
-    "use", "with",
+    "and", "as", "false", "from", "if", "import", "model", "not", "or", "ref", "section", "test",
+    "true", "use", "with",
 ];
 
 /// Creates a keyword parser for the specified keyword string.
@@ -76,6 +76,11 @@ pub fn if_(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
 /// Parses the 'import' keyword token.
 pub fn import(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
     keyword("import", error::ExpectKeyword::Import).parse(input)
+}
+
+/// Parses the 'model' keyword token.
+pub fn model(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
+    keyword("model", error::ExpectKeyword::Model).parse(input)
 }
 
 /// Parses the 'not' keyword token.

@@ -2,7 +2,7 @@ use oneil_ast::{BinaryOp, ComparisonOp, UnaryOp, UnitOp};
 
 use crate::{
     error::reason::{
-        DeclKind, ExpectKind, ExprKind, ImportKind, IncompleteKind, ParameterKind,
+        DeclKind, ExpectKind, ExprKind, ImportKind, IncompleteKind, ModelNameKind, ParameterKind,
         ParserErrorReason, SectionKind, TestKind, UnitKind, UseKind,
     },
     token::error::{IncompleteKind as TokenIncompleteKind, TokenErrorKind},
@@ -130,6 +130,15 @@ impl fmt::Display for SectionKind {
     }
 }
 
+impl fmt::Display for ModelNameKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingName => write!(f, "expected name after `model`"),
+            Self::MissingEndOfLine => write!(f, "unexpected character"),
+        }
+    }
+}
+
 impl fmt::Display for ParameterKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -183,6 +192,7 @@ impl fmt::Display for IncompleteKind {
             Self::Decl(decl_kind) => decl_kind.fmt(f),
             Self::Expr(expr_kind) => expr_kind.fmt(f),
             Self::Section(section_kind) => section_kind.fmt(f),
+            Self::ModelName(model_name_kind) => model_name_kind.fmt(f),
             Self::Parameter(parameter_kind) => parameter_kind.fmt(f),
             Self::Test(test_kind) => test_kind.fmt(f),
             Self::Unit(unit_kind) => unit_kind.fmt(f),

@@ -67,6 +67,8 @@ pub enum ExpectKeyword {
     If,
     /// Expected 'import' keyword
     Import,
+    /// Expected 'model' keyword
+    Model,
     /// Expected 'not' keyword
     Not,
     /// Expected 'or' keyword

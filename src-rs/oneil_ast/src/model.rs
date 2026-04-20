@@ -1,10 +1,14 @@
 //! Model constructs for the AST
 
-use crate::{declaration::DeclNode, naming::SectionLabelNode, node::Node, note::NoteNode};
+use crate::{
+    declaration::DeclNode, model_name::ModelNameNode, naming::SectionLabelNode, node::Node,
+    note::NoteNode,
+};
 
 /// A model definition in an Oneil program
 #[derive(Debug, Clone, PartialEq)]
 pub struct Model {
+    name: Option<ModelNameNode>,
     note: Option<NoteNode>,
     decls: Vec<DeclNode>,
     sections: Vec<SectionNode>,
@@ -17,11 +21,13 @@ impl Model {
     /// Creates a new model with the given components
     #[must_use]
     pub const fn new(
+        name: Option<ModelNameNode>,
         note: Option<NoteNode>,
         decls: Vec<DeclNode>,
         sections: Vec<SectionNode>,
     ) -> Self {
         Self {
+            name,
             note,
             decls,
             sections,
@@ -32,10 +38,17 @@ impl Model {
     #[must_use]
     pub const fn empty() -> Self {
         Self {
+            name: None,
             note: None,
             decls: vec![],
             sections: vec![],
         }
+    }
+
+    /// Returns the optional name of this model
+    #[must_use]
+    pub const fn name(&self) -> Option<&ModelNameNode> {
+        self.name.as_ref()
     }
 
     /// Returns the optional note attached to this model

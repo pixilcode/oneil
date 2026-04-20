@@ -237,6 +237,28 @@ impl ParserError {
         }
     }
 
+    /// Creates a new `ParserError` for a model header missing a name
+    pub(crate) fn model_name_missing_name(model_token: Span) -> impl Fn(TokenError) -> Self {
+        move |error| {
+            Self::new_from_token_error(
+                error,
+                ParserErrorReason::model_name_missing_name(model_token),
+            )
+        }
+    }
+
+    /// Creates a new `ParserError` for a model header missing an end of line
+    pub(crate) fn model_name_missing_end_of_line(
+        model_name_span: Span,
+    ) -> impl Fn(TokenError) -> Self {
+        move |error| {
+            Self::new_from_token_error(
+                error,
+                ParserErrorReason::model_name_missing_end_of_line(model_name_span),
+            )
+        }
+    }
+
     /// Creates a new `ParserError` for a missing identifier in a parameter
     pub(crate) fn parameter_missing_identifier(colon_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {

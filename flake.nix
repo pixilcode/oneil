@@ -17,10 +17,10 @@
           clippy
           rustfmt
           rust-analyzer
+          python3
 
           # VSCode extension tools
           nodejs_20
-          pnpm
           vsce # "Visual Studio Code Extension Manager"
         ];
       };

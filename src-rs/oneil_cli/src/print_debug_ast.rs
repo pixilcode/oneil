@@ -21,6 +21,16 @@ fn print_model(model: &ast::Model, indent: usize) {
         dbg_style::ROOT_HEADER.style("Model")
     );
 
+    if let Some(name) = model.name() {
+        println!(
+            "{} {} {} \"{}\"",
+            "    ".repeat(indent),
+            dbg_style::TREE.style("├──"),
+            dbg_style::DETAIL.style("Name:"),
+            dbg_style::IDENTIFIER.style(name.as_str())
+        );
+    }
+
     // Print note if present
     if let Some(note) = model.note() {
         println!(

@@ -24,12 +24,12 @@ fn unimportant_span() -> Span {
 // SIMPLE CONSTRUCTORS
 
 pub fn empty_model_node() -> ast::ModelNode {
-    let model = ast::Model::new(None, vec![], vec![]);
+    let model = ast::Model::new(None, None, vec![], vec![]);
     ast::Node::new(model, unimportant_span(), unimportant_span())
 }
 
 pub fn empty_model() -> ast::Model {
-    ast::Model::new(None, vec![], vec![])
+    ast::Model::new(None, None, vec![], vec![])
 }
 
 /// Wraps a [`Model`](ast::Model) in a [`ModelNode`](ast::ModelNode) with unimportant spans.
@@ -337,7 +337,7 @@ impl ModelBuilder {
     }
 
     pub fn build(self) -> ast::Model {
-        ast::Model::new(self.note, self.decls, self.sections)
+        ast::Model::new(None, self.note, self.decls, self.sections)
     }
 }
 

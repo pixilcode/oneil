@@ -177,6 +177,22 @@ impl ParserErrorReason {
     }
 
     #[must_use]
+    pub(crate) const fn model_name_missing_name(model_span: Span) -> Self {
+        Self::Incomplete {
+            cause: model_span,
+            kind: IncompleteKind::ModelName(ModelNameKind::MissingName),
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn model_name_missing_end_of_line(model_name_span: Span) -> Self {
+        Self::Incomplete {
+            cause: model_name_span,
+            kind: IncompleteKind::ModelName(ModelNameKind::MissingEndOfLine),
+        }
+    }
+
+    #[must_use]
     pub(crate) const fn parameter_missing_identifier(colon_span: Span) -> Self {
         Self::Incomplete {
             cause: colon_span,
@@ -378,6 +394,8 @@ pub enum IncompleteKind {
     Expr(ExprKind),
     /// Found an incomplete section
     Section(SectionKind),
+    /// Found an incomplete model name
+    ModelName(ModelNameKind),
     /// Found an incomplete parameter
     Parameter(ParameterKind),
     /// Found an incomplete test
@@ -458,6 +476,15 @@ pub enum ExprKind {
 pub enum SectionKind {
     /// Found an incomplete section label
     MissingLabel,
+    /// Missing end of line
+    MissingEndOfLine,
+}
+
+/// The different kind of model name errors
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelNameKind {
+    /// Found an incomplete model name
+    MissingName,
     /// Missing end of line
     MissingEndOfLine,
 }

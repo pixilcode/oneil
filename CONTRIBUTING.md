@@ -63,11 +63,12 @@ settings](https://users.rust-lang.org/t/how-to-use-clippy-in-vs-code-with-rust-a
 1. Clone the repository
 2. Install the following dependencies (or use `nix develop` if in a Nix environment):
     - latest stable Rust toolchain
+    - `python3`
     - `nodejs`
-    - `npm` or `pnpm`
+    - `npm`
     - `vscode`
 3. Run `cargo build` to compile Oneil
-4. Run `cd vscode` followed by `pnpm run compile` to bundle Oneil as a vscode LSP plugin
+4. Run `cd vscode` followed by `npm run compile` to bundle Oneil as a vscode LSP plugin
 5. If not already opened, open VSCode in the current directory
 6. Press the `F5` key to launch VSCode's Extension Development Host (should open a separate window)
 7. Open any `.on` file you want to try the LSP on! Have a look at [the `test` directory](./test) for some example files

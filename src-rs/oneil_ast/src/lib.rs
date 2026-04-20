@@ -5,6 +5,7 @@ mod debug_info;
 mod declaration;
 mod expression;
 mod model;
+mod model_name;
 mod naming;
 mod node;
 mod note;
@@ -22,6 +23,7 @@ pub use expression::{
     LiteralNode, UnaryOp, UnaryOpNode, Variable, VariableNode,
 };
 pub use model::{Model, ModelNode, Section, SectionHeader, SectionHeaderNode, SectionNode};
+pub use model_name::{ModelName, ModelNameNode};
 pub use naming::{
     Directory, DirectoryNode, Identifier, IdentifierNode, ParameterLabelNode, ParameterNameNode,
     ReferenceNameNode, SectionLabelNode,
