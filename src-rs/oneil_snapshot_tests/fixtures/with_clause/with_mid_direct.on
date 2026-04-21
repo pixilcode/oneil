@@ -1,0 +1,7 @@
+# Direct test of the propulsion (mid) submodel: import it as `propulsion`
+# and read its T/W ratio. No extraction here — `propulsion`'s own
+# `inner` reference is consumed entirely from inside the mid model.
+submodel mid_with_matching as propulsion
+
+# Earth T/W ratio: 1000 / (100 * 9.81) ≈ 1.02
+Earth Performance: result = ratio.propulsion

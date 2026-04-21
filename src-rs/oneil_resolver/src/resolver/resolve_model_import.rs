@@ -30,8 +30,7 @@ pub fn resolve_model_imports<E>(
             get_reference_name_and_span(model_import.model_info());
         // The "source name" carried on the `SubmodelImport` for diagnostics
         // is the model file name as written (`foo` in `use foo as bar`).
-        let (source_name, source_name_span) =
-            get_source_name_and_span(model_import.model_info());
+        let (source_name, source_name_span) = get_source_name_and_span(model_import.model_info());
 
         let is_submodel = model_import.model_kind() == ast::ModelKind::Submodel;
 
@@ -60,13 +59,12 @@ pub fn resolve_model_imports<E>(
             })
             .flatten();
 
-        let had_duplicate = maybe_reference_duplicate_error.is_some()
-            || maybe_submodel_duplicate_error.is_some();
+        let had_duplicate =
+            maybe_reference_duplicate_error.is_some() || maybe_submodel_duplicate_error.is_some();
 
         // handle duplicate references
         if let Some(reference_duplicate_error) = maybe_reference_duplicate_error {
-            let submodel_name =
-                is_submodel.then(|| SubmodelName::from(reference_name.as_str()));
+            let submodel_name = is_submodel.then(|| SubmodelName::from(reference_name.as_str()));
             resolution_context.add_model_import_resolution_error_to_active_model(
                 reference_name.clone(),
                 submodel_name,
@@ -439,9 +437,9 @@ mod tests {
 
             for (alias, expected_path) in expected_submodels {
                 let alias = ReferenceName::from(alias);
-                let submodel_import = submodel_map.get(&alias).expect(
-                    format!("did not find submodel for '{}'", alias.as_str()).as_str(),
-                );
+                let submodel_import = submodel_map
+                    .get(&alias)
+                    .expect(format!("did not find submodel for '{}'", alias.as_str()).as_str());
                 assert!(
                     !submodel_import.is_extracted(),
                     "expected '{}' to be a direct submodel, not extracted",
@@ -488,11 +486,7 @@ mod tests {
             for (alias, parent_ref, expected_path) in expected_extractions {
                 let alias = ReferenceName::from(alias);
                 let submodel_import = submodel_map.get(&alias).expect(
-                    format!(
-                        "did not find extracted submodel '{}'",
-                        alias.as_str()
-                    )
-                    .as_str(),
+                    format!("did not find extracted submodel '{}'", alias.as_str()).as_str(),
                 );
                 assert!(
                     submodel_import.is_extracted(),

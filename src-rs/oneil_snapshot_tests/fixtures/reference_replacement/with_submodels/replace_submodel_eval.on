@@ -1,6 +1,0 @@
-# Evaluate mission with Mars propulsion
-ref parent_with_submodel as mission
-use design replace_mid_design for mission
-
-# T/W ratio should reflect Mars gravity (higher ratio due to lower g)
-Mars Performance: result = perf.mission

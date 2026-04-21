@@ -1,6 +1,0 @@
-# Pulls `inner_design` in under `r`. From `outer_model`'s vantage point
-# `inner_design`'s contributions describe `r`'s instance, so its replacement
-# of `planet` lands on `r.planet`.
-design outer_model
-
-use design inner_design for r

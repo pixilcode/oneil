@@ -4,7 +4,7 @@ use ../gravity_earth as planet_a
 use ../gravity_earth as planet_b
 
 # Apply the Mars-gravity overlay only to planet_a.
-use design two_instances_design for planet_a
+apply two_instances_design to planet_a
 
 # Calculate 100kg weight on each planet.
 # Planet A (overlaid Mars): w = 100 * 3.72 = 372 N

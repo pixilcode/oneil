@@ -1,6 +1,9 @@
-//! Resolution of `design`, `use design`, and design shorthand assignments.
+//! Resolution of design surface declarations: `design <model>`,
+//! `apply <file> to <ref>(.<ref>)*`, and design parameter assignments
+//! (`id(.<ref>)* = expr`).
 //!
-//! `use design` resolves sibling **`.one`** files; `design <model>` still resolves the target as a sibling **`.on`** model.
+//! `apply` resolves sibling **`.one`** files; `design <model>` resolves the
+//! target as a sibling **`.on`** model.
 
 use std::ops::Deref;
 
@@ -12,42 +15,29 @@ use oneil_shared::{
     labels::ParameterLabel,
     paths::ModelPath,
     span::Span,
-    symbols::{ParameterName, ReferenceName, SubmodelName},
+    symbols::{ParameterName, ReferenceName},
 };
 
 use crate::{
-    ExternalResolutionContext, ResolutionContext,
-    context::{ModelResult, ReferencePathResult},
-    resolver::resolve_parameter,
+    ExternalResolutionContext, ResolutionContext, context::ModelResult, resolver::resolve_parameter,
 };
 
-/// Loads sibling models referenced by `use design` and design reference replacements
-/// so their IR exists before resolution.
+/// Loads sibling models referenced by `apply` declarations so their IR exists
+/// before resolution.
 pub fn preload_design_files<E: ExternalResolutionContext>(
     model_path: &ModelPath,
     model_ast: &ast::Model,
     resolution_context: &mut ResolutionContext<'_, E>,
 ) {
-    // Load the design target model (the model specified in `design <target>`)
     if let Some(target_path) = collect_design_target_path(model_path, model_ast) {
         super::load_model(&target_path, resolution_context);
     }
-    // Load design files
-    for path in collect_use_design_paths(model_path, model_ast) {
-        super::load_model(&path, resolution_context);
-    }
-    // Load reference replacement models
-    for path in collect_reference_replacement_paths(model_path, model_ast) {
+    for path in collect_apply_design_paths(model_path, model_ast) {
         super::load_model(&path, resolution_context);
     }
 }
 
 /// Renders a [`ModelPath`] for inclusion in user-facing messages.
-///
-/// Two model paths can carry equivalent locations through different syntactic
-/// forms (e.g. one fully resolved and one still containing `..`); using the
-/// canonicalized form when available — and falling back to the file name —
-/// keeps error messages readable and stable in snapshot tests.
 fn display_model_path(path: &ModelPath) -> String {
     let raw = path.as_path();
     if let Some(name) = raw.file_name().and_then(|s| s.to_str()) {
@@ -80,36 +70,16 @@ fn collect_design_target_path(model_path: &ModelPath, model_ast: &ast::Model) ->
     None
 }
 
-/// Collects unique paths for every `use design` declaration.
+/// Collects unique paths referenced by every `apply` declaration (including nested ones).
 #[must_use]
-pub fn collect_use_design_paths(
+pub fn collect_apply_design_paths(
     model_path: &ModelPath,
     model_ast: &ast::Model,
 ) -> IndexSet<ModelPath> {
     let mut out = IndexSet::new();
-    for ud in iter_use_designs(model_ast) {
-        // UseDesign supports full paths via get_design_relative_path()
-        let relative_path = ud.get_design_relative_path();
-        let p = model_path.get_sibling_design_path(relative_path);
-        out.insert(p);
-    }
-    out
-}
-
-/// Collects unique paths for every design reference replacement (`use model as alias`).
-#[must_use]
-fn collect_reference_replacement_paths(
-    model_path: &ModelPath,
-    model_ast: &ast::Model,
-) -> IndexSet<ModelPath> {
-    let mut out = IndexSet::new();
-    for item in collect_design_surface(model_ast) {
-        if let DesignSurfaceItem::Reference(um) = item {
-            // UseModel supports full paths via get_model_relative_path()
-            let relative_path = um.get_model_relative_path();
-            let p = model_path.get_sibling_model_path(relative_path);
-            out.insert(p);
-        }
+    for ad in iter_apply_designs(model_ast) {
+        let relative_path = ad.get_design_relative_path();
+        out.insert(model_path.get_sibling_design_path(relative_path));
     }
     out
 }
@@ -118,25 +88,16 @@ fn collect_reference_replacement_paths(
 #[derive(Debug, Clone, Copy)]
 pub enum DesignSurfaceItem<'a> {
     Target(&'a ast::DesignTargetNode),
-    UseDesign(&'a ast::UseDesignNode),
+    /// `apply <file> to <path>(. <ref>)* [ … ]` declaration on this model.
+    Apply(&'a ast::ApplyDesignNode),
+    /// `id(.<ref>)* = expr` parameter line in a design file.
     Parameter(&'a ast::DesignParameterNode),
-    /// Reference replacement: `use model as alias` in design context.
-    /// The `UseModel` must have an alias set.
-    Reference(&'a ast::UseModelNode),
 }
 
-/// Checks if a `UseModel` is a reference replacement.
-///
-/// A reference replacement is a `use model as alias` declaration (not `ref`).
-/// It must use the `use` keyword (Submodel kind) and have an explicit alias.
-pub fn is_reference_replacement(um: &ast::UseModel) -> bool {
-    um.model_kind() == ast::ModelKind::Submodel && um.model_info().alias().is_some()
-}
-
+/// Walks all declarations (top-level and within sections) producing a
+/// [`DesignSurfaceItem`] for each design-related entry.
 pub fn collect_design_surface(model_ast: &ast::Model) -> Vec<DesignSurfaceItem<'_>> {
     let mut items = Vec::new();
-    let mut pending_use_models: Vec<&ast::UseModelNode> = Vec::new();
-    let mut has_design_target = false;
 
     let all_decls = model_ast
         .decls()
@@ -145,27 +106,13 @@ pub fn collect_design_surface(model_ast: &ast::Model) -> Vec<DesignSurfaceItem<'
 
     for decl in all_decls {
         match &**decl {
-            ast::Decl::DesignTarget(n) => {
-                has_design_target = true;
-                items.push(DesignSurfaceItem::Target(n));
-            }
-            ast::Decl::UseDesign(n) => items.push(DesignSurfaceItem::UseDesign(n)),
+            ast::Decl::DesignTarget(n) => items.push(DesignSurfaceItem::Target(n)),
+            ast::Decl::ApplyDesign(n) => items.push(DesignSurfaceItem::Apply(n)),
             ast::Decl::DesignParameter(n) => items.push(DesignSurfaceItem::Parameter(n)),
-            ast::Decl::UseModel(n) if is_reference_replacement(n) => {
-                pending_use_models.push(n);
-            }
             ast::Decl::Import(_)
             | ast::Decl::UseModel(_)
             | ast::Decl::Parameter(_)
             | ast::Decl::Test(_) => {}
-        }
-    }
-
-    // `use model as alias` is only a reference replacement when this file is a
-    // design file (has a `design <target>` declaration).
-    if has_design_target {
-        for um in pending_use_models {
-            items.push(DesignSurfaceItem::Reference(um));
         }
     }
 
@@ -185,15 +132,25 @@ fn span_of_parameter_on_model<E: ExternalResolutionContext>(
     }
 }
 
-fn iter_use_designs(model_ast: &ast::Model) -> impl Iterator<Item = &ast::UseDesignNode> + '_ {
-    collect_design_surface(model_ast)
-        .into_iter()
-        .filter_map(|item| match item {
-            DesignSurfaceItem::UseDesign(n) => Some(n),
-            DesignSurfaceItem::Target(_)
-            | DesignSurfaceItem::Parameter(_)
-            | DesignSurfaceItem::Reference(_) => None,
-        })
+/// Iterates over every apply declaration in `model_ast`, including nested ones.
+fn iter_apply_designs(model_ast: &ast::Model) -> Vec<&ast::ApplyDesignNode> {
+    let mut out = Vec::new();
+    for item in collect_design_surface(model_ast) {
+        if let DesignSurfaceItem::Apply(n) = item {
+            push_apply_recursive(n, &mut out);
+        }
+    }
+    out
+}
+
+fn push_apply_recursive<'a>(
+    node: &'a ast::ApplyDesignNode,
+    out: &mut Vec<&'a ast::ApplyDesignNode>,
+) {
+    out.push(node);
+    for nested in node.nested_applies() {
+        push_apply_recursive(nested, out);
+    }
 }
 
 /// Registers a design-local parameter as a scratch entry on the resolution context.
@@ -201,7 +158,7 @@ fn iter_use_designs(model_ast: &ast::Model) -> impl Iterator<Item = &ast::UseDes
 /// This lets design-local parameters reference each other during resolution without
 /// polluting the target model's IR. The scratch entry is only visible to parameter
 /// lookups; the real `ir::Parameter` (with its resolved value) is stored in the
-    /// design's `parameter_additions`.
+/// design's `parameter_additions`.
 fn register_design_local_scratch<E: ExternalResolutionContext>(
     model_path: &ModelPath,
     name: ParameterName,
@@ -244,8 +201,8 @@ fn register_design_local_scratch<E: ExternalResolutionContext>(
 /// 2. Dispatch each surface item to the appropriate handler, accumulating into
 ///    a running [`ir::Design`].
 /// 3. Store the resulting design export on the active model.
-/// 4. Record a [`ir::DesignApplication`] for every `use design … for <ref>` so
-///    the instancing pass can compose contributions at evaluation time.
+/// 4. Record an [`ir::ApplyDesign`] for every `apply <file> to <path>` so the
+///    instancing pass can compose contributions at evaluation time.
 pub fn resolve_design_surface<E: ExternalResolutionContext>(
     model_path: &ModelPath,
     model_ast: &ast::Model,
@@ -276,20 +233,10 @@ pub fn resolve_design_surface<E: ExternalResolutionContext>(
                 &mut running,
                 resolution_context,
             ),
-            DesignSurfaceItem::UseDesign(ud) => handle_use_design(
-                ud,
-                model_path,
-                explicit_target.as_ref(),
-                &mut running,
-                resolution_context,
-            ),
-            DesignSurfaceItem::Reference(um) => handle_reference_replacement(
-                um,
-                model_path,
-                explicit_target.as_ref(),
-                &mut running,
-                resolution_context,
-            ),
+            DesignSurfaceItem::Apply(_) => {
+                // Apply declarations are recorded later by `record_applied_designs`,
+                // not folded into the design's own export.
+            }
         }
     }
 
@@ -321,13 +268,11 @@ fn scan_design_locals<E: ExternalResolutionContext>(
                 let relative_path = node.get_target_relative_path();
                 explicit_target = Some(model_path.get_sibling_model_path(relative_path));
             }
-            // Only non-scoped parameters can introduce new design-local names.
-            DesignSurfaceItem::Parameter(p) if p.instance().is_none() => {
+            // Only flat parameters can introduce new design-local names.
+            DesignSurfaceItem::Parameter(p) if p.instance_path().is_empty() => {
                 design_param_names.insert(ParameterName::from(p.ident().as_str()));
             }
-            DesignSurfaceItem::Parameter(_)
-            | DesignSurfaceItem::UseDesign(_)
-            | DesignSurfaceItem::Reference(_) => {}
+            DesignSurfaceItem::Parameter(_) | DesignSurfaceItem::Apply(_) => {}
         }
     }
 
@@ -372,8 +317,8 @@ fn handle_design_target<E: ExternalResolutionContext>(
 }
 
 /// Handles a design parameter line: either records it as an override on an
-/// existing target parameter, as a scoped override on a reference, or as a
-/// new design-local parameter.
+/// existing target parameter, as a scoped override on a reference path, or as
+/// a new design-local parameter.
 fn handle_design_parameter<E: ExternalResolutionContext>(
     p: &ast::DesignParameterNode,
     explicit_target: Option<&ModelPath>,
@@ -390,11 +335,16 @@ fn handle_design_parameter<E: ExternalResolutionContext>(
     };
     let name = ParameterName::from(p.ident().as_str());
 
-    // Scoped parameters (`param.ref = …`) carry an instance suffix.
-    let instance_path = p.instance().map(|inst| {
-        let ref_name = ReferenceName::new(inst.as_str().to_string());
-        InstancePath::root().child(ref_name)
-    });
+    // Scoped parameters (`param.ref(.ref)* = …`) carry an instance path suffix.
+    let instance_path = if p.instance_path().is_empty() {
+        None
+    } else {
+        let mut path = InstancePath::root();
+        for seg in p.instance_path() {
+            path = path.child(ReferenceName::new(seg.as_str().to_string()));
+        }
+        Some(path)
+    };
 
     // Resolve the RHS in the design target's scope so names inside it bind to
     // the target's parameters (and our pre-registered design-local scratches).
@@ -471,139 +421,6 @@ fn handle_design_parameter<E: ExternalResolutionContext>(
     }
 }
 
-/// Handles a `use design <file> [for <ref>]` declaration inside a design
-/// surface, merging the imported bundle into `running` and (for `for <ref>`)
-/// recording its augmented-reference parameters.
-fn handle_use_design<E: ExternalResolutionContext>(
-    ud: &ast::UseDesignNode,
-    model_path: &ModelPath,
-    explicit_target: Option<&ModelPath>,
-    running: &mut ir::Design,
-    resolution_context: &mut ResolutionContext<'_, E>,
-) {
-    let relative_path = ud.get_design_relative_path();
-    let dpath = model_path.get_sibling_design_path(relative_path);
-    let imported_design = match resolution_context.lookup_model(&dpath) {
-        ModelResult::Found(m) => m.design_export().clone(),
-        ModelResult::HasError | ModelResult::NotFound => return,
-    };
-
-    match ud.instance() {
-        None => {
-            let Some(consuming_target) = explicit_target else {
-                resolution_context.add_design_resolution_error_to_active_model(
-                    "`use design` without `for` requires a preceding `design <model>` declaration",
-                    ud.span(),
-                );
-                return;
-            };
-            // Design inheritance only makes sense when both designs target
-            // the same model. Otherwise the imported overrides apply to
-            // unrelated parameters.
-            if let Some(imported_target) = imported_design.target_model.as_ref()
-                && !same_model_path(imported_target, consuming_target)
-            {
-                resolution_context.add_design_resolution_error_to_active_model(
-                    format!(
-                        "`use design {design}` cannot inherit from a design that targets a \
-                         different model: this design targets `{consuming}`, but `{design}` \
-                         targets `{imported}`.",
-                        design = display_model_path(&dpath),
-                        consuming = display_model_path(consuming_target),
-                        imported = display_model_path(imported_target),
-                    ),
-                    ud.span(),
-                );
-                return;
-            }
-            running.merge_later_wins(&imported_design);
-        }
-        Some(id_node) => {
-            let rn = ReferenceName::new(id_node.as_str().to_string());
-            let prefix = InstancePath::root().child(rn.clone());
-            running.merge_prefixed(&prefix, &imported_design);
-
-            // Record augmented params so `ref.new_param` lookups succeed during
-            // resolution. The instancing pass consumes them at eval time.
-            if !imported_design.parameter_additions.is_empty() {
-                resolution_context
-                    .add_augmented_reference_to_active_model(rn, imported_design.clone());
-            }
-        }
-    }
-}
-
-/// Handles a reference replacement (`use model as alias [with [submodels]]`)
-/// declared inside a design file.
-fn handle_reference_replacement<E: ExternalResolutionContext>(
-    um: &ast::UseModelNode,
-    model_path: &ModelPath,
-    explicit_target: Option<&ModelPath>,
-    running: &mut ir::Design,
-    resolution_context: &mut ResolutionContext<'_, E>,
-) {
-    // `is_reference_replacement` guarantees `model_info().alias()` is `Some`.
-    let alias_node = um.model_info().get_alias();
-    let Some(tgt) = explicit_target.cloned() else {
-        resolution_context.add_design_resolution_error_to_active_model(
-            "reference replacement requires a preceding `design <model>` declaration",
-            alias_node.span(),
-        );
-        return;
-    };
-    let alias = ReferenceName::new(alias_node.as_str().to_string());
-
-    // A design file may replace a reference defined in the target model, but
-    // it may not both create a new reference with this alias and then replace
-    // it in the same file.
-    if let Some(original_span) = resolution_context
-        .get_reference_from_active_model(&alias)
-        .map(|r| *r.name_span())
-    {
-        resolution_context.add_design_resolution_error_to_active_model(
-            format!(
-                "cannot replace `{}` in the same file where it is defined; \
-                 reference replacements should target references in the design target model",
-                alias.as_str()
-            ),
-            alias_node.span(),
-        );
-        resolution_context.add_design_resolution_error_to_active_model(
-            format!("`{}` is defined here", alias.as_str()),
-            original_span,
-        );
-        return;
-    }
-
-    let relative_path = um.get_model_relative_path();
-    let replacement_path = model_path.get_sibling_model_path(relative_path);
-
-    let design_submodels: Vec<SubmodelName> = um
-        .imported_submodels()
-        .map(|sl| {
-            sl.iter()
-                .map(|mi: &ast::ModelInfoNode| {
-                    let info: &ast::ModelInfo = mi;
-                    SubmodelName::from(info.get_model_name().as_str())
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    validate_reference_replacement_submodels(
-        resolution_context,
-        &tgt,
-        &alias,
-        &replacement_path,
-        &design_submodels,
-        alias_node.span(),
-    );
-
-    running
-        .reference_replacements
-        .insert(alias, ir::ReferenceReplacement { replacement_path });
-}
-
 /// Stores the final [`ir::Design`] on the active model if the surface produced
 /// any design content; otherwise stores an empty export.
 fn store_design_export<E: ExternalResolutionContext>(
@@ -613,14 +430,9 @@ fn store_design_export<E: ExternalResolutionContext>(
     resolution_context: &mut ResolutionContext<'_, E>,
 ) {
     let has_design_content = explicit_target.is_some()
-        || surface.iter().any(|i| {
-            matches!(
-                i,
-                DesignSurfaceItem::Parameter(_)
-                    | DesignSurfaceItem::UseDesign(_)
-                    | DesignSurfaceItem::Reference(_)
-            )
-        });
+        || surface
+            .iter()
+            .any(|i| matches!(i, DesignSurfaceItem::Parameter(_)));
 
     if has_design_content {
         resolution_context
@@ -637,250 +449,226 @@ fn store_design_export<E: ExternalResolutionContext>(
     }
 }
 
-/// Records a declarative [`ir::DesignApplication`] for every
-/// `use design … for <ref>` after validating that the reference exists,
-/// the design file loaded successfully, and the design's declared target
-/// matches the model that the reference resolves to. The actual stamping
-/// happens in the instancing pass during evaluation.
+/// Records a declarative [`ir::ApplyDesign`] for every `apply <file> to <path>`
+/// (including nested entries) after validating that the target path is
+/// resolvable and that the design's declared target matches the model that the
+/// path resolves to. The actual stamping happens in the instancing pass during
+/// evaluation.
 fn record_applied_designs<E: ExternalResolutionContext>(
     surface: &[DesignSurfaceItem<'_>],
     model_path: &ModelPath,
     explicit_target: Option<&ModelPath>,
     resolution_context: &mut ResolutionContext<'_, E>,
 ) {
+    let consuming_model = explicit_target
+        .cloned()
+        .unwrap_or_else(|| model_path.clone());
+
     for item in surface {
-        let DesignSurfaceItem::UseDesign(ud) = item else {
+        let DesignSurfaceItem::Apply(node) = item else {
             continue;
         };
-        let Some(id_node) = ud.instance() else {
-            continue;
-        };
-
-        let rn = ReferenceName::new(id_node.as_str().to_string());
-        // Resolve the reference and capture the model path it points to so
-        // we can validate the design's target against it. For design files
-        // (`.one`) the active model is the design itself, which inherits its
-        // references from its `design <target>`; resolve via the target so
-        // `use design X for r` can refer to refs declared on the target model.
-        let Some(referenced_model_path) = lookup_referenced_model_path_for_use_design(
+        record_apply_recursive(
+            node,
+            &InstancePath::root(),
+            model_path,
+            &consuming_model,
             resolution_context,
-            explicit_target,
-            &rn,
-        ) else {
-            resolution_context.add_design_resolution_error_to_active_model(
-                format!(
-                    "`use design … for {}`: reference `{}` not found on this model",
-                    rn.as_str(),
-                    rn.as_str()
-                ),
-                id_node.span(),
-            );
-            continue;
+        );
+    }
+}
+
+/// Records `node` (and its nested applies) as concrete [`ir::ApplyDesign`]
+/// entries. The `outer_target` is the path accumulated from outer apply blocks
+/// (root for top-level applies); the resolved `target` is `outer_target`
+/// concatenated with the apply's own segments.
+fn record_apply_recursive<E: ExternalResolutionContext>(
+    node: &ast::ApplyDesignNode,
+    outer_target: &InstancePath,
+    model_path: &ModelPath,
+    consuming_model: &ModelPath,
+    resolution_context: &mut ResolutionContext<'_, E>,
+) {
+    // Resolve each segment of the apply target through the two-tier lookup:
+    // first by reference name, then by unique model name. The first segment is
+    // resolved against `consuming_model`; subsequent segments require resolving
+    // through the live reference graph and are not supported yet — they
+    // produce an error.
+    let segments = node.target();
+    let Some((first_seg, rest_segs)) = segments.split_first() else {
+        // Parser guarantees a non-empty target; treat as a no-op defensively.
+        return;
+    };
+
+    let resolved_first =
+        match resolve_segment_in(consuming_model, first_seg.as_str(), resolution_context) {
+            Ok(name) => name,
+            Err(err) => {
+                resolution_context
+                    .add_design_resolution_error_to_active_model(err, first_seg.span());
+                return;
+            }
         };
 
-        let relative_path = ud.get_design_relative_path();
-        let dpath = model_path.get_sibling_design_path(relative_path);
+    if !rest_segs.is_empty() {
+        // Multi-segment apply targets across child instances are not yet
+        // supported by the resolver. Emit a clear error so users know.
+        resolution_context.add_design_resolution_error_to_active_model(
+            format!(
+                "multi-segment apply target `{}.{}` is not yet supported",
+                first_seg.as_str(),
+                rest_segs
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join("."),
+            ),
+            first_seg.span(),
+        );
+        return;
+    }
 
-        // Skip applications targeting a design we couldn't load — diagnostics
-        // for that come from elsewhere.
+    let target_path = outer_target.clone().child(resolved_first.clone());
+
+    // Validate the design's declared target matches the model the first
+    // segment resolves to, when the apply lives at the root of the consuming
+    // model (i.e. `outer_target` is the root). Deeper validation is skipped
+    // because we don't yet model child-of-child reference graphs at
+    // resolution time.
+    let relative_path = node.get_design_relative_path();
+    let dpath = model_path.get_sibling_design_path(relative_path);
+
+    if outer_target.is_root()
+        && let Some(referenced_model_path) =
+            lookup_referenced_model_path(consuming_model, &resolved_first, resolution_context)
+    {
         let design_target = match resolution_context.lookup_model(&dpath) {
             ModelResult::Found(m) => m.design_export().target_model.clone(),
-            ModelResult::HasError | ModelResult::NotFound => continue,
+            ModelResult::HasError | ModelResult::NotFound => None,
         };
-
-        // Validate that the design's declared target model matches the model
-        // that the referenced alias resolves to. Without this check, applying
-        // `use design X for r` against a design X targeting a different model
-        // is silently ineffective: its overrides land on the wrong instance
-        // and its reference replacements would (if propagated) rewrite a
-        // different model's references.
         if let Some(design_target) = design_target.as_ref()
             && !same_model_path(design_target, &referenced_model_path)
         {
             resolution_context.add_design_resolution_error_to_active_model(
                 format!(
-                    "`use design … for {ref_name}`: design `{design}` targets `{design_target}`, \
-                     but reference `{ref_name}` resolves to `{ref_target}`. \
-                     Apply this design without `for`, or use a design whose \
-                     `design <model>` matches `{ref_target}`.",
-                    ref_name = rn.as_str(),
+                    "`apply {design} to {ref_name}`: design `{design}` targets `{design_target}`, \
+                     but `{ref_name}` resolves to `{ref_target}`. \
+                     Use a design whose `design <model>` matches `{ref_target}`.",
+                    ref_name = resolved_first.as_str(),
                     design = display_model_path(&dpath),
                     design_target = display_model_path(design_target),
                     ref_target = display_model_path(&referenced_model_path),
                 ),
-                ud.span(),
+                node.span(),
             );
-            continue;
+            return;
         }
 
-        resolution_context
-            .active_model_mut()
-            .add_applied_design(ir::DesignApplication {
-                design_path: dpath,
-                applied_to: Some(rn),
-                span: ud.span(),
-            });
+        // Surface augmented parameter names so `ref.new_param` lookups
+        // succeed during resolution.
+        let augmented = match resolution_context.lookup_model(&dpath) {
+            ModelResult::Found(m) => {
+                let d = m.design_export();
+                if d.parameter_additions.is_empty() {
+                    None
+                } else {
+                    Some(d.clone())
+                }
+            }
+            ModelResult::HasError | ModelResult::NotFound => None,
+        };
+        if let Some(d) = augmented {
+            resolution_context.add_augmented_reference_to_active_model(resolved_first.clone(), d);
+        }
+    }
+
+    resolution_context
+        .active_model_mut()
+        .add_applied_design(ir::ApplyDesign {
+            design_path: dpath,
+            target: target_path.clone(),
+            span: node.span(),
+        });
+
+    for nested in node.nested_applies() {
+        record_apply_recursive(
+            nested,
+            &target_path,
+            model_path,
+            consuming_model,
+            resolution_context,
+        );
+    }
+}
+
+/// Resolves a single apply/extraction segment against `model_path` using the
+/// two-tier lookup: first by reference name, then by unique model name among
+/// references. Returns the resolved [`ReferenceName`] on success, or an error
+/// message describing the lookup failure.
+fn resolve_segment_in<E: ExternalResolutionContext>(
+    model_path: &ModelPath,
+    segment: &str,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ReferenceName, String> {
+    let model = match resolution_context.lookup_model(model_path) {
+        ModelResult::Found(m) => m,
+        ModelResult::HasError | ModelResult::NotFound => {
+            return Err(format!(
+                "cannot resolve `{}` because target model `{}` failed to load",
+                segment,
+                display_model_path(model_path),
+            ));
+        }
+    };
+
+    let candidate = ReferenceName::new(segment.to_string());
+    if model.get_references().contains_key(&candidate) {
+        return Ok(candidate);
+    }
+
+    // Fall back to looking the segment up by underlying model file name.
+    let matches: Vec<&ReferenceName> = model
+        .get_references()
+        .iter()
+        .filter(|(_, import)| {
+            import.path().as_path().file_stem().and_then(|s| s.to_str()) == Some(segment)
+        })
+        .map(|(name, _)| name)
+        .collect();
+
+    match matches.as_slice() {
+        [] => Err(format!(
+            "no reference named `{segment}` (and no reference whose model is named `{segment}`) on `{model}`",
+            segment = segment,
+            model = display_model_path(model_path),
+        )),
+        [single] => Ok((*single).clone()),
+        _ => Err(format!(
+            "segment `{segment}` is ambiguous on `{model}`: matches references {refs}",
+            segment = segment,
+            model = display_model_path(model_path),
+            refs = matches
+                .iter()
+                .map(|r| format!("`{}`", r.as_str()))
+                .collect::<Vec<_>>()
+                .join(", "),
+        )),
     }
 }
 
 /// Returns the model path that reference `rn` resolves to from the perspective
-/// of a `use design X for rn` declaration.
-///
-/// When the active model is a design file (`explicit_target` is `Some`), the
-/// reference is resolved on the design's target model rather than on the
-/// design file itself. A design file's own reference declarations are
-/// *replacements* / *augmentations* of its target's reference graph; the
-/// target supplies the baseline set of references that the design's overlays
-/// and applied designs run against. Resolving against the design alone would
-/// miss every reference the design didn't itself touch — including the
-/// common case of forwarding `use design Y for r` where `r` is just an
-/// inherited reference on the target.
+/// of `consuming_model` (typically a model file or a design's target).
 ///
 /// Returns `None` when the reference cannot be resolved (missing, has an
 /// upstream error, etc.).
-fn lookup_referenced_model_path_for_use_design<E: ExternalResolutionContext>(
-    resolution_context: &ResolutionContext<'_, E>,
-    explicit_target: Option<&ModelPath>,
+fn lookup_referenced_model_path<E: ExternalResolutionContext>(
+    consuming_model: &ModelPath,
     rn: &ReferenceName,
+    resolution_context: &ResolutionContext<'_, E>,
 ) -> Option<ModelPath> {
-    if let Some(target_path) = explicit_target {
-        let target_model = match resolution_context.lookup_model(target_path) {
-            ModelResult::Found(m) => m,
-            ModelResult::HasError | ModelResult::NotFound => return None,
-        };
-        return target_model
-            .get_references()
-            .get(rn)
-            .map(|r| r.path().clone());
-    }
-
-    match resolution_context.lookup_reference_path_in_active_model(rn) {
-        ReferencePathResult::Found(_, path) => Some(path.clone()),
-        ReferencePathResult::ReferenceNotFound
-        | ReferencePathResult::ReferenceHasResolutionError
-        | ReferencePathResult::ModelHasResolutionError(_)
-        | ReferencePathResult::ModelNotFound(_) => None,
-    }
-}
-
-/// Validates that submodel extractions in a reference replacement are compatible.
-///
-/// This checks:
-/// 1. If the design specifies `with` submodels, they must exist on the replacement model.
-/// 2. If the original reference had `with` extractions, they must also exist on the replacement.
-fn validate_reference_replacement_submodels<E: ExternalResolutionContext>(
-    resolution_context: &mut ResolutionContext<'_, E>,
-    target_model: &ModelPath,
-    alias: &ReferenceName,
-    replacement_path: &ModelPath,
-    design_submodels: &[SubmodelName],
-    error_span: Span,
-) {
-    // Collect all data we need first, then emit errors (avoids borrow checker issues)
-    let mut errors: Vec<String> = Vec::new();
-
-    // Look up the target model to find original reference and its submodels
-    let (original_ref_path, original_submodels) = {
-        let target_ir = match resolution_context.lookup_model(target_model) {
-            ModelResult::Found(m) => m,
-            ModelResult::HasError | ModelResult::NotFound => return,
-        };
-
-        // Find the original reference being replaced
-        let Some(original_ref) = target_ir.get_reference(alias) else {
-            errors.push(format!(
-                "reference `{}` not found on target model `{}`",
-                alias.as_str(),
-                target_model.as_path().display()
-            ));
-            // Emit errors before returning
-            for err in errors {
-                resolution_context.add_design_resolution_error_to_active_model(&err, error_span);
-            }
-            return;
-        };
-
-        // Collect submodel aliases that were imported from the original
-        // reference. The submodel map is keyed by alias (= reference name),
-        // and the alias is also what an extracted submodel exposes on the
-        // replacement, so this is the right set to validate against.
-        let original_submodels: Vec<String> = target_ir
-            .get_submodels()
-            .iter()
-            .filter(|(_, import)| import.reference_name() == alias)
-            .map(|(alias, _)| alias.as_str().to_string())
-            .collect();
-
-        (original_ref.path().clone(), original_submodels)
+    let model = match resolution_context.lookup_model(consuming_model) {
+        ModelResult::Found(m) => m,
+        ModelResult::HasError | ModelResult::NotFound => return None,
     };
-
-    // Collect parameter names from replacement model
-    let replacement_params: Vec<String> = {
-        let replacement_ir = match resolution_context.lookup_model(replacement_path) {
-            ModelResult::Found(m) => m,
-            ModelResult::HasError | ModelResult::NotFound => return,
-        };
-        replacement_ir
-            .get_parameters()
-            .keys()
-            .map(|p: &oneil_shared::symbols::ParameterName| p.as_str().to_string())
-            .collect()
-    };
-
-    // Collect parameter names from original referenced model
-    let original_model_params: Vec<String> = {
-        match resolution_context.lookup_model(&original_ref_path) {
-            ModelResult::Found(m) => m
-                .get_parameters()
-                .keys()
-                .map(|p: &oneil_shared::symbols::ParameterName| p.as_str().to_string())
-                .collect(),
-            ModelResult::HasError | ModelResult::NotFound => Vec::new(),
-        }
-    };
-
-    // Determine which submodels need to be checked:
-    // - If design specifies `with`, use those
-    // - Otherwise, use the original submodels that were imported
-    let design_submodel_names: Vec<&str> =
-        design_submodels.iter().map(SubmodelName::as_str).collect();
-    let original_submodel_names: Vec<&str> =
-        original_submodels.iter().map(String::as_str).collect();
-    let required_submodels: &[&str] = if design_submodel_names.is_empty() {
-        &original_submodel_names
-    } else {
-        &design_submodel_names
-    };
-
-    // Validate each required submodel exists on the replacement model
-    for &name_str in required_submodels {
-        // Check if the original model has this parameter (which would be the submodel)
-        // The submodel must exist on the replacement model
-        if original_model_params.iter().any(|p| p == name_str)
-            && !replacement_params.iter().any(|p| p == name_str)
-        {
-            errors.push(format!(
-                "replacement model `{}` does not have parameter `{}` required by original reference",
-                replacement_path.as_path().display(),
-                name_str
-            ));
-        }
-    }
-
-    // Also check that any design-specified submodels exist on replacement
-    for submodel_name in design_submodels {
-        let name_str = submodel_name.as_str();
-        if !replacement_params.iter().any(|p| p == name_str) {
-            errors.push(format!(
-                "`with` submodel `{}` does not exist on replacement model `{}`",
-                name_str,
-                replacement_path.as_path().display()
-            ));
-        }
-    }
-
-    // Emit all collected errors
-    for err in errors {
-        resolution_context.add_design_resolution_error_to_active_model(&err, error_span);
-    }
+    model.get_references().get(rn).map(|r| r.path().clone())
 }

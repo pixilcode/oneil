@@ -1,0 +1,13 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 104
+expression: output
+---
+error: reference `gravity` is defined multiple times
+  at fixtures/reference_replacement/ref_replace_simple.one:8:24
+---
+
+Model: fixtures/reference_replacement/ref_replace_simple.one
+Tests: 0/0
+Parameters:
+  m = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(100.0)), unit: Unit { dimension_map: DimensionMap({Mass: 1.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "kg", exponent: 1.0 } } })

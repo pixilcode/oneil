@@ -82,7 +82,7 @@ where
     resolution_context.set_active_model_note(model_note);
 
     // split model ast into imports, use models, parameters, and tests
-    let (imports, model_imports, parameters, tests) = split_model_ast(model_path, &model_ast);
+    let (imports, model_imports, parameters, tests) = split_model_ast(&model_ast);
 
     // resolve python imports
     resolve_python_import::resolve_python_imports(model_path, imports, resolution_context);
@@ -135,35 +135,20 @@ where
 /// 2. Declarations within each section of the model
 ///
 /// This separation is necessary for the different processing steps in model loading.
-///
-/// In design files (`.one`), `use model as alias` declarations are reference replacements,
-/// not regular model imports. These are filtered out from `use_models` and handled
-/// separately by `resolve_design_surface`.
-fn split_model_ast<'a>(
-    model_path: &ModelPath,
-    model_ast: &'a ast::Model,
+fn split_model_ast(
+    model_ast: &ast::Model,
 ) -> (
-    Vec<&'a ast::ImportNode>,
-    Vec<&'a ast::UseModelNode>,
-    Vec<ParameterWithSection<'a>>,
-    Vec<TestWithSection<'a>>,
+    Vec<&ast::ImportNode>,
+    Vec<&ast::UseModelNode>,
+    Vec<ParameterWithSection<'_>>,
+    Vec<TestWithSection<'_>>,
 ) {
     let mut imports = vec![];
     let mut use_models = vec![];
     let mut parameters = vec![];
     let mut tests = vec![];
 
-    // In design files, `use model as alias` is a reference replacement, not a regular import.
-    // Note: `ref model as alias` is a regular reference declaration, not a replacement.
-    let is_design_file = model_path.is_design_file();
-    let should_skip = |um: &ast::UseModel| -> bool {
-        is_design_file && resolve_design::is_reference_replacement(um)
-    };
-
-    let top_level = model_ast
-        .decls()
-        .iter()
-        .map(|d| (d, None));
+    let top_level = model_ast.decls().iter().map(|d| (d, None));
     let in_sections = model_ast
         .sections()
         .iter()
@@ -172,7 +157,7 @@ fn split_model_ast<'a>(
     for (decl, section_label) in top_level.chain(in_sections) {
         match &**decl {
             ast::Decl::Import(import) => imports.push(import),
-            ast::Decl::UseModel(use_model) if !should_skip(use_model) => {
+            ast::Decl::UseModel(use_model) => {
                 use_models.push(use_model);
             }
             ast::Decl::Parameter(parameter) => parameters.push(ParameterWithSection {
@@ -183,10 +168,9 @@ fn split_model_ast<'a>(
                 test,
                 section_label,
             }),
-            // Reference replacements and design declarations are handled by resolve_design_surface.
-            ast::Decl::UseModel(_)
-            | ast::Decl::DesignTarget(_)
-            | ast::Decl::UseDesign(_)
+            // Design declarations are handled by resolve_design_surface.
+            ast::Decl::DesignTarget(_)
+            | ast::Decl::ApplyDesign(_)
             | ast::Decl::DesignParameter(_) => {}
         }
     }
@@ -253,9 +237,9 @@ mod tests {
 
     #[test]
     fn split_model_ast_empty() {
-        let model_path = test_model_path("test");
+        let _model_path = test_model_path("test");
         let model = test_ast::empty_model_node();
-        let (imports, use_models, parameters, tests) = split_model_ast(&model_path, &model);
+        let (imports, use_models, parameters, tests) = split_model_ast(&model);
 
         assert!(imports.is_empty());
         assert!(use_models.is_empty());
@@ -265,11 +249,11 @@ mod tests {
 
     #[test]
     fn split_model_ast_with_all_declarations() {
-        let model_path = test_model_path("test");
+        let _model_path = test_model_path("test");
         let model = test_ast::ModelBuilder::new()
             .with_submodel("submodel")
             .build();
-        let (imports, use_models, parameters, tests) = split_model_ast(&model_path, &model);
+        let (imports, use_models, parameters, tests) = split_model_ast(&model);
 
         assert_eq!(imports.len(), 0);
         assert_eq!(use_models.len(), 1);
@@ -284,12 +268,12 @@ mod tests {
 
     #[test]
     fn split_model_ast_use_model_only() {
-        let model_path = test_model_path("test");
+        let _model_path = test_model_path("test");
         let model = test_ast::ModelBuilder::new()
             .with_submodel("submodel1")
             .with_submodel("submodel2")
             .build();
-        let (imports, use_models, parameters, tests) = split_model_ast(&model_path, &model);
+        let (imports, use_models, parameters, tests) = split_model_ast(&model);
 
         assert!(imports.is_empty());
         assert_eq!(use_models.len(), 2);

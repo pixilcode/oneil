@@ -8,9 +8,7 @@ use indexmap::{IndexMap, IndexSet};
 use oneil_shared::labels::ParameterLabel;
 use oneil_shared::paths::ModelPath;
 use oneil_shared::span::Span;
-use oneil_shared::symbols::{
-    BuiltinValueName, ParameterName, ReferenceName, TestIndex,
-};
+use oneil_shared::symbols::{BuiltinValueName, ParameterName, ReferenceName, TestIndex};
 use oneil_shared::{EvalInstanceKey, InstancePath};
 
 use crate::Value;

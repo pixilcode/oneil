@@ -83,13 +83,13 @@ impl ModelBuilder {
         let source_name = SubmodelName::new(submodel_name.to_string());
         let reference_path = submodel_path.clone();
 
-        let submodel_import =
-            ir::SubmodelImport::new(source_name, span, reference_name.clone());
+        let submodel_import = ir::SubmodelImport::new(source_name, span, reference_name.clone());
 
         let reference_import =
             ir::ReferenceImport::new(reference_name.clone(), span, reference_path);
 
-        self.submodels.insert(reference_name.clone(), submodel_import);
+        self.submodels
+            .insert(reference_name.clone(), submodel_import);
         self.references.insert(reference_name, reference_import);
         self
     }

@@ -4,7 +4,7 @@
 # mismatch" error rather than silently doing nothing.
 use ../../gravity_earth as planet
 
-use design wrong_target_design for planet
+apply wrong_target_design to planet
 
 Mass: m = 100 :kg
 Surface Weight: w = m * g.planet :N

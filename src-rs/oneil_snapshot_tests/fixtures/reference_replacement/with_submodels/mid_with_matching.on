@@ -1,7 +1,0 @@
-# Propulsion system with Earth-based gravity
-use ../../gravity_earth as inner
-
-# Thrust-to-weight ratio for 1000N thruster with 100kg payload
-Thrust: thrust = 1000 :N
-Payload: payload = 100 :kg
-T/W Ratio: ratio = thrust / (payload * g.inner)

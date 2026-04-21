@@ -113,37 +113,36 @@ impl Runtime {
         self.load_ir_internal(path);
 
         // If design path provided, load it (without overwriting the target model) and
-        // build a runtime DesignApplication targeting the root model.
-        let runtime_designs: Vec<oneil_ir::DesignApplication> =
-            if let Some(design_path) = design_path {
-                let design_results = resolver::load_model(design_path, self);
-                for (model_path_result, result) in design_results {
-                    // Skip if this is not the design file itself (avoid overwriting target models)
-                    if model_path_result != *design_path {
-                        continue;
-                    }
-                    let (model, model_errors) = result.into_parts();
-                    if model_errors.is_empty() {
-                        self.ir_cache
-                            .insert(model_path_result, LoadResult::success(model));
-                    } else {
-                        self.ir_cache
-                            .insert(model_path_result, LoadResult::partial(model, model_errors));
-                    }
+        // build a runtime ApplyDesign targeting the root model.
+        let runtime_designs: Vec<oneil_ir::ApplyDesign> = if let Some(design_path) = design_path {
+            let design_results = resolver::load_model(design_path, self);
+            for (model_path_result, result) in design_results {
+                // Skip if this is not the design file itself (avoid overwriting target models)
+                if model_path_result != *design_path {
+                    continue;
                 }
+                let (model, model_errors) = result.into_parts();
+                if model_errors.is_empty() {
+                    self.ir_cache
+                        .insert(model_path_result, LoadResult::success(model));
+                } else {
+                    self.ir_cache
+                        .insert(model_path_result, LoadResult::partial(model, model_errors));
+                }
+            }
 
-                vec![oneil_ir::DesignApplication {
-                    design_path: design_path.clone(),
-                    applied_to: None,
-                    span: oneil_shared::span::Span::empty(oneil_shared::span::SourceLocation {
-                        offset: 0,
-                        line: 1,
-                        column: 1,
-                    }),
-                }]
-            } else {
-                Vec::new()
-            };
+            vec![oneil_ir::ApplyDesign {
+                design_path: design_path.clone(),
+                target: oneil_shared::InstancePath::root(),
+                span: oneil_shared::span::Span::empty(oneil_shared::span::SourceLocation {
+                    offset: 0,
+                    line: 1,
+                    column: 1,
+                }),
+            }]
+        } else {
+            Vec::new()
+        };
 
         // Evaluate the model and its dependencies
         let eval_result = eval::eval_model_with_designs(path, &runtime_designs, self);

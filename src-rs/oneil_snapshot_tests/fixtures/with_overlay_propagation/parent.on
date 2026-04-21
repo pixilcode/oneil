@@ -3,7 +3,7 @@
 # *same* instance, so an overlay applied through `inner` is visible from the
 # `mid` side as well — observed indirectly here through `mid`'s own
 # parameters that read `value.inner`.
-use intermediate as mid with [inner]
+use intermediate as mid [inner]
 
 Direct from inner: direct = value.inner
 Forwarded via mid: via_mid = forwarded.mid

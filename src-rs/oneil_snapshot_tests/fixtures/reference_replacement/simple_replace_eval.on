@@ -1,6 +1,0 @@
-# Evaluate lander with Mars gravity
-ref simple_parent as lander
-use design simple_replace_design for lander
-
-# Should show Mars landing weight: 100 * 3.72 = 372 N
-Mars Landing Weight: result = weight.lander :N

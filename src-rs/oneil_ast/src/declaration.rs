@@ -25,10 +25,11 @@ pub enum Decl {
     /// Declares that this file is a design file for another model (`design <name>`).
     DesignTarget(DesignTargetNode),
 
-    /// Applies a design file to the current design target or to a specific import (`use design …`).
-    UseDesign(UseDesignNode),
+    /// Applies a design file to a specific reference path (`apply <file> to <ref>(.<ref>)*
+    /// [\[ nested \]]`).
+    ApplyDesign(ApplyDesignNode),
 
-    /// Parameter assignment in a design file (`id = expr`, no label preamble).
+    /// Parameter assignment in a design file (`id(.<ref>)* = expr`, no label preamble).
     DesignParameter(DesignParameterNode),
 
     /// Parameter declaration for defining model parameters
@@ -60,10 +61,10 @@ impl Decl {
         Self::DesignTarget(node)
     }
 
-    /// Creates a `use design` declaration
+    /// Creates an `apply` declaration
     #[must_use]
-    pub const fn use_design(node: UseDesignNode) -> Self {
-        Self::UseDesign(node)
+    pub const fn apply_design(node: ApplyDesignNode) -> Self {
+        Self::ApplyDesign(node)
     }
 
     /// Creates a design parameter line
@@ -379,42 +380,44 @@ impl DesignTarget {
     }
 }
 
-/// `use design [path/to/]<file> [for <alias>]`.
+/// `apply [path/to/]<file> to <ref>(.<ref>)* [ '[' nested_applies ']' ]`.
+///
+/// Applies a design file to a specific reference path on the current model
+/// (or design target). Nested applies appear in a `[ … ]` block and may
+/// recursively address deeper references; nested entries omit the `apply`
+/// keyword (they are parsed as `<file> to <ref>(.<ref>)*`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UseDesign {
+pub struct ApplyDesign {
     /// Optional directory path (e.g., `../designs/`).
     directory_path: Vec<DirectoryNode>,
     /// Design file name (without extension).
     design_file: IdentifierNode,
-    /// When `None`, the design applies to this file's [`DesignTarget`].
-    instance: Option<IdentifierNode>,
+    /// Non-empty path of reference segments identifying where the design lands.
+    target: Vec<IdentifierNode>,
+    /// Recursive applies attached under `target`. Each entry is itself an
+    /// [`ApplyDesignNode`]; the resolver flattens these by concatenating the
+    /// outer `target` with the nested entry's `target` before applying.
+    nested_applies: Vec<ApplyDesignNode>,
 }
 
-/// AST node for a [`UseDesign`].
-pub type UseDesignNode = Node<UseDesign>;
+/// AST node for an [`ApplyDesign`].
+pub type ApplyDesignNode = Node<ApplyDesign>;
 
-impl UseDesign {
-    /// Creates a `use design` declaration with just a file name.
+impl ApplyDesign {
+    /// Creates an `apply` declaration with the given target path and (possibly empty)
+    /// nested applies.
     #[must_use]
-    pub const fn new(design_file: IdentifierNode, instance: Option<IdentifierNode>) -> Self {
-        Self {
-            directory_path: Vec::new(),
-            design_file,
-            instance,
-        }
-    }
-
-    /// Creates a `use design` declaration with a directory path.
-    #[must_use]
-    pub const fn with_path(
+    pub const fn new(
         directory_path: Vec<DirectoryNode>,
         design_file: IdentifierNode,
-        instance: Option<IdentifierNode>,
+        target: Vec<IdentifierNode>,
+        nested_applies: Vec<ApplyDesignNode>,
     ) -> Self {
         Self {
             directory_path,
             design_file,
-            instance,
+            target,
+            nested_applies,
         }
     }
 
@@ -430,10 +433,16 @@ impl UseDesign {
         &self.design_file
     }
 
-    /// Optional `for <alias>` import instance selector.
+    /// Returns the non-empty `to <ref>(.<ref>)*` path identifying the apply target.
     #[must_use]
-    pub const fn instance(&self) -> Option<&IdentifierNode> {
-        self.instance.as_ref()
+    pub const fn target(&self) -> &[IdentifierNode] {
+        self.target.as_slice()
+    }
+
+    /// Returns nested applies declared under this target's `[ … ]` block.
+    #[must_use]
+    pub const fn nested_applies(&self) -> &[ApplyDesignNode] {
+        self.nested_applies.as_slice()
     }
 
     /// Returns the relative path of the design file (without extension).
@@ -452,16 +461,18 @@ impl UseDesign {
     }
 }
 
-/// `id = value` or `id.instance = value` line allowed after `design` in design files.
+/// `<id>(.<segment>)* = value` line allowed after `design` in design files.
 ///
-/// When `instance` is present, the parameter override applies to a child instance
-/// rather than the design target itself. For example, `mass.sat = 5 kg` overrides
-/// the `mass` parameter on the `sat` instance.
+/// When `instance_path` is non-empty, the parameter override applies to a
+/// descendant instance reached by walking the dotted path of reference names.
+/// For example, `mass.sat = 5 kg` overrides `mass` on the `sat` instance and
+/// `h.sc.o = 25 km` overrides `h` on the `o` instance reached from `sc`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DesignParameter {
     ident: IdentifierNode,
-    /// Optional instance scope for the parameter override (e.g., `sat` in `mass.sat = 5 kg`).
-    instance: Option<IdentifierNode>,
+    /// Reference-name path scoping the override (empty for a flat override on the
+    /// design target).
+    instance_path: Vec<IdentifierNode>,
     value: ParameterValueNode,
     note: Option<NoteNode>,
 }
@@ -470,32 +481,17 @@ pub struct DesignParameter {
 pub type DesignParameterNode = Node<DesignParameter>;
 
 impl DesignParameter {
-    /// Creates a design parameter line without instance scope.
+    /// Creates a design parameter line with the given (possibly empty) instance path.
     #[must_use]
     pub const fn new(
         ident: IdentifierNode,
+        instance_path: Vec<IdentifierNode>,
         value: ParameterValueNode,
         note: Option<NoteNode>,
     ) -> Self {
         Self {
             ident,
-            instance: None,
-            value,
-            note,
-        }
-    }
-
-    /// Creates a design parameter line with instance scope.
-    #[must_use]
-    pub const fn with_instance(
-        ident: IdentifierNode,
-        instance: IdentifierNode,
-        value: ParameterValueNode,
-        note: Option<NoteNode>,
-    ) -> Self {
-        Self {
-            ident,
-            instance: Some(instance),
+            instance_path,
             value,
             note,
         }
@@ -507,10 +503,10 @@ impl DesignParameter {
         &self.ident
     }
 
-    /// Optional instance scope for the parameter override.
+    /// Reference-name path scoping the override (empty for a flat override).
     #[must_use]
-    pub const fn instance(&self) -> Option<&IdentifierNode> {
-        self.instance.as_ref()
+    pub const fn instance_path(&self) -> &[IdentifierNode] {
+        self.instance_path.as_slice()
     }
 
     /// Assigned value (expression or piecewise).

@@ -1,7 +1,0 @@
-# Applies `consumer.one` to a target instance. The consumer's
-# `output = derived` overlay reads the `derived` parameter that
-# `addition.one` augments the target with, yielding `output = 2 * base = 10`.
-use target as t
-use design consumer for t
-
-Result: result = output.t

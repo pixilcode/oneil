@@ -1,0 +1,8 @@
+# Mission model that pulls `propulsion` in and also extracts its `inner`
+# reference up to the parent scope via the `[inner]` extraction block.
+# Both `ratio.propulsion` and `g.inner` resolve through the same
+# underlying gravity instance.
+submodel mid_with_matching as propulsion [inner]
+
+# Performance computed inside `propulsion` should match Earth's gravity.
+Earth Mission: result = ratio.propulsion

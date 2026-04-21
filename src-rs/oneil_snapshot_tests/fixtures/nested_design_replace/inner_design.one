@@ -1,4 +1,0 @@
-# Replaces inner_model's `planet` reference with Mars gravity.
-design inner_model
-
-use ../gravity_mars as planet

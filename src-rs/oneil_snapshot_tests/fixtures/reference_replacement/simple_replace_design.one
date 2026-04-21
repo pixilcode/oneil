@@ -1,4 +1,0 @@
-# Replace Earth gravity with Mars gravity for Mars landing
-design simple_parent
-
-use ../gravity_mars as planet

@@ -92,84 +92,22 @@ fn overlay_nested_parameter() {
 }
 
 // =============================================================================
-// Reference Replacement Tests
+// Submodel Extraction Tests
 // =============================================================================
 
 #[test]
-fn replace_same_file_error() {
-    // Error case: cannot replace a reference in the same file where it's defined
-    // The ref and use replacement should be in separate files
-    let path = fixture_path("reference_replacement/ref_replace_simple.one");
-    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
-    insta::assert_snapshot!(output);
-}
-
-#[test]
-fn replace_via_design_file() {
-    // Basic reference replacement via design file
-    // simple_parent.on uses design_child (x=10)
-    // simple_replace_design.one replaces with design_child_alt (x=99)
-    // Expected: s = 99
-    let path = fixture_path("reference_replacement/simple_replace_eval.on");
-    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
-    insta::assert_snapshot!(output);
-}
-
-#[test]
-fn replace_mid_direct_baseline() {
-    // Baseline: mid_with_matching works directly (x=10)
-    let path = fixture_path("reference_replacement/with_submodels/test_mid_direct.on");
-    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
-    insta::assert_snapshot!(output);
-}
-
-#[test]
-fn replace_with_clause_baseline() {
-    // Baseline: with [inner] clause works with mid model
-    let path = fixture_path("reference_replacement/with_submodels/test_parent_direct.on");
-    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
-    insta::assert_snapshot!(output);
-}
-
-#[test]
-fn replace_with_submodels() {
-    // Replacement when parent uses with [inner]
-    // Expected: v = 99 (from replaced mid's design_child_alt)
-    let path = fixture_path("reference_replacement/with_submodels/replace_submodel_eval.on");
-    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
-    insta::assert_snapshot!(output);
-}
-
-// =============================================================================
-// With Clause Tests
-// =============================================================================
-
-#[test]
-fn with_base_case() {
-    // `with [inner]` extracts the gravity submodel out of the satellite,
-    // making `g.inner` available on the parent.
+fn extract_base_case() {
+    // `[inner]` extracts the gravity submodel out of the satellite, making
+    // `g.inner` available on the parent.
     // Expected: weight = 100 kg * 9.81 m/s^2 = 981 N
     let path = fixture_path("with_clause/with_parent_direct.on");
     let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
     insta::assert_snapshot!(output);
 }
 
-// =============================================================================
-// Extracted Submodel Tests
-// =============================================================================
-
 #[test]
-fn extract_through_replaced_parent() {
-    // Extracted submodels resolve through replaced parent
-    // Expected: r = 99 (from replacement's x, not original's 10)
-    let path = fixture_path("extracted_submodels/extract_eval.on");
-    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
-    insta::assert_snapshot!(output);
-}
-
-#[test]
-fn with_overlay_propagation() {
-    // A `with [inner]` clause aliases the extracted submodel onto the same
+fn extract_overlay_propagation() {
+    // An `[inner]` extraction aliases the extracted submodel onto the same
     // instance as the deeper child it was lifted from — `parent.inner` and
     // `parent.mid.inner` are two reference-name aliases for one
     // `EvalInstanceKey`. An overlay setting `value.inner = 99` on the parent
@@ -185,38 +123,26 @@ fn with_overlay_propagation() {
     insta::assert_snapshot!(output);
 }
 
-// =============================================================================
-// Design Merge Tests
-// =============================================================================
-
 #[test]
-fn merge_use_design_without_for() {
-    // use design file (without for) to merge designs
-    let path = fixture_path("use_design_merge/use_design_nofor_parent.on");
+fn extract_mid_direct_no_extraction() {
+    // Baseline: importing an intermediate model (`propulsion`) without
+    // extraction. The intermediate's own `inner` reference (Earth gravity)
+    // is consumed entirely inside the intermediate, so the parent only
+    // observes the computed result.
+    // Expected: ratio.propulsion = 1000 / (100 * 9.81) ≈ 1.0193
+    let path = fixture_path("with_clause/with_mid_direct.on");
     let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
     insta::assert_snapshot!(output);
 }
 
 #[test]
-fn merge_nested_design_replaces_under_prefix() {
-    // When an outer design declares `use design Y for r` and `Y` declares a
-    // reference replacement, that replacement targets `r`'s reference (not
-    // the outer model's). Here `inner_design` replaces `inner_model.planet`
-    // with Mars; pulled in under `r` from `outer_design`, it must reach
-    // `out.r.planet` and produce Mars gravity (3.72 m/s^2).
-    let path = fixture_path("nested_design_replace/eval.on");
-    let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
-    insta::assert_snapshot!(output);
-}
-
-#[test]
-fn merge_propagates_parameter_additions() {
-    // When one design inherits another via `use design Y` (no `for`, same
-    // target), `Y`'s `parameter_additions` are visible to the consumer's own
-    // overlays. Here the consumer overrides `output = derived` where
-    // `derived` is added by the imported design, so the override resolves to
-    // `2 * base = 10` at eval time.
-    let path = fixture_path("design_addition_propagation/eval.on");
+fn extract_through_intermediate() {
+    // Parent extracts `inner` out of an intermediate (`propulsion`). The
+    // intermediate computes `ratio` against its own `inner` reference; the
+    // extraction also exposes that same gravity reference at the parent
+    // level (`g.inner`) without changing the computed value.
+    // Expected: ratio.propulsion = 1000 / (100 * 9.81) ≈ 1.0193
+    let path = fixture_path("with_clause/with_extract_through_mid.on");
     let output = run_model_and_format(&path, Some(manifest_dir().as_path()));
     insta::assert_snapshot!(output);
 }

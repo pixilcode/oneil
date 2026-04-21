@@ -1,4 +1,0 @@
-# Design file that replaces Earth orbit with Mars orbit
-design extract_parent
-
-use extract_replacement as solar_system

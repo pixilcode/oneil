@@ -8,7 +8,7 @@ use oneil_shared::{
 
 use crate::{
     Note,
-    design_overlay::{Design, DesignApplication},
+    design_overlay::{ApplyDesign, Design},
     model_import::{ReferenceImport, SubmodelImport},
     parameter::Parameter,
     python_import::PythonImport,
@@ -35,15 +35,15 @@ pub struct Model {
     design_target: Option<ModelPath>,
     /// Resolved design content exported by this file (for `use design` consumers).
     design_export: Design,
-    /// Designs applied to references via `use design X for ref`.
+    /// Designs applied to references via `apply X to ref`.
     /// Maps reference alias → design containing `parameter_additions` that augment the ref.
     /// Used during resolution to support `ref.augmented_param` lookups.
     augmented_reference_params: IndexMap<ReferenceName, Design>,
-    /// Designs applied by this model file via `use design X [for ref]`.
+    /// Designs applied by this model file via `apply X to <path>`.
     ///
-    /// Declarative records consumed by the instancing pass to stamp overrides,
-    /// reference replacements, and parameter additions onto the live tree.
-    applied_designs: Vec<DesignApplication>,
+    /// Declarative records consumed by the instancing pass to stamp overrides
+    /// and parameter additions onto the live tree.
+    applied_designs: Vec<ApplyDesign>,
 }
 
 impl Model {
@@ -196,14 +196,14 @@ impl Model {
         self.augmented_reference_params.insert(reference, design);
     }
 
-    /// Returns the declarative `use design …` applications recorded for this model.
+    /// Returns the declarative `apply …` applications recorded for this model.
     #[must_use]
-    pub const fn applied_designs(&self) -> &[DesignApplication] {
+    pub const fn applied_designs(&self) -> &[ApplyDesign] {
         self.applied_designs.as_slice()
     }
 
-    /// Records a `use design X [for ref]` application on this model.
-    pub fn add_applied_design(&mut self, application: DesignApplication) {
+    /// Records an `apply X to <path>` application on this model.
+    pub fn add_applied_design(&mut self, application: ApplyDesign) {
         self.applied_designs.push(application);
     }
 

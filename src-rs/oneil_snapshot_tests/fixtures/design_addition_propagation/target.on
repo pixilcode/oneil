@@ -1,5 +1,0 @@
-# Base model. `output` defaults to `base` so we can observe the consumer's
-# override redirecting it to a design-added parameter.
-Base value: base = 5
-
-Output: output = base

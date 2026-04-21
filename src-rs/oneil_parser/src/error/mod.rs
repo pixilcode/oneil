@@ -147,10 +147,17 @@ impl ParserError {
         }
     }
 
-    /// Missing design file identifier after `use design`.
-    pub(crate) fn use_design_missing_file(after_kw: Span) -> impl Fn(TokenError) -> Self {
+    /// Missing design file identifier after `apply`.
+    pub(crate) fn apply_missing_file(after_kw: Span) -> impl Fn(TokenError) -> Self {
         move |error: TokenError| {
-            Self::new_from_token_error(error, ParserErrorReason::use_design_missing_file(after_kw))
+            Self::new_from_token_error(error, ParserErrorReason::apply_missing_file(after_kw))
+        }
+    }
+
+    /// Missing `to <target>` clause after `apply <file>`.
+    pub(crate) fn apply_missing_target(file_span: Span) -> impl Fn(TokenError) -> Self {
+        move |error: TokenError| {
+            Self::new_from_token_error(error, ParserErrorReason::apply_missing_target(file_span))
         }
     }
 

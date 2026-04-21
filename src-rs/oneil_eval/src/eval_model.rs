@@ -35,12 +35,12 @@ pub fn eval_model<E: ExternalEvaluationContext>(
 }
 
 /// Like [`eval_model`], but also applies the given runtime-supplied
-/// [`ir::DesignApplication`]s at the root before evaluation.
+/// [`ir::ApplyDesign`]s at the root before evaluation.
 ///
 /// These are typically the contributions implied by a CLI `--design <file>` flag.
 pub fn eval_model_with_designs<E: ExternalEvaluationContext>(
     model_path: &ModelPath,
-    runtime_designs: &[ir::DesignApplication],
+    runtime_designs: &[ir::ApplyDesign],
     external_context: &mut E,
 ) -> IndexMap<EvalInstanceKey, MaybePartialResult<Model, EvalErrors>> {
     let graph = InstanceGraph::build(model_path, runtime_designs, external_context);

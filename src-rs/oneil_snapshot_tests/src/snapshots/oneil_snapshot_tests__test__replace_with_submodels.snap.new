@@ -1,0 +1,14 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 140
+expression: output
+---
+error: unexpected character
+  at fixtures/reference_replacement/with_submodels/parent_with_submodel.on:2:37
+
+error: expected model after `use`
+  at fixtures/reference_replacement/with_submodels/replace_submodel_eval.on:3:5
+---
+
+Model: fixtures/reference_replacement/with_submodels/replace_submodel_eval.on
+Tests: 0/0

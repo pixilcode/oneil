@@ -1,5 +1,0 @@
-# Augments target with a design-local `derived` parameter. Consumers that
-# inherit this design should see `derived` available for their own overlays.
-design target
-
-derived = 2 * base

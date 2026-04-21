@@ -1,5 +1,0 @@
-# Solar system model with Mars orbit
-use extract_child_alt as orbit
-
-# Mission uses planet's orbital period  
-Mission Duration: duration = period.orbit :day

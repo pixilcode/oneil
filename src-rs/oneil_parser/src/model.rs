@@ -454,9 +454,10 @@ mod tests {
     }
 
     #[test]
-    fn use_without_as() {
-        let input = InputSpan::new_extra("use foo\n", Config::default());
-        let (rest, model) = parse_complete(input).expect("should parse model with use declaration");
+    fn submodel_without_as() {
+        let input = InputSpan::new_extra("submodel foo\n", Config::default());
+        let (rest, model) =
+            parse_complete(input).expect("should parse model with submodel declaration");
         assert!(model.note().is_none());
         assert_eq!(model.decls().len(), 1);
 
@@ -744,7 +745,11 @@ mod tests {
                     assert_eq!(cause.end().offset, 18);
                 }
                 ParserErrorReason::Expect(ExpectKind::Decl) => {}
-                other => panic!("Unexpected reason {other:?}"),
+                other @ (ParserErrorReason::Expect(_)
+                | ParserErrorReason::Incomplete { .. }
+                | ParserErrorReason::UnexpectedToken
+                | ParserErrorReason::TokenError(_)
+                | ParserErrorReason::NomError(_)) => panic!("Unexpected reason {other:?}"),
             }
         }
     }
@@ -760,7 +765,6 @@ mod tests {
                 "import foo\ndesign bar\n",
                 Config {
                     require_design_header: true,
-                    ..Config::new()
                 },
             );
             let result = parse_complete(input);
@@ -782,7 +786,6 @@ mod tests {
                 "",
                 Config {
                     require_design_header: true,
-                    ..Config::new()
                 },
             );
             parse_complete(input).expect("empty design file should parse");
@@ -794,7 +797,6 @@ mod tests {
                 "design foo\ndesign bar\n",
                 Config {
                     require_design_header: true,
-                    ..Config::new()
                 },
             );
             let result = parse_complete(input);
@@ -811,16 +813,16 @@ mod tests {
         }
 
         #[test]
-        fn section_body_accepts_use_design() {
+        fn section_body_accepts_apply() {
             let input =
-                InputSpan::new_extra("section s\n  use design overlay\n", Config::default());
+                InputSpan::new_extra("section s\n  apply overlay to r\n", Config::default());
             let (_, model) = parse_complete(input).expect("parse");
             assert_eq!(model.sections().len(), 1);
             let section = &model.sections()[0];
             assert_eq!(section.decls().len(), 1);
             assert!(matches!(
                 section.decls()[0].clone().take_value(),
-                Decl::UseDesign(_)
+                Decl::ApplyDesign(_)
             ));
         }
 
@@ -849,7 +851,6 @@ mod tests {
                 "design foo\n",
                 Config {
                     require_design_header: true,
-                    ..Config::new()
                 },
             );
             let (rest, model) = parse_complete(input).expect("should parse design header");
@@ -858,9 +859,9 @@ mod tests {
         }
 
         #[test]
-        fn use_design_allowed_without_design_header_flag() {
-            let input = InputSpan::new_extra("use design my_overlay\n", Config::default());
-            let (rest, model) = parse_complete(input).expect("should parse use design");
+        fn apply_allowed_without_design_header_flag() {
+            let input = InputSpan::new_extra("apply my_overlay to r\n", Config::default());
+            let (rest, model) = parse_complete(input).expect("should parse apply");
             assert_eq!(model.decls().len(), 1);
             assert_eq!(rest.fragment(), &"");
         }
@@ -888,7 +889,11 @@ mod tests {
                     assert_eq!(cause.end().offset, 6);
                 }
                 ParserErrorReason::Expect(ExpectKind::Decl) => {}
-                other => panic!("Unexpected reason {other:?}"),
+                other @ (ParserErrorReason::Expect(_)
+                | ParserErrorReason::Incomplete { .. }
+                | ParserErrorReason::UnexpectedToken
+                | ParserErrorReason::TokenError(_)
+                | ParserErrorReason::NomError(_)) => panic!("Unexpected reason {other:?}"),
             }
         }
 
@@ -1024,7 +1029,13 @@ mod tests {
                         ..
                     }
                     | ParserErrorReason::Expect(ExpectKind::Decl) => {}
-                    other => panic!("Expected declaration error, got {other:?}"),
+                    other @ (ParserErrorReason::Expect(_)
+                    | ParserErrorReason::Incomplete { .. }
+                    | ParserErrorReason::UnexpectedToken
+                    | ParserErrorReason::TokenError(_)
+                    | ParserErrorReason::NomError(_)) => {
+                        panic!("Expected declaration error, got {other:?}")
+                    }
                 }
             }
         }

@@ -1,16 +1,14 @@
 //! The instance graph: a single pre-computed structure of all model instances
-//! reachable from a root, with reference replacements, design overlays, and
-//! design-introduced parameters already resolved to absolute coordinates.
+//! reachable from a root, with design overlays and design-introduced
+//! parameters already resolved to absolute coordinates.
 //!
 //! Building the graph is the **single place** where design composition happens:
-//! - Reference replacements from `use model as alias` are baked into each
-//!   instance's reference wiring.
-//! - Parameter overrides from `use design X [for ref]` land as
-//!   [`OverlayBinding`] entries keyed by `(EvalInstanceKey, ParameterName)`.
+//! - Parameter overrides from `apply X to <path>` land as [`OverlayBinding`]
+//!   entries keyed by `(EvalInstanceKey, ParameterName)`.
 //! - Parameter additions from a design are merged into the target instance's
 //!   parameter set.
 //! - Scoped overrides (`x.ref = …`) propagate down the live tree via the
-//!   reference structure — including post-replacement references.
+//!   reference structure.
 //!
 //! Once built, the [`crate::EvalContext`] just consumes the graph: forcing
 //! pending parameters, evaluating tests, and propagating reference errors.
@@ -30,20 +28,20 @@ use crate::context::ExternalEvaluationContext;
 /// One model instance in the [`InstanceGraph`].
 ///
 /// All design contributions targeting this instance have already been baked in
-/// (parameters include design additions, references reflect post-replacement
-/// targets, overlays hold the resolved RHS keyed by parameter name).
+/// (parameters include design additions, overlays hold the resolved RHS keyed
+/// by parameter name).
 #[derive(Debug, Clone)]
 pub struct InstancedModel {
-    /// On-disk model file backing this instance (post-replacement).
+    /// On-disk model file backing this instance.
     pub model_path: ModelPath,
     /// All declared parameters on this instance: own IR parameters plus any
     /// parameter additions from designs landed here.
     pub parameters: IndexMap<ParameterName, ir::Parameter>,
-    /// References on this instance, mapped to the child instance they point to
-    /// (post-replacement). Includes both true references and aliases from
-    /// extracted submodels — extracted aliases reuse the existing
-    /// [`EvalInstanceKey`] of the deep instance they navigate to, so overlays
-    /// applied to that instance via any path are observed consistently.
+    /// References on this instance, mapped to the child instance they point to.
+    /// Includes both true references and aliases from extracted submodels —
+    /// extracted aliases reuse the existing [`EvalInstanceKey`] of the deep
+    /// instance they navigate to, so overlays applied to that instance via any
+    /// path are observed consistently.
     pub references: IndexMap<ReferenceName, EvalInstanceKey>,
     /// Aliases of submodel imports declared on this model file (both
     /// direct `use … as alias` submodels and `with`-extracted submodels).
@@ -93,7 +91,7 @@ impl InstanceGraph {
     /// are the ones that take effect, matching prior behavior.
     pub fn build<E: ExternalEvaluationContext>(
         root_path: &ModelPath,
-        runtime_designs: &[ir::DesignApplication],
+        runtime_designs: &[ir::ApplyDesign],
         external: &E,
     ) -> Self {
         let root_key = EvalInstanceKey {
@@ -142,8 +140,6 @@ struct DesignContribution {
     overrides: IndexMap<ParameterName, ir::OverlayParameterValue>,
     /// New parameters this design adds to the target.
     additions: IndexMap<ParameterName, ir::Parameter>,
-    /// Reference replacements this design declares.
-    replacements: IndexMap<ReferenceName, ir::ReferenceReplacement>,
     /// Contributions to forward to specific child references.
     nested_by_ref: IndexMap<ReferenceName, Self>,
 }
@@ -154,33 +150,25 @@ impl DesignContribution {
             anchor_key,
             overrides: IndexMap::new(),
             additions: IndexMap::new(),
-            replacements: IndexMap::new(),
             nested_by_ref: IndexMap::new(),
         }
     }
 
     /// Lifts a [`Design`](ir::Design) into a contribution anchored at
-    /// `anchor_key`, splitting all three scoped maps (`scoped_overrides`,
-    /// `scoped_replacements`, `scoped_additions`) by their first path segment
-    /// for propagation through `nested_by_ref`.
+    /// `anchor_key`, splitting both scoped maps (`scoped_overrides`,
+    /// `scoped_additions`) by their first path segment for propagation through
+    /// `nested_by_ref`.
     fn from_design(design: &ir::Design, anchor_key: &EvalInstanceKey) -> Self {
         let mut out = Self {
             anchor_key: anchor_key.clone(),
             overrides: design.parameter_overrides.clone(),
             additions: design.parameter_additions.clone(),
-            replacements: design.reference_replacements.clone(),
             nested_by_ref: IndexMap::new(),
         };
         for (path, params) in &design.scoped_overrides {
             let leaf = descend_or_create(&mut out, path.segments(), anchor_key);
             for (k, v) in params {
                 leaf.overrides.insert(k.clone(), v.clone());
-            }
-        }
-        for (path, repls) in &design.scoped_replacements {
-            let leaf = descend_or_create(&mut out, path.segments(), anchor_key);
-            for (k, v) in repls {
-                leaf.replacements.insert(k.clone(), v.clone());
             }
         }
         for (path, adds) in &design.scoped_additions {
@@ -288,9 +276,6 @@ fn merge_contributions(mut a: DesignContribution, b: DesignContribution) -> Desi
     for (k, v) in b.additions {
         a.additions.insert(k, v);
     }
-    for (k, v) in b.replacements {
-        a.replacements.insert(k, v);
-    }
     for (k, v) in b.nested_by_ref {
         match a.nested_by_ref.shift_remove(&k) {
             Some(existing) => {
@@ -304,53 +289,64 @@ fn merge_contributions(mut a: DesignContribution, b: DesignContribution) -> Desi
     a
 }
 
-/// Resolves a [`DesignApplication`](ir::DesignApplication) to a
-/// [`DesignContribution`]: looks up the design IR and lifts it, anchoring it
-/// at the design's target instance — the place where the design's overlays
-/// and additions logically live. The anchor matters for overlay RHS
-/// evaluation (see [`OverlayBinding::anchor_key`]): a design's RHSes refer
-/// to parameters in its target's lexical scope, not in the consumer's.
+/// Resolves an [`ApplyDesign`](ir::ApplyDesign) to a [`DesignContribution`]:
+/// looks up the design IR and lifts it, anchoring it at the design's target
+/// instance — the place where the design's overlays and additions logically
+/// live. The anchor matters for overlay RHS evaluation (see
+/// [`OverlayBinding::anchor_key`]): a design's RHSes refer to parameters in
+/// its target's lexical scope, not in the consumer's.
 ///
-/// - For `use design X` (no `for`): the target instance is the consumer
-///   itself, so the anchor is `consuming_key`.
-/// - For `use design X for r`: the target instance is `r` on the consumer
-///   (a child instance for direct submodels, a shared instance for `ref`s).
-///   The contribution is wrapped under `nested_by_ref[r]` so it lands on
-///   that instance, but the anchor inside the wrap points at the target
-///   instance so RHSes resolve against the target's parameters.
+/// When `app.target` is non-root, the contribution is wrapped under
+/// `nested_by_ref` along the target's segments so it lands on the right
+/// instance. When it's root, the contribution lands on the consumer itself
+/// (this only happens for runtime-supplied applications, e.g. CLI
+/// `--design`; source `apply` declarations always have a non-root target).
 ///
 /// Returns `None` if the design IR cannot be loaded.
 fn contribution_for_application<E: ExternalEvaluationContext>(
-    app: &ir::DesignApplication,
+    app: &ir::ApplyDesign,
     consuming_key: &EvalInstanceKey,
     external: &E,
 ) -> Option<DesignContribution> {
     let design = load_design(&app.design_path, external)?;
-    let inner_anchor = app.applied_to.as_ref().map_or_else(
-        || consuming_key.clone(),
-        |ref_name| {
-            target_instance_key_for(&design, ref_name, consuming_key, external)
-                .unwrap_or_else(|| consuming_key.clone())
-        },
-    );
+    let segments = app.target.segments();
+    let Some((first, rest)) = segments.split_first() else {
+        // Root target: anchor at consumer itself.
+        return Some(DesignContribution::from_design(&design, consuming_key));
+    };
+
+    let inner_anchor = target_instance_key_for(&design, first, consuming_key, external)
+        .unwrap_or_else(|| consuming_key.clone());
+    let inner_anchor = if rest.is_empty() {
+        inner_anchor
+    } else {
+        EvalInstanceKey {
+            model_path: inner_anchor.model_path,
+            instance_path: rest.iter().fold(inner_anchor.instance_path, |acc, seg| {
+                acc.child(seg.clone())
+            }),
+        }
+    };
+
     let mut contribution = DesignContribution::from_design(&design, &inner_anchor);
-    if let Some(ref_name) = &app.applied_to {
+    for seg in segments.iter().rev() {
         let mut wrapped = DesignContribution::empty(consuming_key.clone());
-        wrapped.nested_by_ref.insert(ref_name.clone(), contribution);
+        wrapped.nested_by_ref.insert(seg.clone(), contribution);
         contribution = wrapped;
     }
     Some(contribution)
 }
 
-/// Computes the [`EvalInstanceKey`] of a design's target instance when it is
-/// applied via `use design X for ref_name` on the consumer at `consuming_key`.
+/// Computes the [`EvalInstanceKey`] of a design's first-segment target
+/// instance on the consumer at `consuming_key`.
 ///
 /// The design's target model comes from the design IR; the instance path is
 /// derived from how the consumer declares `ref_name`:
-/// - direct submodel (`use M as ref`): the target instance lives at
+/// - direct submodel (`submodel M as ref`): the target instance lives at
 ///   `consuming_key.instance_path.child(ref_name)`.
-/// - shared reference (`ref M as ref`): the target instance lives at the
-///   root instance path (shared instances are not nested under the consumer).
+/// - shared reference (`reference M as ref`): the target instance lives at
+///   the root instance path (shared instances are not nested under the
+///   consumer).
 ///
 /// Returns `None` if the design has no declared target, the consumer model IR
 /// can't be loaded, or `ref_name` isn't declared on the consumer (resolution
@@ -430,18 +426,6 @@ fn compose_overlays(landed: &[DesignContribution]) -> IndexMap<ParameterName, Ov
     out
 }
 
-/// Collects reference-name → replacement-path entries from landed
-/// contributions (later landings win).
-fn collect_replacements(landed: &[DesignContribution]) -> IndexMap<ReferenceName, ModelPath> {
-    let mut out: IndexMap<ReferenceName, ModelPath> = IndexMap::new();
-    for c in landed {
-        for (name, repl) in &c.replacements {
-            out.insert(name.clone(), repl.replacement_path.clone());
-        }
-    }
-    out
-}
-
 /// DFS that materializes one instance and recurses into its children.
 fn visit<E: ExternalEvaluationContext>(
     key: &EvalInstanceKey,
@@ -485,11 +469,10 @@ fn visit<E: ExternalEvaluationContext>(
 
     let parameters = compose_parameters(model.get_parameters(), &all_landed);
     let overlays = compose_overlays(&all_landed);
-    let replacements = collect_replacements(&all_landed);
 
-    // Build the post-replacement references map for *true* references first.
-    // Extracted submodels are wired afterwards by walking the live graph so
-    // they reuse the same `EvalInstanceKey` as the deep instance.
+    // Build the references map for *true* references first. Extracted
+    // submodels are wired afterwards by walking the live graph so they reuse
+    // the same `EvalInstanceKey` as the deep instance.
 
     // The submodel map is keyed by alias; an alias points at a *direct*
     // submodel iff its `SubmodelImport.submodel_path` is empty.
@@ -501,10 +484,6 @@ fn visit<E: ExternalEvaluationContext>(
 
     let mut references: IndexMap<ReferenceName, EvalInstanceKey> = IndexMap::new();
     for (ref_name, ref_import) in model_refs {
-        let child_path = replacements
-            .get(ref_name)
-            .cloned()
-            .unwrap_or_else(|| ref_import.path().clone());
         let is_direct_submodel = submodels.contains(ref_name);
         let child_instance = if is_direct_submodel {
             key.instance_path.child(ref_name.clone())
@@ -512,7 +491,7 @@ fn visit<E: ExternalEvaluationContext>(
             InstancePath::root()
         };
         let child_key = EvalInstanceKey {
-            model_path: child_path,
+            model_path: ref_import.path().clone(),
             instance_path: child_instance,
         };
         references.insert(ref_name.clone(), child_key);

@@ -1,7 +1,7 @@
 # Parent model that uses a child and applies a design with augmented params
 
 use child as c
-use design augment for c
+apply augment to c
 
 # Reference existing parameter from child (syntax is param.ref)
 From child: x = base.c

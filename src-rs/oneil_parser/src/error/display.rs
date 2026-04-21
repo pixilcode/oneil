@@ -54,7 +54,8 @@ impl fmt::Display for DeclKind {
             Self::ModelMissingSubcomponent => write!(f, "expected submodel name after `.`"),
             Self::AsMissingAlias => write!(f, "expected model alias after `as`"),
             Self::DesignMissingTarget => write!(f, "expected model name after `design`"),
-            Self::UseDesignMissingFile => write!(f, "expected design file name after `use design`"),
+            Self::ApplyMissingFile => write!(f, "expected design file name after `apply`"),
+            Self::ApplyMissingTarget => write!(f, "expected `to <target>` after `apply <file>`"),
             Self::DesignHeaderWrongFile => write!(
                 f,
                 "`design` declaration is only allowed in `.one` design bundle files"

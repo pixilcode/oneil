@@ -1,5 +1,6 @@
 ---
 source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 79
 expression: output
 ---
 error: `apply wrong_target_design.one to planet`: design `wrong_target_design.one` targets `gravity_mars.on`, but `planet` resolves to `gravity_earth.on`. Use a design whose `design <model>` matches `gravity_earth.on`.

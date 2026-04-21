@@ -1,5 +1,0 @@
-# Mission using propulsion system, extracts gravity reference
-use mid_with_matching as propulsion with [inner]
-
-# Use propulsion system's T/W ratio
-Performance: perf = ratio.propulsion

@@ -13,7 +13,7 @@ mod test;
 mod unit;
 
 pub use debug_info::TraceLevel;
-pub use design_overlay::{Design, DesignApplication, OverlayParameterValue, ReferenceReplacement};
+pub use design_overlay::{ApplyDesign, Design, OverlayParameterValue};
 pub use expr::{
     BinaryOp, ComparisonOp, Expr, ExprVisitor, FunctionName, Literal, UnaryOp, Variable,
 };

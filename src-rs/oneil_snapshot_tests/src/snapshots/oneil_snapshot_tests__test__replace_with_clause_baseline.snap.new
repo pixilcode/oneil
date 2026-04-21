@@ -1,0 +1,11 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 131
+expression: output
+---
+error: unexpected character
+  at fixtures/reference_replacement/with_submodels/test_parent_direct.on:2:37
+---
+
+Model: fixtures/reference_replacement/with_submodels/test_parent_direct.on
+Tests: 0/0

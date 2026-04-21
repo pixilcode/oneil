@@ -104,12 +104,21 @@ impl ParserErrorReason {
         }
     }
 
-    /// Missing design file name after `use design`.
+    /// Missing design file name after `apply`.
     #[must_use]
-    pub(crate) const fn use_design_missing_file(cause: Span) -> Self {
+    pub(crate) const fn apply_missing_file(cause: Span) -> Self {
         Self::Incomplete {
             cause,
-            kind: IncompleteKind::Decl(DeclKind::UseDesignMissingFile),
+            kind: IncompleteKind::Decl(DeclKind::ApplyMissingFile),
+        }
+    }
+
+    /// Missing `to <target>` clause on an `apply` declaration.
+    #[must_use]
+    pub(crate) const fn apply_missing_target(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::ApplyMissingTarget),
         }
     }
 
@@ -454,8 +463,10 @@ pub enum DeclKind {
     AsMissingAlias,
     /// Missing model identifier after `design`.
     DesignMissingTarget,
-    /// Missing design file name after `use design`.
-    UseDesignMissingFile,
+    /// Missing design file name after `apply`.
+    ApplyMissingFile,
+    /// `apply <file>` without a `to <target>` clause.
+    ApplyMissingTarget,
     /// `design <model>` at file top level is only valid in `.one` design bundle files.
     DesignHeaderWrongFile,
     /// Only one `design <model>` declaration is allowed per `.one` design bundle.

@@ -1,0 +1,10 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 105
+expression: output
+---
+Model: fixtures/with_clause/with_parent_direct.on
+Tests: 0/0
+Parameters:
+  mass = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(100.0)), unit: Unit { dimension_map: DimensionMap({Mass: 1.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "kg", exponent: 1.0 } } })
+  weight = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(981.0)), unit: Unit { dimension_map: DimensionMap({Mass: 1.0, Distance: 1.0, Time: -2.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "N", exponent: 1.0 } } })

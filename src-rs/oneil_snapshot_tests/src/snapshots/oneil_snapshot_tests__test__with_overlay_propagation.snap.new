@@ -1,0 +1,11 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 185
+expression: output
+---
+error: unexpected character
+  at fixtures/with_overlay_propagation/parent.on:6:25
+---
+
+Model: fixtures/with_overlay_propagation/parent.on
+Tests: 0/0

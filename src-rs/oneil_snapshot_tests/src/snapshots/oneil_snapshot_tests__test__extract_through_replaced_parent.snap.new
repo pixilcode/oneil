@@ -1,0 +1,14 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 167
+expression: output
+---
+error: unexpected character
+  at fixtures/extracted_submodels/extract_parent.on:2:38
+
+error: expected model after `use`
+  at fixtures/extracted_submodels/extract_eval.on:4:5
+---
+
+Model: fixtures/extracted_submodels/extract_eval.on
+Tests: 0/0

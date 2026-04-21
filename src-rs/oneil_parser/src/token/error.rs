@@ -57,16 +57,14 @@ pub enum ExpectKind {
 pub enum ExpectKeyword {
     /// Expected 'and' keyword
     And,
+    /// Expected `apply` keyword
+    Apply,
     /// Expected 'as' keyword
     As,
     /// Expected 'false' keyword
     False,
     /// Expected `design` keyword
     Design,
-    /// Expected `for` keyword
-    For,
-    /// Expected 'from' keyword
-    From,
     /// Expected 'if' keyword
     If,
     /// Expected 'import' keyword
@@ -77,16 +75,20 @@ pub enum ExpectKeyword {
     Or,
     /// Expected 'ref' keyword
     Ref,
+    /// Expected `reference` keyword
+    Reference,
     /// Expected 'section' keyword
     Section,
+    /// Expected `submodel` keyword
+    Submodel,
     /// Expected 'test' keyword
     Test,
+    /// Expected `to` keyword
+    To,
     /// Expected 'true' keyword
     True,
     /// Expected 'use' keyword
     Use,
-    /// Expected 'with' keyword
-    With,
 }
 
 /// The different symbols that could have been expected.

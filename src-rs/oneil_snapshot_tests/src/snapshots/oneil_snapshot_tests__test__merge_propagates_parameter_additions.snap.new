@@ -1,0 +1,13 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 221
+expression: output
+---
+error: expected model after `use`
+  at fixtures/design_addition_propagation/eval.on:5:5
+---
+
+Model: fixtures/design_addition_propagation/eval.on
+Tests: 0/0
+Parameters:
+  result = Number(Scalar(5.0))
