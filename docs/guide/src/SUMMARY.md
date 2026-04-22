@@ -12,3 +12,4 @@
 - [Importing Python Functions](./10-importing-python.md)
 
 [Appendix A: Python API](./a-python-api.md)
+[Appendix B: Using AI](./b-using-ai.md)
