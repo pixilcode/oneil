@@ -1,4 +1,4 @@
-# Python API (oneil)
+# Appendix A: Python API (oneil)
 
 The Oneil Rust implementation exposes a Python library built from `oneil_python::py_compat`. It provides Oneil’s builtin values, units, and functions, plus Python classes for **Interval**, **MeasuredNumber**, and **Unit**, so you can use Oneil’s number and unit semantics from Python.
 
