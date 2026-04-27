@@ -1,0 +1,5 @@
+submodel planet as target
+apply derived_planet to target
+
+$ Day length: t_day = day_length.target :hr
+$ Surface area: A = surface_area.target :km^2

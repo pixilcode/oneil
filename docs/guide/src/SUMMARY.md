@@ -9,7 +9,8 @@
 - [Intervals](./07-intervals.md)
 - [Notes](./08-notes.md)
 - [Importing models](./09-importing-models.md)
-- [Importing Python Functions](./10-importing-python.md)
+- [Designs](./10-designs.md)
+- [Importing Python Functions](./11-importing-python.md)
 
 [Appendix A: Python API](./a-python-api.md)
 [Appendix B: Using AI](./b-using-ai.md)

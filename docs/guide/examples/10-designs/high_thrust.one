@@ -1,0 +1,4 @@
+design spacecraft
+
+thrust.main_engine = 2000 :N
+isp.main_engine    = 450  :s

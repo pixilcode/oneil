@@ -1,0 +1,3 @@
+submodel planet as earth
+
+Earth surface gravity: g_surface = g.earth :m/s^2
