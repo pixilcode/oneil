@@ -255,19 +255,18 @@ Oneil with Python.
 
 ## Model imports
 
-It is also possible to import other models as "submodels" using the syntax
-`use <submodel_file> as <submodel_identifier>`. Parameters from within that
-submodel can be referenced with the syntax `<variable_name>.<submodel_name>`.
+Models can import other models as **submodels** using `submodel <file> as <alias>`.
+Parameters from the imported model are accessed as `parameter.alias`.
 
 ```oneil
 # satellite.on
-use battery
-use magnetometer as m
-use radar as r
+submodel battery
+submodel magnetometer as m
+submodel radar as r
 
 Satellite peak power: P_max = P_max.m + P_max.r :W
 
-$ Instantaneous battery usage: U_B = P_max/load_max.b :%
+$ Battery usage: U_B = P_max / load_max.battery :%
 ```
 
 ```oneil
@@ -285,13 +284,13 @@ Magnetometer peak power: P_max = 20 :W
 Radar peak power: P_max = 2 :W
 ```
 
-A *submodel* of a *model* correlates to a *subsystem* of the *system* being
-modeled. When you need to reference variables within a model but don't want to
-treat it as a submodel, use `ref <model_file> as <model_name>` instead.
+A *submodel* correlates to a *subsystem* of the system being modeled. When you
+need to read from a model but don't want to treat it as a subsystem, use
+`reference <file> as <alias>` instead.
 
 ```oneil
 # orbit.on
-ref constants as c
+reference constants as c
 
 Altitude of satellite: h = 500 :km
 $ Radius of orbit: r = h + R_E.c :km
@@ -304,11 +303,25 @@ Earth radius: R_E = 6356752 :km
 
 ## Designs
 
-> [!NOTE]
-> This is not supported yet, so this section is incomplete. But it will be
-> supported soon!
+A *design* allows you to change or augment parameters of a model to represent
+an alternative configuration. Designs are written in `.one` files and can be
+applied to a model at the command line or from within another model using
+`apply <design> to <ref>`.
 
-A *design* allows you to change certain parameters of a model in order to
-represent a similar system.
+```oneil
+# mars_gravity.one
+design planet
 
-<!-- TODO: finish this documentation when the design task is complete  -->
+g = 3.72 :m/s^2
+```
+
+```oneil
+# mission.on
+submodel planet as p
+apply mars_gravity to p
+
+Spacecraft mass: m = 500 :kg
+Surface weight: W = m * g.p :N
+```
+
+See [Designs](./10-designs.md) for the full reference.

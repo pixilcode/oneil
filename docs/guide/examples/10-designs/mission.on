@@ -1,0 +1,5 @@
+submodel planet as target
+apply mars_gravity to target
+
+Spacecraft mass: m = 500 :kg
+$ Surface weight: W = m * g.target :N
