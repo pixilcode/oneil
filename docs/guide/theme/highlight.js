@@ -113,34 +113,11 @@ hljs.registerLanguage("oneil", function (hljs) {
         end: END_OF_LINE_RE,
       },
 
-      // use declaration
+      // submodel declaration
       {
         begin: [
           /^\s*/m,
-          /use/,
-          /\s+/,
-          IDENT_RE,
-        ],
-        beginScope: {
-          2: "keyword",
-        },
-        end: END_OF_LINE_RE,
-        keywords: ["as", "with"],
-        contains: [
-          // use foo with [ ... ]
-          {
-            begin: /\[/,
-            end: /\]/,
-            keywords: ["as"],
-          }
-        ],
-      },
-
-      // ref declaration
-      {
-        begin: [
-          /^\s*/m,
-          /ref/,
+          /submodel/,
           /\s+/,
           IDENT_RE,
         ],
@@ -149,6 +126,58 @@ hljs.registerLanguage("oneil", function (hljs) {
         },
         end: END_OF_LINE_RE,
         keywords: ["as"],
+        contains: [
+          // submodel foo as bar [inner, other as renamed]
+          {
+            begin: /\[/,
+            end: /\]/,
+            keywords: ["as"],
+          }
+        ],
+      },
+
+      // reference declaration
+      {
+        begin: [
+          /^\s*/m,
+          /reference/,
+          /\s+/,
+          IDENT_RE,
+        ],
+        beginScope: {
+          2: "keyword",
+        },
+        end: END_OF_LINE_RE,
+        keywords: ["as"],
+      },
+
+      // design declaration
+      {
+        begin: [
+          /^\s*/m,
+          /design/,
+          /\s+/,
+          IDENT_RE,
+        ],
+        beginScope: {
+          2: "keyword",
+        },
+        end: END_OF_LINE_RE,
+      },
+
+      // apply declaration
+      {
+        begin: [
+          /^\s*/m,
+          /apply/,
+          /\s+/,
+          IDENT_RE,
+        ],
+        beginScope: {
+          2: "keyword",
+        },
+        end: END_OF_LINE_RE,
+        keywords: ["to"],
       },
 
       // section declaration
@@ -220,7 +249,7 @@ hljs.registerLanguage("oneil", function (hljs) {
         begin: [
           /^\s*(\$|\*\*?)?\s*/m, // includes `$`, `*`, `**` annotations
           LABEL_RE,
-          /\s*/,
+          /(?!\s*=)\s*/,         // reject bare `ident =` (shorthand param, not a label)
         ],
         beginScope: {
           2: "title",

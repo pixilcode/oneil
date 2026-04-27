@@ -1,0 +1,5 @@
+submodel thruster as main_engine
+submodel thruster as rcs
+
+Thrust scale factor: thrust_scale = 1.0
+$ Total thrust: F_total = thrust.main_engine + thrust.rcs :N
