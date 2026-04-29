@@ -5,7 +5,7 @@ use oneil_ir as ir;
 use oneil_shared::{
     partial::MaybePartialResult,
     paths::ModelPath,
-    symbols::{BuiltinValueName, ReferenceName},
+    symbols::{BuiltinValueName, ReferenceName, TestIndex},
 };
 use oneil_shared::{span::Span, symbols::ParameterName};
 
@@ -79,7 +79,7 @@ fn eval_model_from_context<E: ExternalEvaluationContext>(
             .get(&parameter_name)
             .expect("parameter should exist because it comes from the keys of the parameters map");
 
-        let value = eval_parameter::eval_parameter(parameter, context);
+        let value = eval_parameter::eval_parameter(parameter_name.clone(), parameter, context);
 
         let parameter_result = value.map(|value| {
             parameter_result_from(
@@ -97,7 +97,7 @@ fn eval_model_from_context<E: ExternalEvaluationContext>(
     // Evaluate tests
     let tests = model.get_tests();
     for (test_index, test) in tests {
-        let test_result = eval_test(test, context);
+        let test_result = eval_test(*test_index, test, context);
         context.add_test_result(*test_index, test_result);
     }
 
@@ -254,10 +254,12 @@ fn process_parameter_dependencies(
 }
 
 fn eval_test<E: ExternalEvaluationContext>(
+    test_index: TestIndex,
     test: &ir::Test,
     context: &mut EvalContext<'_, E>,
 ) -> Result<output::Test, Vec<EvalError>> {
-    context.begin_expression_evaluation();
+    context.begin_test_evaluation(test_index);
+
     let (test_result, expr_span) = eval_expr::eval_expr(test.expr(), context)?;
     let warnings = context.take_expression_warnings();
 

@@ -1,27 +1,38 @@
 //! Utility methods for the runtime.
 
+#[cfg(feature = "python")]
+use std::path::PathBuf;
+
 use indexmap::IndexSet;
 #[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
 use oneil_shared::paths::{ModelPath, SourcePath};
 
 use super::Runtime;
-#[cfg(feature = "python")]
-use crate::cache::PythonImportCache;
 use crate::cache::{AstCache, EvalCache, IrCache, SourceCache};
+#[cfg(feature = "python")]
+use crate::cache::{PythonCallCache, PythonImportCache};
 use oneil_builtins::BuiltinRef;
 
 impl Runtime {
     /// Creates a new runtime instance with empty caches.
     #[must_use]
     pub fn new() -> Self {
+        #[cfg(feature = "python")]
+        let cache_dir = PathBuf::from("__oncache__");
         Self {
+            #[cfg(feature = "python")]
+            cache_dir: cache_dir.clone(),
             source_cache: SourceCache::new(),
             ast_cache: AstCache::new(),
             ir_cache: IrCache::new(),
             eval_cache: EvalCache::new(),
             #[cfg(feature = "python")]
             python_import_cache: PythonImportCache::new(),
+            #[cfg(feature = "python")]
+            python_call_cache: PythonCallCache::new(cache_dir.clone()),
+            #[cfg(feature = "python")]
+            python_call_replacement_cache: PythonCallCache::new(cache_dir),
             builtins: BuiltinRef::new(),
         }
     }

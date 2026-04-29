@@ -21,8 +21,11 @@ mod util;
 mod python;
 
 #[cfg(feature = "python")]
-use crate::cache::PythonImportCache;
+use std::path::PathBuf;
+
 use crate::cache::{AstCache, EvalCache, IrCache, SourceCache};
+#[cfg(feature = "python")]
+use crate::cache::{PythonCallCache, PythonImportCache};
 use oneil_builtins::BuiltinRef;
 
 /// Runtime for the Oneil programming language.
@@ -31,11 +34,17 @@ use oneil_builtins::BuiltinRef;
 /// methods to load and process Oneil models.
 #[derive(Debug)]
 pub struct Runtime {
+    #[cfg(feature = "python")]
+    cache_dir: PathBuf,
     source_cache: SourceCache,
     ast_cache: AstCache,
     ir_cache: IrCache,
     eval_cache: EvalCache,
     #[cfg(feature = "python")]
     python_import_cache: PythonImportCache,
+    #[cfg(feature = "python")]
+    python_call_cache: PythonCallCache,
+    #[cfg(feature = "python")]
+    python_call_replacement_cache: PythonCallCache,
     builtins: BuiltinRef,
 }
