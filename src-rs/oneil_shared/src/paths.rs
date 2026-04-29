@@ -147,7 +147,7 @@ impl TryFrom<&str> for ModelPath {
 }
 
 /// A path to a Python module file.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PythonPath(PathBuf);
 
 impl PythonPath {
