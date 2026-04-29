@@ -41,7 +41,7 @@ impl AsOneilDiagnostic for LoadPythonImportError {
 }
 
 /// Error from evaluating a Python function (argument conversion, call, or result conversion failed).
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PythonEvalError {
     PyErr {
         /// Error message from Python or from conversion.
