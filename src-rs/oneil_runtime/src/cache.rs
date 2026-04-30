@@ -200,20 +200,19 @@ impl<T, E> ModelCache<T, E> {
 }
 
 #[cfg(feature = "python")]
-pub use python::{PythonCallCache, PythonImportCache};
+pub use python::{PythonCallCache, PythonCallCacheRecord, PythonImportCache};
 
 #[cfg(feature = "python")]
 mod python {
     use std::path::{Component, PathBuf};
 
-    #[cfg(feature = "python")]
     use indexmap::IndexMap;
     use oneil_py_call_cache::{
         CacheValue, CachedFunctionName, CachedParameterName, CachedTestIndex, FileCache,
-        FunctionCall, FunctionCallResult, ReadCacheError, WriteCacheError,
+        FunctionCall, FunctionCallResult, ImportHash, ReadCacheError, WriteCacheError,
     };
-    use oneil_python::PythonEvalError;
-    #[cfg(feature = "python")]
+    use oneil_py_call_cache::{CachedPythonPath, ImportEntry};
+    use oneil_python::{PythonEvalError, function::PythonModule};
     use oneil_shared::paths::ModelPath;
     use oneil_shared::{
         paths::PythonPath,
@@ -221,8 +220,31 @@ mod python {
     };
 
     use crate::error::PythonImportError;
-    #[cfg(feature = "python")]
     use crate::output;
+
+    /// Inputs shared by [`PythonCallCache::add_parameter_entry`] and [`PythonCallCache::add_test_entry`].
+    #[derive(Debug)]
+    pub struct PythonCallCacheRecord<'a> {
+        /// Model file whose cache entry is updated.
+        pub model_path: &'a ModelPath,
+        /// Path of the Python module that defined the callee.
+        pub python_path: &'a PythonPath,
+        /// Name of the invoked Python function.
+        pub function_name: &'a PyFunctionName,
+        /// Argument values passed to the call.
+        pub args: &'a [output::Value],
+        /// Evaluation outcome to persist.
+        pub eval_result: Result<output::Value, PythonEvalError>,
+        /// Loaded module metadata for import tracking.
+        pub python_module: &'a PythonModule,
+    }
+
+    /// Whether a recorded call belongs to a parameter default or a test body.
+    #[derive(Debug, Clone, Copy)]
+    enum CallCacheTarget<'a> {
+        Parameter(&'a ParameterName),
+        Test(TestIndex),
+    }
     /// Cache for Python import function maps keyed by path.
     ///
     /// Stores a [`Result`] per path: either the loaded [`PythonFunctionMap`] or a
@@ -335,62 +357,67 @@ mod python {
             entry.tests.get(&test_index).map(Vec::as_slice)
         }
 
+        /// Appends one cached function call for `parameter_name` and updates import usage.
         pub fn add_parameter_entry(
             &mut self,
-            model_path: &ModelPath,
+            record: PythonCallCacheRecord<'_>,
             parameter_name: &ParameterName,
-            function_name: &PyFunctionName,
-            args: &[output::Value],
-            eval_result: Result<output::Value, PythonEvalError>,
         ) {
-            let entry = self.entries.entry(model_path.clone()).or_default();
-
-            let cached_parameter_name = CachedParameterName::from(parameter_name.clone());
-            let cached_function_name = CachedFunctionName::from(function_name.clone());
-            let cached_args = args
-                .iter()
-                .map(|arg| CacheValue::from(arg.clone()))
-                .collect();
-            let cached_eval_result = FunctionCallResult::from(eval_result);
-
-            entry
-                .parameters
-                .entry(cached_parameter_name)
-                .or_default()
-                .push(FunctionCall {
-                    function: cached_function_name,
-                    inputs: cached_args,
-                    output: cached_eval_result,
-                });
+            self.push_function_call_entry(record, CallCacheTarget::Parameter(parameter_name));
         }
 
-        pub fn add_test_entry(
+        /// Appends one cached function call for `test_index` and updates import usage.
+        pub fn add_test_entry(&mut self, record: PythonCallCacheRecord<'_>, test_index: TestIndex) {
+            self.push_function_call_entry(record, CallCacheTarget::Test(test_index));
+        }
+
+        /// Appends one [`FunctionCall`] under `target` and registers `function_name` on the matching import entry.
+        fn push_function_call_entry(
             &mut self,
-            model_path: &ModelPath,
-            test_index: TestIndex,
-            function_name: &PyFunctionName,
-            args: &[output::Value],
-            eval_result: Result<output::Value, PythonEvalError>,
+            record: PythonCallCacheRecord<'_>,
+            target: CallCacheTarget<'_>,
         ) {
-            let entry = self.entries.entry(model_path.clone()).or_default();
+            let PythonCallCacheRecord {
+                model_path,
+                python_path,
+                function_name,
+                args,
+                eval_result,
+                python_module,
+            } = record;
 
-            let cached_test_index = CachedTestIndex::from(test_index);
+            let model_entry = self.entries.entry(model_path.clone()).or_default();
+            let cached_function_call = function_call_from(function_name, args, eval_result);
+
+            match target {
+                CallCacheTarget::Parameter(parameter_name) => {
+                    let cached_parameter_name = CachedParameterName::from(parameter_name.clone());
+
+                    model_entry
+                        .parameters
+                        .entry(cached_parameter_name)
+                        .or_default()
+                        .push(cached_function_call);
+                }
+                CallCacheTarget::Test(test_index) => {
+                    let cached_test_index = CachedTestIndex::from(test_index);
+
+                    model_entry
+                        .tests
+                        .entry(cached_test_index)
+                        .or_default()
+                        .push(cached_function_call);
+                }
+            }
+
+            let cached_python_path = CachedPythonPath::from(python_path.clone());
             let cached_function_name = CachedFunctionName::from(function_name.clone());
-            let cached_args = args
-                .iter()
-                .map(|arg| CacheValue::from(arg.clone()))
-                .collect();
-            let cached_eval_result = FunctionCallResult::from(eval_result);
-
-            entry
-                .tests
-                .entry(cached_test_index)
-                .or_default()
-                .push(FunctionCall {
-                    function: cached_function_name,
-                    inputs: cached_args,
-                    output: cached_eval_result,
-                });
+            model_entry
+                .imports
+                .entry(cached_python_path)
+                .or_insert_with(|| make_python_cache_import_entry(python_path, python_module))
+                .functions_used
+                .insert(cached_function_name);
         }
 
         /// Loads a cache entry from disk.
@@ -471,5 +498,40 @@ mod python {
         }
 
         path
+    }
+
+    fn function_call_from(
+        function_name: &PyFunctionName,
+        args: &[output::Value],
+        eval_result: Result<output::Value, PythonEvalError>,
+    ) -> FunctionCall {
+        FunctionCall {
+            function: CachedFunctionName::from(function_name.clone()),
+            inputs: args
+                .iter()
+                .map(|arg| CacheValue::from(arg.clone()))
+                .collect(),
+            output: FunctionCallResult::from(eval_result),
+        }
+    }
+
+    fn make_python_cache_import_entry(
+        python_path: &PythonPath,
+        python_module: &PythonModule,
+    ) -> ImportEntry {
+        let name = python_path
+            .as_path()
+            .file_stem()
+            .map_or_else(|| "<unknown>".into(), |s| s.to_string_lossy().to_string());
+
+        let dependencies = python_module
+            .get_imports()
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect();
+
+        let hash = ImportHash::from(python_module.get_hash());
+
+        ImportEntry::new(name, dependencies, hash)
     }
 }
