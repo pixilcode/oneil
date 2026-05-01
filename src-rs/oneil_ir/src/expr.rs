@@ -1,7 +1,7 @@
 //! Expression system for mathematical and logical operations in Oneil.
 
 use oneil_shared::{
-    paths::{ModelPath, PythonPath},
+    paths::PythonPath,
     span::Span,
     symbols::{
         BuiltinFunctionName, BuiltinValueName, ParameterName, PyFunctionName, ReferenceName,
@@ -164,7 +164,6 @@ impl Expr {
     #[must_use]
     pub const fn external_variable(
         span: Span,
-        model_path: ModelPath,
         reference_name: ReferenceName,
         reference_span: Span,
         parameter_name: ParameterName,
@@ -173,7 +172,6 @@ impl Expr {
         Self::Variable {
             span,
             variable: Variable::external(
-                model_path,
                 reference_name,
                 reference_span,
                 parameter_name,
@@ -195,6 +193,75 @@ impl Expr {
             span,
             expr: Box::new(expr),
             unit,
+        }
+    }
+
+    /// Walks every `Variable` in this expression in pre-order and invokes
+    /// `f` on each. Read-only counterpart to [`Self::walk_variables_mut`];
+    /// used by the post-walk validation pass to inspect resolved variables
+    /// without mutating them.
+    pub fn walk_variables<F: FnMut(&Variable)>(&self, f: &mut F) {
+        match self {
+            Self::ComparisonOp {
+                left,
+                right,
+                rest_chained,
+                ..
+            } => {
+                left.walk_variables(f);
+                right.walk_variables(f);
+                for (_, expr) in rest_chained {
+                    expr.walk_variables(f);
+                }
+            }
+            Self::BinaryOp { left, right, .. } => {
+                left.walk_variables(f);
+                right.walk_variables(f);
+            }
+            Self::UnaryOp { expr, .. } | Self::UnitCast { expr, .. } => {
+                expr.walk_variables(f);
+            }
+            Self::FunctionCall { args, .. } => {
+                for arg in args {
+                    arg.walk_variables(f);
+                }
+            }
+            Self::Variable { variable, .. } => f(variable),
+            Self::Literal { .. } => {}
+        }
+    }
+
+    /// Walks every `Variable` in this expression in pre-order and invokes
+    /// `f` on each. Used by the pre-validation classification pass to
+    /// reclassify raw identifiers as Parameter / Builtin / External.
+    pub fn walk_variables_mut<F: FnMut(&mut Variable)>(&mut self, f: &mut F) {
+        match self {
+            Self::ComparisonOp {
+                left,
+                right,
+                rest_chained,
+                ..
+            } => {
+                left.walk_variables_mut(f);
+                right.walk_variables_mut(f);
+                for (_, expr) in rest_chained {
+                    expr.walk_variables_mut(f);
+                }
+            }
+            Self::BinaryOp { left, right, .. } => {
+                left.walk_variables_mut(f);
+                right.walk_variables_mut(f);
+            }
+            Self::UnaryOp { expr, .. } | Self::UnitCast { expr, .. } => {
+                expr.walk_variables_mut(f);
+            }
+            Self::FunctionCall { args, .. } => {
+                for arg in args {
+                    arg.walk_variables_mut(f);
+                }
+            }
+            Self::Variable { variable, .. } => f(variable),
+            Self::Literal { .. } => {}
         }
     }
 
@@ -433,27 +500,40 @@ impl FunctionName {
 }
 
 /// Variable references in expressions.
+///
+/// Variables carry no positional information. The pre-validation
+/// classification pass classifies a raw identifier as `Parameter`,
+/// `External`, or `Builtin` based on the host instance's binding
+/// scope; eval resolves variables against the active scope at force
+/// time (with overlay parameters pushing the anchor scope first via
+/// [`crate::DesignProvenance::anchor_path`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Variable {
-    /// Built-in variable
+    /// Built-in variable.
     Builtin {
         /// The identifier of the builtin.
         ident: BuiltinValueName,
         /// Span of the builtin identifier.
         ident_span: Span,
     },
-    /// Parameter defined in the current model.
+    /// Bare-name parameter reference, evaluated against the active scope.
     Parameter {
         /// The parameter name.
         parameter_name: ParameterName,
         /// Span of the parameter identifier.
         parameter_span: Span,
     },
-    /// Parameter defined in another model.
+    /// `p.r` reference: parameter `p` on the instance reached through
+    /// reference name `r` from the active scope. The source-text spelling
+    /// `p.r` is subscript-style (parameter first, reference / submodel
+    /// second), opposite of OOP-style `r.p`.
+    ///
+    /// The resolved model path is **not** stored here; it is looked up from
+    /// the live `InstancedModel::references` / `submodels` / `aliases` maps
+    /// during the post-build validation pass (and at eval time for
+    /// the lookup itself).
     External {
-        /// The model where the parameter is defined.
-        model_path: ModelPath,
-        /// The reference name of the model.
+        /// The reference name of the model as it appears in the source.
         reference_name: ReferenceName,
         /// Span of the referenced model identifier.
         reference_span: Span,
@@ -483,14 +563,12 @@ impl Variable {
     /// Creates an external variable reference.
     #[must_use]
     pub const fn external(
-        model_path: ModelPath,
         reference_name: ReferenceName,
         reference_span: Span,
         parameter_name: ParameterName,
         parameter_span: Span,
     ) -> Self {
         Self::External {
-            model_path,
             reference_name,
             reference_span,
             parameter_name,

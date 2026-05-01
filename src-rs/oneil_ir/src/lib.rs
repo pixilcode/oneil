@@ -1,10 +1,15 @@
 #![cfg_attr(doc, doc = include_str!("../README.md"))]
-//! Intermediate Representation (IR) for the Oneil programming language
+//! Intermediate Representation (IR) for the Oneil programming language.
+//!
+//! This crate provides the expression-level IR types used throughout the compiler
+//! pipeline: expressions, parameters (with their dependencies and units), tests,
+//! Python imports, and notes.
+//!
+//! The model-level types (`InstancedModel`, `InstanceGraph`, and design-related
+//! structs) live in `oneil_frontend::instance`.
 
 mod debug_info;
 mod expr;
-mod model;
-mod model_import;
 mod note;
 mod parameter;
 mod python_import;
@@ -15,10 +20,13 @@ pub use debug_info::TraceLevel;
 pub use expr::{
     BinaryOp, ComparisonOp, Expr, ExprVisitor, FunctionName, Literal, UnaryOp, Variable,
 };
-pub use model::Model;
-pub use model_import::{ReferenceImport, SubmodelImport};
 pub use note::Note;
-pub use parameter::{Dependencies, Limits, Parameter, ParameterValue, PiecewiseExpr};
+pub use parameter::{
+    Dependencies, DesignApplication, DesignProvenance, Limits, Parameter, ParameterValue,
+    PiecewiseExpr,
+};
 pub use python_import::PythonImport;
 pub use test::Test;
-pub use unit::{CompositeUnit, DisplayCompositeUnit, DisplayUnit, Unit, UnitInfo};
+pub use unit::{
+    CompositeUnit, DisplayCompositeUnit, DisplayUnit, Unit, UnitInfo, compute_dimension_map,
+};

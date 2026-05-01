@@ -1,26 +1,45 @@
 //! Unit system for dimensional analysis in Oneil.
 
+use oneil_output::{DimensionMap, DisplayUnit as ResolvedDisplayUnit, Unit as ResolvedUnit};
 use oneil_shared::{
     span::Span,
     symbols::{UnitBaseName, UnitName, UnitPrefix},
 };
 
 /// A composite unit composed of multiple base units.
+///
+/// Each composite unit carries its pre-resolved [`DimensionMap`] alongside
+/// the AST-derived component breakdown. The dimension map is computed once
+/// during lowering (when builtin unit definitions are in scope) so later
+/// passes — design overlay validation, dimensional analysis — can compare
+/// dimensions by data without re-evaluating the unit expression.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompositeUnit {
     units: Vec<Unit>,
     display_unit: DisplayCompositeUnit,
     span: Span,
+    /// Pre-resolved dimension map for this composite unit.
+    ///
+    /// Populated by the lowering pass once the builtin unit dictionary is
+    /// consulted. Subsequent passes treat this as the authoritative
+    /// dimensional signature of the unit.
+    dimension: DimensionMap,
 }
 
 impl CompositeUnit {
     /// Creates a new composite unit from a vector of individual units.
     #[must_use]
-    pub const fn new(units: Vec<Unit>, display_unit: DisplayCompositeUnit, span: Span) -> Self {
+    pub const fn new(
+        units: Vec<Unit>,
+        display_unit: DisplayCompositeUnit,
+        span: Span,
+        dimension: DimensionMap,
+    ) -> Self {
         Self {
             units,
             display_unit,
             span,
+            dimension,
         }
     }
 
@@ -40,6 +59,12 @@ impl CompositeUnit {
     #[must_use]
     pub const fn span(&self) -> Span {
         self.span
+    }
+
+    /// Returns the pre-resolved dimension map for this composite unit.
+    #[must_use]
+    pub const fn dimension(&self) -> &DimensionMap {
+        &self.dimension
     }
 }
 
@@ -112,6 +137,36 @@ impl Unit {
     }
 }
 
+/// Computes the [`DimensionMap`] of a list of [`Unit`]s by looking up each
+/// base unit's dimension map and combining them according to the unit's
+/// exponent.
+///
+/// The lookup function should return the resolved [`ResolvedUnit`] for a
+/// builtin unit base name (typically forwarded to the runtime's builtin
+/// table). Units whose base name cannot be resolved are treated as
+/// dimensionless; missing-unit errors are surfaced separately during the
+/// lowering pass and shouldn't be re-reported here.
+///
+/// dB units do not contribute to the dimension map (they're a logarithmic
+/// scale, not a dimension), but their inner base unit, if any, does.
+#[must_use]
+pub fn compute_dimension_map<F>(units: &[Unit], mut lookup_unit: F) -> DimensionMap
+where
+    F: FnMut(&UnitBaseName) -> Option<ResolvedUnit>,
+{
+    units
+        .iter()
+        .filter_map(|unit| {
+            let base_name = match unit.info() {
+                UnitInfo::Standard { base_name, .. } => Some(base_name),
+                UnitInfo::Db { base_name, .. } => base_name.as_ref(),
+            }?;
+            let resolved = lookup_unit(base_name)?;
+            Some(resolved.dimension_map.pow(unit.exponent()))
+        })
+        .fold(DimensionMap::dimensionless(), |acc, dim| acc * dim)
+}
+
 /// Information about a unit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnitInfo {
@@ -149,6 +204,24 @@ pub enum DisplayCompositeUnit {
     BaseUnit(DisplayUnit),
     /// `1` unit
     One,
+}
+
+impl DisplayCompositeUnit {
+    /// Lowers this AST-style display unit into the runtime
+    /// [`ResolvedDisplayUnit`] used by [`oneil_output::Unit`] and error
+    /// messages. Pure data conversion — no symbol lookup required.
+    #[must_use]
+    pub fn to_resolved_display(&self) -> ResolvedDisplayUnit {
+        match self {
+            Self::BaseUnit(unit) => ResolvedDisplayUnit::Unit {
+                name: unit.name.clone(),
+                exponent: unit.exponent,
+            },
+            Self::One => ResolvedDisplayUnit::One,
+            Self::Multiply(left, right) => left.to_resolved_display() * right.to_resolved_display(),
+            Self::Divide(left, right) => left.to_resolved_display() / right.to_resolved_display(),
+        }
+    }
 }
 
 /// A unit used for displaying the unit to

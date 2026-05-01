@@ -652,12 +652,12 @@ dependencies = [
  "oneil_builtins",
  "oneil_cli",
  "oneil_eval",
+ "oneil_frontend",
  "oneil_ir",
  "oneil_lsp",
  "oneil_output",
  "oneil_parser",
  "oneil_python",
- "oneil_resolver",
  "oneil_runtime",
  "oneil_shared",
  "pyo3",
@@ -668,6 +668,7 @@ name = "oneil_analysis"
 version = "0.16.0"
 dependencies = [
  "indexmap",
+ "oneil_frontend",
  "oneil_ir",
  "oneil_output",
  "oneil_shared",
@@ -712,6 +713,18 @@ version = "0.16.0"
 dependencies = [
  "indexmap",
  "oneil_builtins",
+ "oneil_frontend",
+ "oneil_ir",
+ "oneil_output",
+ "oneil_shared",
+]
+
+[[package]]
+name = "oneil_frontend"
+version = "0.16.0"
+dependencies = [
+ "indexmap",
+ "oneil_ast",
  "oneil_ir",
  "oneil_output",
  "oneil_shared",
@@ -722,6 +735,7 @@ name = "oneil_ir"
 version = "0.16.0"
 dependencies = [
  "indexmap",
+ "oneil_output",
  "oneil_shared",
 ]
 
@@ -775,16 +789,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oneil_resolver"
-version = "0.16.0"
-dependencies = [
- "indexmap",
- "oneil_ast",
- "oneil_ir",
- "oneil_shared",
-]
-
-[[package]]
 name = "oneil_runtime"
 version = "0.16.0"
 dependencies = [
@@ -793,11 +797,11 @@ dependencies = [
  "oneil_ast",
  "oneil_builtins",
  "oneil_eval",
+ "oneil_frontend",
  "oneil_ir",
  "oneil_output",
  "oneil_parser",
  "oneil_python",
- "oneil_resolver",
  "oneil_shared",
 ]
 

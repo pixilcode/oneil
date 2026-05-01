@@ -3,11 +3,12 @@
 use indexmap::IndexMap;
 use oneil_shared::{
     paths::{ModelPath, PythonPath},
-    symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex},
+    symbols::{ParameterName, ReferenceName, TestIndex},
 };
 
 use crate::{
     Note,
+    design_overlay::{ApplyDesign, Design},
     model_import::{ReferenceImport, SubmodelImport},
     parameter::Parameter,
     python_import::PythonImport,
@@ -19,24 +20,42 @@ use crate::{
 pub struct Model {
     path: ModelPath,
     python_imports: IndexMap<PythonPath, PythonImport>,
-    submodels: IndexMap<SubmodelName, SubmodelImport>,
+    /// Submodels declared by this model file, keyed by alias.
+    ///
+    /// The key is the submodel's *alias* (a [`ReferenceName`]) — the same
+    /// string used as the key in [`Self::references`]. Keying by alias is
+    /// what makes `submodel foo as a` and `submodel foo as b` distinguishable so they
+    /// can be replaced or overlaid independently.
+    submodels: IndexMap<ReferenceName, SubmodelImport>,
     references: IndexMap<ReferenceName, ReferenceImport>,
     parameters: IndexMap<ParameterName, Parameter>,
     tests: IndexMap<TestIndex, Test>,
     note: Option<Note>,
+    /// `design <model>` target for this file, when present.
+    design_target: Option<ModelPath>,
+    /// Resolved design content exported by this file (for `apply` consumers).
+    design_export: Design,
+    /// Designs applied by this model file via `apply X to <path>`.
+    ///
+    /// Declarative records consumed by the instancing pass to stamp overrides
+    /// and parameter additions onto the live tree.
+    applied_designs: Vec<ApplyDesign>,
 }
 
 impl Model {
     /// Creates a new model with the specified components.
     #[must_use]
-    pub const fn new(
+    #[expect(clippy::too_many_arguments)]
+    pub fn new(
         path: ModelPath,
         python_imports: IndexMap<PythonPath, PythonImport>,
-        submodels: IndexMap<SubmodelName, SubmodelImport>,
+        submodels: IndexMap<ReferenceName, SubmodelImport>,
         references: IndexMap<ReferenceName, ReferenceImport>,
         parameters: IndexMap<ParameterName, Parameter>,
         tests: IndexMap<TestIndex, Test>,
         note: Option<Note>,
+        design_target: Option<ModelPath>,
+        design_export: Design,
     ) -> Self {
         Self {
             path,
@@ -46,6 +65,9 @@ impl Model {
             parameters,
             tests,
             note,
+            design_target,
+            design_export,
+            applied_designs: Vec::new(),
         }
     }
 
@@ -61,9 +83,9 @@ impl Model {
         &self.python_imports
     }
 
-    /// Looks up a submodel by its identifier.
+    /// Looks up a submodel by its alias (= reference name).
     #[must_use]
-    pub fn get_submodel(&self, identifier: &SubmodelName) -> Option<&SubmodelImport> {
+    pub fn get_submodel(&self, identifier: &ReferenceName) -> Option<&SubmodelImport> {
         self.submodels.get(identifier)
     }
 
@@ -73,18 +95,18 @@ impl Model {
         clippy::missing_panics_doc,
         reason = "the panic is only caused by breaking an internal invariant"
     )]
-    pub fn get_submodel_reference(&self, identifier: &SubmodelName) -> Option<&ReferenceImport> {
+    pub fn get_submodel_reference(&self, identifier: &ReferenceName) -> Option<&ReferenceImport> {
         let submodel = self.submodels.get(identifier)?;
-        let reference = self
+        let reference: &ReferenceImport = self
             .references
             .get(submodel.reference_name())
             .expect("reference corresponding to submodel should exist");
         Some(reference)
     }
 
-    /// Returns a reference to all submodels in this model.
+    /// Returns a reference to all submodels in this model, keyed by alias.
     #[must_use]
-    pub const fn get_submodels(&self) -> &IndexMap<SubmodelName, SubmodelImport> {
+    pub const fn get_submodels(&self) -> &IndexMap<ReferenceName, SubmodelImport> {
         &self.submodels
     }
 
@@ -124,6 +146,45 @@ impl Model {
         self.note.as_ref()
     }
 
+    /// Returns the declared `design <model>` target path, if any.
+    #[must_use]
+    pub const fn design_target(&self) -> Option<&ModelPath> {
+        self.design_target.as_ref()
+    }
+
+    /// Returns the resolved design content this file exports.
+    #[must_use]
+    pub const fn design_export(&self) -> &Design {
+        &self.design_export
+    }
+
+    /// Returns a mutable reference to the design content this file exports.
+    #[must_use]
+    pub const fn design_export_mut(&mut self) -> &mut Design {
+        &mut self.design_export
+    }
+
+    /// Sets the `design` target for this model file.
+    pub fn set_design_target(&mut self, target: Option<ModelPath>) {
+        self.design_target = target;
+    }
+
+    /// Sets the exported design content for this model file.
+    pub fn set_design_export(&mut self, design: Design) {
+        self.design_export = design;
+    }
+
+    /// Returns the declarative `apply …` applications recorded for this model.
+    #[must_use]
+    pub const fn applied_designs(&self) -> &[ApplyDesign] {
+        self.applied_designs.as_slice()
+    }
+
+    /// Records an `apply X to <path>` application on this model.
+    pub fn add_applied_design(&mut self, application: ApplyDesign) {
+        self.applied_designs.push(application);
+    }
+
     /// Adds a Python import to this model.
     pub fn add_python_import(&mut self, path: PythonPath, import: PythonImport) {
         self.python_imports.insert(path, import);
@@ -134,9 +195,9 @@ impl Model {
         self.references.insert(name, import);
     }
 
-    /// Adds a submodel to this model.
-    pub fn add_submodel(&mut self, name: SubmodelName, import: SubmodelImport) {
-        self.submodels.insert(name, import);
+    /// Adds a submodel to this model under the given alias (reference name).
+    pub fn add_submodel(&mut self, alias: ReferenceName, import: SubmodelImport) {
+        self.submodels.insert(alias, import);
     }
 
     /// Adds a parameter to this model.
