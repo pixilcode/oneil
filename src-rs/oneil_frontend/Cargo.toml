@@ -1,6 +1,6 @@
 [package]
-name = "oneil_analysis"
-description = "Semantic analysis for Oneil"
+name = "oneil_frontend"
+description = "Frontend for the Oneil programming language: parsing orchestration, file loading, and instance graph construction"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,11 +12,18 @@ categories.workspace = true
 readme = "README.md"
 
 [dependencies]
-oneil_frontend = { path = "../oneil_frontend" }
+oneil_ast = { path = "../oneil_ast" }
+oneil_shared = { path = "../oneil_shared" }
 oneil_ir = { path = "../oneil_ir" }
 oneil_output = { path = "../oneil_output" }
-oneil_shared = { path = "../oneil_shared" }
 indexmap = { workspace = true }
+
+[features]
+default = ["python"]
+python = []
+
+[dev-dependencies]
+oneil_shared = { path = "../oneil_shared", features = ["random_span"] }
 
 [lints]
 workspace = true

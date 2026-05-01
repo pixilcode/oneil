@@ -30,7 +30,7 @@ rust-lib = [
 	"oneil_lsp",
 	"oneil_output",
 	"oneil_parser",
-	"oneil_resolver",
+	"oneil_frontend",
 	"oneil_runtime",
 	"oneil_shared",
 ]
@@ -38,7 +38,7 @@ python-imports = [
 	"oneil_cli/python",
 	"oneil_eval/python",
 	"oneil_python/rust-lib",
-	"oneil_resolver/python",
+	"oneil_frontend/python",
 	"oneil_runtime/python",
 ]
 python-lib = ["oneil_python/python-lib", "pyo3"]
@@ -54,7 +54,7 @@ oneil_lsp = { path = "../oneil_lsp", optional = true }
 oneil_output = { path = "../oneil_output", optional = true }
 oneil_parser = { path = "../oneil_parser", optional = true }
 oneil_python = { path = "../oneil_python", default-features = false, optional = true }
-oneil_resolver = { path = "../oneil_resolver", default-features = false, optional = true }
+oneil_frontend = { path = "../oneil_frontend", default-features = false, optional = true }
 oneil_runtime = { path = "../oneil_runtime", default-features = false, optional = true }
 oneil_shared = { path = "../oneil_shared", default-features = false, optional = true }
 pyo3 = { workspace = true, optional = true }

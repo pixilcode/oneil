@@ -1,7 +1,7 @@
 //! Context types for tree traversal and analysis.
 
 use indexmap::IndexMap;
-use oneil_ir as ir;
+use oneil_frontend::InstancedModel;
 use oneil_output::{DependencySet, Model, Parameter, Value};
 use oneil_shared::load_result::LoadResult;
 use oneil_shared::paths::ModelPath;
@@ -12,8 +12,8 @@ use crate::output::error::{GetValueError, ModelEvalHasErrors};
 
 /// External context provided to tree operations.
 pub trait ExternalAnalysisContext {
-    /// Returns the full map of model paths to their IR models.
-    fn get_all_model_ir(&self) -> IndexMap<&ModelPath, &ir::Model>;
+    /// Returns the full map of model paths to their lowered [`InstancedModel`] templates.
+    fn get_all_model_ir(&self) -> IndexMap<&ModelPath, &InstancedModel>;
 
     /// Returns the value of a builtin variable by identifier, if defined.
     fn lookup_builtin_variable(&self, identifier: &BuiltinValueName) -> Option<&Value>;

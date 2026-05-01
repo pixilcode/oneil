@@ -324,7 +324,7 @@ where
 /// Gets the dependency graph for all models in the evaluation cache.
 ///
 /// The graph is built from the cached evaluation results. The cache must
-/// have been populated by a prior call to [`Runtime::load_ir`]. This
+/// have been populated by a prior call to [`Runtime::load_and_lower`]. This
 /// can be done indirectly by calling [`Runtime::eval_model`].
 #[must_use]
 fn get_dependency_graph<E: ExternalAnalysisContext>(
@@ -333,7 +333,7 @@ fn get_dependency_graph<E: ExternalAnalysisContext>(
     let mut dependency_graph = crate::dep_graph::DependencyGraph::new();
 
     for (model_path, model) in external_context.get_all_model_ir() {
-        for (parameter_name, parameter) in model.get_parameters() {
+        for (parameter_name, parameter) in model.parameters() {
             let dependencies = parameter.dependencies();
 
             for builtin_dep in dependencies.builtin().keys() {
@@ -356,14 +356,40 @@ fn get_dependency_graph<E: ExternalAnalysisContext>(
                 );
             }
 
-            for ((reference_dep_name, parameter_dep_name), (external_model_path, _)) in
-                dependencies.external()
-            {
+            for (reference_dep_name, parameter_dep_name) in dependencies.external().keys() {
+                // Look up the resolved model path from the live instance graph rather
+                // than caching it in the IR (which no longer stores it). The name can
+                // bind in any of the three import maps:
+                //  • `references` — cross-file `reference` declarations
+                //  • `submodels`  — owned child subtrees declared with `submodel`
+                //  • `aliases`    — extraction-list aliases (walk alias_path)
+                let external_model_path = model
+                    .references()
+                    .get(reference_dep_name)
+                    .map(|r| r.path.clone())
+                    .or_else(|| {
+                        model
+                            .submodels()
+                            .get(reference_dep_name)
+                            .map(|s| s.instance.path().clone())
+                    })
+                    .or_else(|| {
+                        let alias = model.aliases().get(reference_dep_name)?;
+                        let mut node = model;
+                        for seg in alias.alias_path.segments() {
+                            node = node.submodels().get(seg)?.instance.as_ref();
+                        }
+                        Some(node.path().clone())
+                    });
+                let Some(external_model_path) = external_model_path else {
+                    // Reference not found in this template — validation will report the error.
+                    continue;
+                };
                 dependency_graph.add_depends_on_external(
                     model_path.clone(),
                     parameter_name.clone(),
                     oneil_output::ExternalDependency {
-                        model_path: external_model_path.clone(),
+                        model_path: external_model_path,
                         reference_name: reference_dep_name.clone(),
                         parameter_name: parameter_dep_name.clone(),
                     },
