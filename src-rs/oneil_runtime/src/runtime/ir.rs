@@ -1,11 +1,13 @@
-//! IR loading and resolution for the runtime.
+//! Template loading and resolution for the runtime.
 
-use indexmap::IndexSet;
-use oneil_ir as ir;
-use oneil_resolver::{self as resolver, error::VariableResolutionError};
+use indexmap::{IndexMap, IndexSet};
+use oneil_frontend::{
+    self as frontend, CompilationUnit, InstancedModel, ResolutionErrorCollection,
+    build_unit_graph_for, collect_design_target_path, error::VariableResolutionError,
+};
 use oneil_shared::{
     load_result::LoadResult,
-    paths::{ModelPath, PythonPath},
+    paths::{DesignPath, ModelPath, PythonPath},
     symbols::{BuiltinFunctionName, BuiltinValueName, PyFunctionName, UnitBaseName, UnitPrefix},
 };
 
@@ -13,68 +15,135 @@ use super::Runtime;
 use crate::output::{self, ast, error::RuntimeErrors};
 
 impl Runtime {
-    /// Loads the IR for a model and all of its dependencies.
+    /// Loads and lowers a model and all its dependencies into [`InstancedModel`] templates.
+    ///
+    /// Returns a reference to the lowered template so callers can inspect the
+    /// file-static structure (parameters, references, types) for hover /
+    /// definition / debug-IR flows.
     ///
     /// # Errors
     ///
-    /// Returns [`RuntimeErrors`] (via [`get_model_errors`](super::Runtime::get_model_errors)) if that
-    /// model had parse or resolution errors.
-    pub fn load_ir(
+    /// Returns [`RuntimeErrors`] if the model had parse or resolution errors.
+    pub fn load_and_lower(
         &mut self,
         path: &ModelPath,
     ) -> (
-        Option<output::reference::ModelIrReference<'_>>,
+        Option<output::reference::ModelTemplateReference<'_>>,
         RuntimeErrors,
     ) {
-        self.load_ir_internal(path);
+        self.load_and_lower_internal(path);
 
-        let ir_opt = self
-            .ir_cache
-            .get_entry(path)
-            .and_then(LoadResult::value)
-            .map(|ir| output::reference::ModelIrReference::new(ir, &self.ir_cache));
+        let template_opt = self
+            .unit_graph_cache
+            .get(&CompilationUnit::Model(path.clone()))
+            .map(|graph| {
+                output::reference::ModelTemplateReference::new(
+                    graph.root.as_ref(),
+                    &self.unit_graph_cache,
+                )
+            });
 
         let include_indirect_errors = true;
-
         let errors = self.get_model_errors(path, include_indirect_errors);
 
-        (ir_opt, errors)
+        (template_opt, errors)
     }
 
-    pub(super) fn load_ir_internal(
-        &mut self,
-        path: &ModelPath,
-    ) -> &LoadResult<output::ir::Model, resolver::ResolutionErrorCollection> {
-        let results = resolver::load_model(path, self);
+    pub(super) fn load_and_lower_internal(&mut self, path: &ModelPath) {
+        let results = frontend::load_model(path, self);
+
+        // Build local maps for the newly resolved files. Previously loaded
+        // models are in `unit_graph_cache` and hit the cache during
+        // `build_unit_graph_inner` without consulting these maps.
+        let mut local_templates: IndexMap<
+            ModelPath,
+            LoadResult<InstancedModel, frontend::ResolutionErrorCollection>,
+        > = IndexMap::new();
+        let mut local_design_info: IndexMap<ModelPath, frontend::ModelDesignInfo> = IndexMap::new();
 
         for (model_path, result) in results {
-            let (model, model_errors) = result.into_parts();
+            let (model, design_export, applied_designs, model_errors) = result.into_parts();
 
-            if model_errors.is_empty() {
-                self.ir_cache.insert(model_path, LoadResult::success(model));
+            local_design_info.insert(
+                model_path.clone(),
+                frontend::ModelDesignInfo {
+                    applied_designs,
+                    design_export,
+                },
+            );
+
+            let load_result = if model_errors.is_empty() {
+                LoadResult::success(model)
             } else {
-                self.ir_cache
-                    .insert(model_path, LoadResult::partial(model, model_errors));
-            }
+                LoadResult::partial(model, model_errors)
+            };
+            local_templates.insert(model_path, load_result);
         }
 
-        self.ir_cache
-            .get_entry(path)
-            .expect("entry was inserted in this function for the requested path")
+        // Eagerly build and cache unit graphs for all models returned by
+        // `load_model`. `load_model` uses a fresh `ResolutionContext` each
+        // call and therefore always re-resolves the full transitive closure of
+        // `path`, returning every dependency in `results`. Iterating all of
+        // them (rather than just `path`) keeps the unit graph cache consistent
+        // with the latest resolution pass. This is especially important for
+        // design files: a design file's unit graph build does not recurse into
+        // target models, so building only the design path's graph would leave
+        // the target model's unit graph stale or absent.
+        // Merge the newly resolved design info into the persistent map so it
+        // is available to `apply_designs` at composition time.
+        self.design_info.extend(local_design_info.clone());
+
+        let model_paths: Vec<ModelPath> = local_templates.keys().cloned().collect();
+        let mut cache = std::mem::take(&mut self.unit_graph_cache);
+        for model_path in &model_paths {
+            frontend::build_unit_graph(
+                model_path,
+                &mut cache,
+                &mut Vec::new(),
+                &local_templates,
+                &local_design_info,
+            );
+            // For design files also build the `CompilationUnit::Design` cache
+            // entry. `build_unit_graph` above only inserts
+            // `CompilationUnit::Model`, but `compose`'s runtime-design loop
+            // looks up by `CompilationUnit::Design` to find `design_export`.
+            if let Ok(design_path) = DesignPath::try_from(model_path.clone()) {
+                build_unit_graph_for(
+                    &CompilationUnit::Design(design_path),
+                    &mut cache,
+                    &mut Vec::new(),
+                    &local_templates,
+                    &local_design_info,
+                );
+            }
+        }
+        self.unit_graph_cache = cache;
     }
 
-    /// Resolves an expression as if it were in the context
-    /// of the given model.
+    /// Returns the target [`ModelPath`] declared by a `design <target>` line in
+    /// `design_path`, or `None` if the file has no such declaration or could
+    /// not be parsed.
+    ///
+    /// Useful for transparently running a `.one` design file as if the user
+    /// had passed the target model with the design applied.
+    pub fn get_design_target(&mut self, design_path: &DesignPath) -> Option<ModelPath> {
+        let model_path = design_path.to_model_path();
+        let ast = self.load_ast_internal(&model_path);
+        let ast = ast.value()?;
+        collect_design_target_path(&model_path, ast)
+    }
+
+    /// Resolves an expression as if it were in the context of the given model.
     pub(super) fn resolve_expr_in_model(
         &mut self,
         expr_ast: &ast::ExprNode,
         model_path: &ModelPath,
     ) -> Result<output::ir::Expr, Vec<VariableResolutionError>> {
-        resolver::resolve_expr_in_model(expr_ast, model_path, self)
+        frontend::resolve_expr_in_model(expr_ast, model_path, self)
     }
 }
 
-impl resolver::ExternalResolutionContext for Runtime {
+impl frontend::ExternalResolutionContext for Runtime {
     fn has_builtin_value(&self, identifier: &ast::Identifier) -> bool {
         self.builtins.has_builtin_value(identifier.as_str())
     }
@@ -104,47 +173,53 @@ impl resolver::ExternalResolutionContext for Runtime {
         self.builtins.unit_supports_si_prefixes(name)
     }
 
+    fn lookup_unit(&self, name: &UnitBaseName) -> Option<&output::Unit> {
+        self.builtins.get_unit(name)
+    }
+
     fn load_ast(
         &mut self,
         path: &ModelPath,
-    ) -> LoadResult<&ast::ModelNode, resolver::AstLoadingFailedError> {
+    ) -> LoadResult<&ast::ModelNode, frontend::AstLoadingFailedError> {
         self.load_ast_internal(path)
             .as_ref()
-            .map_err(|_e| resolver::AstLoadingFailedError)
+            .map_err(|_e| frontend::AstLoadingFailedError)
     }
 
     #[cfg(feature = "python")]
     fn load_python_import<'context>(
         &'context mut self,
         python_path: &PythonPath,
-    ) -> Result<IndexSet<&'context PyFunctionName>, resolver::PythonImportLoadingFailedError> {
+    ) -> Result<IndexSet<&'context PyFunctionName>, frontend::PythonImportLoadingFailedError> {
         self.load_python_import_internal(python_path)
             .as_ref()
             .ok()
             .map(|functions| functions.get_function_names().collect())
-            .ok_or(resolver::PythonImportLoadingFailedError)
+            .ok_or(frontend::PythonImportLoadingFailedError)
     }
 
-    /// Resolver never calls this when the `python` feature is disabled; the stub satisfies
-    /// [`ExternalResolutionContext`](resolver::ExternalResolutionContext).
     #[cfg(not(feature = "python"))]
     fn load_python_import<'context>(
         &'context mut self,
         _python_path: &PythonPath,
-    ) -> Result<IndexSet<&'context PyFunctionName>, resolver::PythonImportLoadingFailedError> {
-        Err(resolver::PythonImportLoadingFailedError)
+    ) -> Result<IndexSet<&'context PyFunctionName>, frontend::PythonImportLoadingFailedError> {
+        Err(frontend::PythonImportLoadingFailedError)
     }
 
     fn get_preloaded_models(
         &self,
-    ) -> impl Iterator<
-        Item = (
-            ModelPath,
-            &LoadResult<ir::Model, resolver::ResolutionErrorCollection>,
-        ),
-    > {
-        self.ir_cache
-            .iter()
-            .map(|(path, result)| (path.clone(), result))
+    ) -> impl Iterator<Item = (ModelPath, InstancedModel, ResolutionErrorCollection)> {
+        self.unit_graph_cache.iter().filter_map(|(unit, graph)| {
+            let CompilationUnit::Model(path) = unit else {
+                return None;
+            };
+            let model = (*graph.root).clone();
+            let errors = graph
+                .resolution_errors
+                .get(path)
+                .cloned()
+                .unwrap_or_else(ResolutionErrorCollection::empty);
+            Some((path.clone(), model, errors))
+        })
     }
 }

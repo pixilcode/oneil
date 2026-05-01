@@ -1,9 +1,15 @@
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 
 use oneil_ir as ir;
-use oneil_shared::{span::Span, symbols::ParameterName};
+use oneil_shared::{
+    span::Span,
+    symbols::{BuiltinValueName, ParameterName, ReferenceName},
+};
 
-use oneil_output::{MeasuredNumber, Number, Unit, Value};
+use oneil_output::{
+    self as output, BuiltinDependency, DependencySet, ExternalDependency, MeasuredNumber, Number,
+    ParameterDependency, Unit, Value,
+};
 
 use crate::{
     context::{EvalContext, ExternalEvaluationContext},
@@ -27,13 +33,28 @@ pub struct EvalParameterResult {
 /// - The parameter unit does not match the limit.
 pub fn eval_parameter<E: ExternalEvaluationContext>(
     parameter: &ir::Parameter,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<EvalParameterResult, Vec<EvalError>> {
     // TODO: this is about where we would use `trace_level`, but I'm not yet sure
     //       how to handle it.
 
+    // Overlay RHSes have already been applied to `parameter.value()` by
+    // the design composition step, and any anchor-scope handling is
+    // expressed through [`ir::DesignProvenance::anchor_path`] which the
+    // caller has already pushed onto `context`'s scope stack. Eval
+    // therefore just runs the parameter's value as-is — no overlay
+    // lookup needed here.
+    eval_parameter_from_resolved_value(parameter.value(), parameter, context)
+}
+
+/// Evaluates a parameter using an explicit resolved [`ir::ParameterValue`] (IR default or overlay).
+pub fn eval_parameter_from_resolved_value<E: ExternalEvaluationContext>(
+    value_source: &ir::ParameterValue,
+    parameter: &ir::Parameter,
+    context: &mut EvalContext<'_, E>,
+) -> Result<EvalParameterResult, Vec<EvalError>> {
     // evaluate the value and the unit
-    let (value, expr_span, unit_ir) = match parameter.value() {
+    let (value, expr_span, unit_ir) = match value_source {
         ir::ParameterValue::Simple(expr, unit) => {
             let (value, expr_span) = eval_expr::eval_expr(expr, context)?;
             (value, expr_span, unit)
@@ -111,7 +132,7 @@ fn get_piecewise_result<'a, E: ExternalEvaluationContext>(
     piecewise: &'a [ir::PiecewiseExpr],
     param_ident: ParameterName,
     param_ident_span: Span,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<(Value, &'a Span), Vec<EvalError>> {
     // evaluate each of the conditions and their bodies
     let results = piecewise.iter().map(|piecewise_expr| {
@@ -207,7 +228,7 @@ enum Limits {
 
 fn eval_limits<E: ExternalEvaluationContext>(
     limits: &ir::Limits,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Limits, Vec<EvalError>> {
     match limits {
         ir::Limits::Default => Ok(Limits::AnyStringOrBooleanOrPositiveNumber),
@@ -227,7 +248,7 @@ fn eval_continuous_limits<E: ExternalEvaluationContext>(
     min: &oneil_ir::Expr,
     max: &oneil_ir::Expr,
     limit_expr_span: &Span,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Limits, Vec<EvalError>> {
     let min = eval_expr::eval_expr(min, context).and_then(|(value, expr_span)| match value {
         Value::MeasuredNumber(number) => {
@@ -303,17 +324,13 @@ fn eval_continuous_limits<E: ExternalEvaluationContext>(
 fn eval_discrete_limits<E: ExternalEvaluationContext>(
     values: &[ir::Expr],
     limit_expr_span: &Span,
-    context: &EvalContext<'_, E>,
+    context: &mut EvalContext<'_, E>,
 ) -> Result<Limits, Vec<EvalError>> {
-    let values = values
-        .iter()
-        .map(|value| eval_expr::eval_expr(value, context));
-
     let mut errors = Vec::new();
-    let mut results = Vec::new();
+    let mut results: Vec<(Value, &Span)> = Vec::new();
 
     for value in values {
-        match value {
+        match eval_expr::eval_expr(value, context) {
             Ok((value, expr_span)) => results.push((value, expr_span)),
             Err(e) => errors.extend(e),
         }
@@ -748,9 +765,167 @@ fn verify_value_is_within_string_discrete_limit(
     }
 }
 
+/// Builds an [`output::Parameter`] from a successfully evaluated value plus the IR metadata.
+///
+/// Handles trace-level gating and (for Debug levels) collects current dependency values via
+/// `get_*_dependency_values` helpers.
+pub fn build_output_parameter<E: ExternalEvaluationContext>(
+    value: Value,
+    expr_span: Span,
+    parameter: &ir::Parameter,
+    context: &mut EvalContext<'_, E>,
+) -> output::Parameter {
+    let (print_level, debug_info) = match parameter.trace_level() {
+        ir::TraceLevel::Debug if parameter.is_performance() => {
+            let builtin_dependency_values =
+                get_builtin_dependency_values(parameter.dependencies().builtin(), context);
+            let parameter_dependency_values =
+                get_parameter_dependency_values(parameter.dependencies().parameter(), context);
+            let external_dependency_values =
+                get_external_dependency_values(parameter.dependencies().external(), context);
+            (
+                output::PrintLevel::Performance,
+                Some(output::DebugInfo {
+                    builtin_dependency_values,
+                    parameter_dependency_values,
+                    external_dependency_values,
+                }),
+            )
+        }
+        ir::TraceLevel::Trace | ir::TraceLevel::None if parameter.is_performance() => {
+            (output::PrintLevel::Performance, None)
+        }
+        ir::TraceLevel::Debug => {
+            let builtin_dependency_values =
+                get_builtin_dependency_values(parameter.dependencies().builtin(), context);
+            let parameter_dependency_values =
+                get_parameter_dependency_values(parameter.dependencies().parameter(), context);
+            let external_dependency_values =
+                get_external_dependency_values(parameter.dependencies().external(), context);
+            (
+                output::PrintLevel::Trace,
+                Some(output::DebugInfo {
+                    builtin_dependency_values,
+                    parameter_dependency_values,
+                    external_dependency_values,
+                }),
+            )
+        }
+        ir::TraceLevel::Trace => (output::PrintLevel::Trace, None),
+        ir::TraceLevel::None => (output::PrintLevel::None, None),
+    };
+
+    let builtin_dependencies = parameter
+        .dependencies()
+        .builtin()
+        .keys()
+        .map(|builtin_name| BuiltinDependency {
+            name: builtin_name.clone(),
+        })
+        .collect::<IndexSet<_>>();
+
+    let parameter_dependencies = parameter
+        .dependencies()
+        .parameter()
+        .keys()
+        .map(|parameter_name| ParameterDependency {
+            parameter_name: parameter_name.clone(),
+        })
+        .collect::<IndexSet<_>>();
+
+    let external_dependencies = parameter
+        .dependencies()
+        .external()
+        .keys()
+        .filter_map(|(reference_name, parameter_name)| {
+            // Model path is looked up from the live eval context since it is no
+            // longer stored in `ir::Variable::External`.
+            let model_path = context.lookup_external_model_path(reference_name)?;
+            Some(ExternalDependency {
+                model_path,
+                reference_name: reference_name.clone(),
+                parameter_name: parameter_name.clone(),
+            })
+        })
+        .collect::<IndexSet<_>>();
+
+    let dependencies = DependencySet {
+        builtin_dependencies,
+        parameter_dependencies,
+        external_dependencies,
+    };
+
+    output::Parameter {
+        ident: parameter.name().clone(),
+        label: parameter.label().clone(),
+        value,
+        print_level,
+        debug_info,
+        dependencies,
+        expr_span,
+    }
+}
+
+/// Looks up current values of builtin dependencies for debug reporting.
+pub fn get_builtin_dependency_values<E: ExternalEvaluationContext>(
+    dependencies: &IndexMap<BuiltinValueName, Span>,
+    context: &EvalContext<'_, E>,
+) -> IndexMap<BuiltinValueName, Value> {
+    dependencies
+        .keys()
+        .map(|dependency| {
+            let value = context.lookup_builtin_variable(dependency);
+            (dependency.clone(), value)
+        })
+        .collect::<IndexMap<_, _>>()
+}
+
+/// Looks up current values of parameter dependencies for debug reporting.
+///
+/// Must only be called after the referenced parameters have been evaluated; the lazy memo
+/// table must already contain `Done` slots for them. If a dependency is still unevaluated,
+/// `force_parameter` will evaluate it now.
+///
+/// # Panics
+///
+/// Panics if any dependency is not defined in scope (a resolver invariant violation).
+pub fn get_parameter_dependency_values<E: ExternalEvaluationContext>(
+    dependencies: &IndexMap<ParameterName, Span>,
+    context: &mut EvalContext<'_, E>,
+) -> IndexMap<ParameterName, Value> {
+    let mut out = IndexMap::new();
+    for (dependency, dependency_span) in dependencies {
+        let value = context
+            .lookup_parameter_value(dependency, *dependency_span)
+            .expect("dependency should be found because the expression evaluated successfully");
+        out.insert(dependency.clone(), value);
+    }
+    out
+}
+
+/// Looks up current values of external (cross-reference) dependencies for debug reporting.
+///
+/// # Panics
+///
+/// Panics if any dependency is not defined in scope.
+pub fn get_external_dependency_values<E: ExternalEvaluationContext>(
+    dependencies: &IndexMap<(ReferenceName, ParameterName), Span>,
+    context: &mut EvalContext<'_, E>,
+) -> IndexMap<(ReferenceName, ParameterName), Value> {
+    let mut out = IndexMap::new();
+    for ((reference_name, parameter_name), dependency_span) in dependencies {
+        let value = context
+            .lookup_external_parameter_value(reference_name, parameter_name, *dependency_span)
+            .expect("dependency should be found because the expression evaluated successfully");
+        out.insert((reference_name.clone(), parameter_name.clone()), value);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use oneil_output::Dimension;
+    use oneil_shared::EvalInstanceKey;
 
     use crate::{
         assert_is_close, assert_units_dimensionally_eq,
@@ -766,9 +941,10 @@ mod tests {
         let parameter = helper::build_simple_parameter("x", 1.0, []);
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         // check the parameter value
         let Value::Number(number) = parameter_value.value else {
@@ -793,9 +969,10 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -830,9 +1007,10 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -870,9 +1048,10 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0), (Dimension::Time, -1.0)];
 
@@ -908,9 +1087,10 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [];
 
@@ -946,9 +1126,10 @@ mod tests {
         );
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [
             (Dimension::Mass, 1.0),
@@ -982,7 +1163,7 @@ mod tests {
         // setup context with x = 1.0 m and y = 1.0 km
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1007,7 +1188,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), Some("k"), false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -1038,7 +1220,7 @@ mod tests {
         // setup context with x = 1.0 kg*m/s^2 and y = 1.0 N
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1067,7 +1249,8 @@ mod tests {
             [helper::UnitSpec::new(Some("N"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [
             (Dimension::Mass, 1.0),
@@ -1102,7 +1285,7 @@ mod tests {
         // setup context with x = 1.0 dBW and y = 1.0 W
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1127,7 +1310,8 @@ mod tests {
             [helper::UnitSpec::new(Some("W"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [
             (Dimension::Mass, 1.0),
@@ -1163,7 +1347,7 @@ mod tests {
         // setup context with x = 1.0 W
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
         helper::setup_context_with_parameters(
             &mut context,
             [(
@@ -1181,7 +1365,8 @@ mod tests {
             [helper::UnitSpec::new(Some("W"), None, false, 2.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [
             (Dimension::Mass, 2.0),
@@ -1215,7 +1400,7 @@ mod tests {
         // setup context with x = 3.0 m and y = 2.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1240,7 +1425,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), None, false, 2.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 2.0)];
 
@@ -1270,7 +1456,7 @@ mod tests {
         // setup context with x = 6.0 m^2 and y = 2.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1295,7 +1481,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -1325,7 +1512,7 @@ mod tests {
         // setup context with x = 6.0 m and y = 2.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1354,7 +1541,8 @@ mod tests {
             ],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [];
 
@@ -1385,7 +1573,7 @@ mod tests {
         // setup context with x = 6.0 m and y = 2.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1411,7 +1599,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -1442,7 +1631,7 @@ mod tests {
         // setup context with x = 7.0 m and y = 3.0 m
         let mut external = TestExternalContext::new();
         let mut context = EvalContext::new(&mut external);
-        context.push_active_model(test_model_path("test"));
+        context.push_active_model(EvalInstanceKey::root(test_model_path("test")));
         helper::setup_context_with_parameters(
             &mut context,
             [
@@ -1467,7 +1656,8 @@ mod tests {
             [helper::UnitSpec::new(Some("m"), None, false, 1.0)],
         );
 
-        let parameter_value = eval_parameter(&parameter, &context).expect("eval should succeed");
+        let parameter_value =
+            eval_parameter(&parameter, &mut context).expect("eval should succeed");
 
         let expected_dimensions = [(Dimension::Distance, 1.0)];
 
@@ -1613,6 +1803,7 @@ mod tests {
                     units,
                     unimportant_display_composite_unit(),
                     random_span(),
+                    oneil_output::DimensionMap::dimensionless(),
                 ))
             }
         }
@@ -2028,7 +2219,7 @@ mod tests {
         /// Loads pre-defined parameters into an existing evaluation context.
         ///
         /// The context must already have an active model pushed (e.g. via
-        /// `context.push_active_model(test_model_path("test"))`).
+        /// `context.push_active_model(EvalInstanceKey::root(test_model_path("test")))`).
         ///
         /// # Arguments
         ///

@@ -244,7 +244,7 @@ impl LanguageServer for Backend {
                 .lock()
                 .expect("if the runtime has panicked elsewhere, it is not in a useful state");
 
-            let (ir_model, errors) = runtime.load_ir(&current_model_path);
+            let (ir_model, errors) = runtime.load_and_lower(&current_model_path);
 
             let Some(ir_model) = ir_model else {
                 let errors = errors.to_vec();
@@ -295,7 +295,7 @@ impl LanguageServer for Backend {
                 .lock()
                 .expect("if the runtime has panicked elsewhere, it is not in a useful state");
 
-            let (ir_model, errors) = runtime.load_ir(&current_model_path);
+            let (ir_model, errors) = runtime.load_and_lower(&current_model_path);
 
             let Some(ir_model) = ir_model else {
                 break 'complete (
@@ -359,11 +359,19 @@ impl Backend {
 
         let (successful_models, diagnostics) = {
             let mut runtime = self.runtime.lock().expect("runtime mutex poisoned");
-            let (result, errors) = runtime.eval_model(model_path);
+            // Use the compose-only entry point: file / IR / composition
+            // / validation diagnostics surface here, no eval pass.
+            // The full evaluation path is reserved for explicit `oneil
+            // eval`-style invocations; IDE feedback only needs static
+            // diagnostics initially.
+            let (visited_paths, errors) = runtime.check_model(model_path, None);
 
-            let successful_models = result
-                .map(|result| result.all_model_paths())
-                .unwrap_or_default()
+            // Mirror the prior `result.all_model_paths()` clear set:
+            // every file the composition touched gets its existing
+            // diagnostics cleared, so stale errors on now-clean files
+            // don't linger after the user fixes them. Files that
+            // re-acquire diagnostics get them re-published below.
+            let successful_models = visited_paths
                 .into_iter()
                 .map(ModelPath::into_path_buf)
                 .filter_map(Uri::from_file_path);

@@ -3,14 +3,13 @@
 //! These types represent the results of evaluating Oneil models, including
 //! parameters, tests, and submodels.
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 
 use oneil_shared::labels::ParameterLabel;
 use oneil_shared::paths::ModelPath;
 use oneil_shared::span::Span;
-use oneil_shared::symbols::{
-    BuiltinValueName, ParameterName, ReferenceName, SubmodelName, TestIndex,
-};
+use oneil_shared::symbols::{BuiltinValueName, ParameterName, ReferenceName, TestIndex};
+use oneil_shared::{EvalInstanceKey, InstancePath};
 
 use crate::Value;
 use crate::dependency::DependencySet;
@@ -25,13 +24,21 @@ use crate::dependency::DependencySet;
 pub struct Model {
     /// The file path of the model that was evaluated.
     pub path: ModelPath,
-    /// A map of submodel names to their reference names.
-    pub submodels: IndexMap<SubmodelName, ReferenceName>,
-    /// A map of reference names to their evaluated results.
+    /// Import chain from the evaluation root to this model instance.
+    pub instance_path: InstancePath,
+    /// Aliases of submodel imports declared on this model.
     ///
-    /// References are evaluated recursively, so each entry contains a fully
-    /// evaluated `Model` structure.
-    pub references: IndexMap<ReferenceName, ModelPath>,
+    /// Each entry is a submodel's alias (= reference name), the same key used
+    /// in [`Self::references`]. The set is provided so consumers can quickly
+    /// distinguish references that originated as `use` submodels from plain
+    /// `ref` references without re-walking the IR.
+    pub submodels: IndexSet<ReferenceName>,
+    /// A map of reference names to evaluated child instances.
+    ///
+    /// Each value identifies a distinct evaluation of a model file (path plus
+    /// instance path), so the same file imported twice under different aliases
+    /// can coexist in the evaluation cache.
+    pub references: IndexMap<ReferenceName, EvalInstanceKey>,
     /// A map of parameter identifiers to their evaluated results.
     ///
     /// Parameters are stored by their identifier (name) and contain their

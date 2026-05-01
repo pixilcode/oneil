@@ -101,7 +101,7 @@ fn get_source_and_context_lines(
 ) -> String {
     // source line (if available)
     //   |
-    // 1 | use foo bar
+    // 1 | submodel foo bar
     //   |         ^
     //   |
     let line = location.line();

@@ -15,6 +15,7 @@ readme = "README.md"
 oneil_output = { path = "../oneil_output" }
 oneil_shared = { path = "../oneil_shared" }
 oneil_ir = { path = "../oneil_ir" }
+oneil_frontend = { path = "../oneil_frontend" }
 indexmap = { workspace = true }
 
 [features]

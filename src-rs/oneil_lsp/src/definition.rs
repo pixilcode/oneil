@@ -20,7 +20,7 @@ pub fn resolve_definition(
             Some(span_to_location(current_model_path, *span))
         }
         SymbolAtPosition::ParameterReference { name, .. } => {
-            let (model, _errors) = runtime.load_ir(current_model_path);
+            let (model, _errors) = runtime.load_and_lower(current_model_path);
             let model = model?;
 
             let param = model.get_parameter(name)?;
@@ -28,15 +28,28 @@ pub fn resolve_definition(
             Some(span_to_location(current_model_path, param.name_span()))
         }
         SymbolAtPosition::ExternalParameterReference {
-            model_path,
+            reference_name,
             parameter_name,
             ..
         } => {
-            let (external_model, _errors) = runtime.load_ir(model_path);
+            // Resolve the reference name to a model path via the current model's imports.
+            let (current_model, _) = runtime.load_and_lower(current_model_path);
+            let current_model = current_model?;
+            let external_model_path = current_model
+                .reference_imports()
+                .get(reference_name)
+                .map(|r| r.path.clone())
+                .or_else(|| {
+                    current_model
+                        .submodel_imports()
+                        .get(reference_name)
+                        .map(|s| s.instance.path().clone())
+                })?;
+            let (external_model, _errors) = runtime.load_and_lower(&external_model_path);
             let external_model = external_model?;
 
             let param = external_model.get_parameter(parameter_name)?;
-            Some(span_to_location(model_path, param.name_span()))
+            Some(span_to_location(&external_model_path, param.name_span()))
         }
         SymbolAtPosition::ModelImportDefinition { path, .. } => {
             let uri = Uri::from_file_path(path.as_path())?;
@@ -55,12 +68,16 @@ pub fn resolve_definition(
             })
         }
         SymbolAtPosition::ModelImportReference { reference_name, .. } => {
-            let (model, _errors) = runtime.load_ir(current_model_path);
+            let (model, _errors) = runtime.load_and_lower(current_model_path);
             let model = model?;
 
             let reference_imports = model.reference_imports();
-            let reference = reference_imports.get(reference_name)?;
-            Some(span_to_location(current_model_path, *reference.name_span()))
+            if let Some(reference) = reference_imports.get(reference_name) {
+                return Some(span_to_location(current_model_path, reference.name_span));
+            }
+            let submodel_imports = model.submodel_imports();
+            let submodel = submodel_imports.get(reference_name)?;
+            Some(span_to_location(current_model_path, submodel.name_span))
         }
         SymbolAtPosition::PythonImport { path, .. } => {
             let uri = Uri::from_file_path(path.as_path())?;

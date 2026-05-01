@@ -22,14 +22,14 @@ use oneil_runtime::{
 #[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
 use oneil_shared::{
-    paths::{ModelPath, SourcePath},
+    paths::{DesignPath, ModelPath, SourcePath},
     symbols::ParameterName,
 };
 
 use crate::{
     command::{
-        BuiltinsCommand, CliCommand, Commands, CommonArgs, DevCommand, EvalArgs, IndependentArgs,
-        IrIncludeSection, LspArgs, ModelResultIncludeSection, TestArgs, TreeArgs,
+        BuiltinsCommand, CheckArgs, CliCommand, Commands, CommonArgs, DevCommand, EvalArgs,
+        IndependentArgs, IrIncludeSection, LspArgs, ModelResultIncludeSection, TestArgs, TreeArgs,
     },
     print_debug_ast::AstPrintConfig,
     print_debug_ir::IrPrintConfig,
@@ -67,6 +67,7 @@ pub fn main() {
 
     match cli.get_command() {
         Commands::Eval(eval_args) => handle_eval_command(eval_args),
+        Commands::Check(check_args) => handle_check_command(check_args),
         Commands::Test(test_args) => handle_test_command(test_args),
         Commands::Tree(tree_args) => handle_tree_command(tree_args),
         Commands::Builtins(builtins_args) => handle_builtins_command(builtins_args.get_command()),
@@ -282,7 +283,7 @@ fn handle_print_ir(
 
     let mut runtime = Runtime::new();
 
-    let (ir_result, errors) = runtime.load_ir(file);
+    let (ir_result, errors) = runtime.load_and_lower(file);
 
     for error in errors.to_vec() {
         print_error::print(error, show_internal_errors);
@@ -349,7 +350,7 @@ fn handle_print_model_result(
     };
 
     let mut runtime = Runtime::new();
-    let (model_opt, errors) = runtime.eval_model(file);
+    let (model_opt, errors) = runtime.eval_model(file, None);
 
     for error in errors.to_vec() {
         print_error::print(error, show_internal_errors);
@@ -364,9 +365,29 @@ fn handle_print_model_result(
     }
 }
 
+/// If `file` is a `.one` design file and no explicit `design` was provided,
+/// resolve the design's declared target and return `(target_model, Some(design))`.
+/// Otherwise returns `(file, design)` unchanged.
+fn resolve_design_file_redirect(
+    file: ModelPath,
+    design: Option<DesignPath>,
+    runtime: &mut Runtime,
+) -> (ModelPath, Option<DesignPath>) {
+    if design.is_some() {
+        return (file, design);
+    }
+    if let Ok(design_path) = DesignPath::try_from(file.clone())
+        && let Some(target) = runtime.get_design_target(&design_path)
+    {
+        return (target, Some(design_path));
+    }
+    (file, design)
+}
+
 fn handle_eval_command(args: EvalArgs) {
     let EvalArgs {
         file,
+        design,
         params: variables,
         print: print_mode,
         debug: display_partial_results,
@@ -397,8 +418,11 @@ fn handle_eval_command(args: EvalArgs) {
     };
 
     if watch {
+        let mut runtime = Runtime::new();
+        let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
         watch_model(
             &file,
+            design.as_ref(),
             &eval_expressions,
             common.dev_show_internal_errors,
             display_partial_results,
@@ -406,9 +430,11 @@ fn handle_eval_command(args: EvalArgs) {
         );
     } else {
         let mut runtime = Runtime::new();
+        let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
 
         eval_and_print_model(
             &file,
+            design.as_ref(),
             &eval_expressions,
             common.dev_show_internal_errors,
             display_partial_results,
@@ -420,6 +446,7 @@ fn handle_eval_command(args: EvalArgs) {
 
 fn eval_and_print_model(
     file: &ModelPath,
+    design: Option<&DesignPath>,
     eval_expressions: &[String],
     show_internal_errors: bool,
     display_partial_results: bool,
@@ -427,7 +454,7 @@ fn eval_and_print_model(
     runtime: &mut Runtime,
 ) {
     let (result, model_errors, expr_errors) =
-        runtime.eval_model_and_expressions(file, eval_expressions);
+        runtime.eval_model_and_expressions(file, design, eval_expressions);
 
     for error in model_errors.to_vec() {
         print_error::print(error, show_internal_errors);
@@ -452,6 +479,7 @@ fn eval_and_print_model(
 
 fn watch_model(
     file: &ModelPath,
+    design: Option<&DesignPath>,
     eval_expressions: &[String],
     show_internal_errors: bool,
     display_partial_results: bool,
@@ -479,6 +507,7 @@ fn watch_model(
 
     eval_and_print_model(
         file,
+        design,
         eval_expressions,
         show_internal_errors,
         display_partial_results,
@@ -500,6 +529,7 @@ fn watch_model(
 
                     eval_and_print_model(
                         file,
+                        design,
                         eval_expressions,
                         show_internal_errors,
                         display_partial_results,
@@ -594,6 +624,7 @@ fn clear_screen() {
 fn handle_test_command(args: TestArgs) {
     let TestArgs {
         file,
+        design,
         recursive,
         debug: display_partial_results,
         no_header,
@@ -613,7 +644,8 @@ fn handle_test_command(args: TestArgs) {
     };
 
     let mut runtime = Runtime::new();
-    let (model_opt, errors) = runtime.eval_model(&file);
+    let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
+    let (model_opt, errors) = runtime.eval_model(&file, design.as_ref());
 
     for error in errors.to_vec() {
         print_error::print(error, common.dev_show_internal_errors);
@@ -656,6 +688,7 @@ fn handle_tree_command(args: TreeArgs) {
     };
 
     let mut runtime = Runtime::new();
+    let (file, _design) = resolve_design_file_redirect(file, None, &mut runtime);
 
     let (trees, errors) = if up {
         let mut trees = Vec::new();
@@ -795,6 +828,36 @@ fn handle_builtins_command(command: BuiltinsCommand) {
         } => {
             print_builtins::print_builtins_prefixes(&runtime);
         }
+    }
+}
+
+/// Handles the `oneil check` subcommand.
+///
+/// Mirrors the LSP's open-file diagnostic flow: composes the instance
+/// graph through the per-unit cache (no eval) and prints whatever
+/// `RuntimeErrors` come back. Exits with status 1 when there are
+/// diagnostics so the command is scriptable in CI.
+#[expect(
+    clippy::exit,
+    reason = "scriptable diagnostic surface for CI; exit 1 on any diagnostic so wrappers can short-circuit without parsing stderr"
+)]
+fn handle_check_command(args: CheckArgs) {
+    let CheckArgs {
+        file,
+        design,
+        common,
+    } = args;
+
+    let mut runtime = Runtime::new();
+    let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
+    let (_visited_paths, errors) = runtime.check_model(&file, design.as_ref());
+
+    for error in errors.to_vec() {
+        print_error::print(error, common.dev_show_internal_errors);
+    }
+
+    if !errors.is_empty() {
+        std::process::exit(1);
     }
 }
 

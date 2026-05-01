@@ -4,9 +4,9 @@
 //! print them, then optionally display the model result tree (with optional recursion).
 
 use anstream::println;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use oneil_runtime::output::reference::ModelReference;
-use oneil_shared::symbols::{ReferenceName, SubmodelName, TestIndex};
+use oneil_shared::symbols::{ReferenceName, TestIndex};
 
 use crate::stylesheet::debug as dbg_style;
 
@@ -148,7 +148,7 @@ fn print_model(
         );
 
         match tag {
-            SectionTag::Submodels => print_submodels(&submodels, indent + 1),
+            SectionTag::Submodels => print_submodels(submodels, indent + 1),
             SectionTag::Parameters => print_parameters(&parameters, indent + 1, config),
             SectionTag::References => print_references(&references, indent + 1),
             SectionTag::Tests => print_tests(tests, indent + 1),
@@ -173,17 +173,16 @@ enum SectionTag {
     Tests,
 }
 
-fn print_submodels(submodels: &IndexMap<&SubmodelName, &ReferenceName>, indent: usize) {
-    for (i, (name, reference_name)) in submodels.iter().enumerate() {
+fn print_submodels(submodels: &IndexSet<ReferenceName>, indent: usize) {
+    for (i, alias) in submodels.iter().enumerate() {
         let is_last = i == submodels.len() - 1;
         let prefix = if is_last { "└──" } else { "├──" };
         println!(
-            "{}    {} {} \"{}\" -> \"{}\"",
+            "{}    {} {} \"{}\"",
             "    ".repeat(indent),
             dbg_style::TREE.style(prefix),
             dbg_style::LABEL.style("Submodel:"),
-            dbg_style::IDENTIFIER.style(name.as_str()),
-            dbg_style::IDENTIFIER.style(reference_name.as_str())
+            dbg_style::IDENTIFIER.style(alias.as_str()),
         );
     }
 }

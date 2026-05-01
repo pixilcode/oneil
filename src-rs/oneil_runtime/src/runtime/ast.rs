@@ -41,7 +41,8 @@ impl Runtime {
         };
 
         // parse the model and return an error if it fails
-        match parser::parse_model(source, None).into_result() {
+        match parser::parse_model(source, Some(parser::Config::for_model_path(path))).into_result()
+        {
             Ok(ast) => {
                 self.ast_cache
                     .insert(path.clone(), LoadResult::success(ast));

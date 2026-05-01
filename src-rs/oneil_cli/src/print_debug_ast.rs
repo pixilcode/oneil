@@ -57,6 +57,31 @@ fn print_model(model: &ast::Model, indent: usize) {
     }
 }
 
+/// Recursively prints an `apply` declaration along with its nested applies.
+fn print_apply_design(ad: &ast::ApplyDesign, indent: usize, prefix: &str) {
+    let target_str = ad
+        .target()
+        .iter()
+        .map(|seg| seg.as_str())
+        .collect::<Vec<_>>()
+        .join(".");
+    let header = format!(" to {target_str}");
+    println!(
+        "{}{} {} {}{}",
+        "    ".repeat(indent),
+        dbg_style::TREE.style(prefix),
+        dbg_style::LABEL.style("ApplyDesign:"),
+        dbg_style::IDENTIFIER.style(ad.design_file().as_str()),
+        dbg_style::LITERAL.style(header)
+    );
+    let nested = ad.nested_applies();
+    for (i, child) in nested.iter().enumerate() {
+        let is_last = i == nested.len() - 1;
+        let nested_prefix = if is_last { "└──" } else { "├──" };
+        print_apply_design(child, indent + 1, nested_prefix);
+    }
+}
+
 /// Prints a declaration node
 #[expect(clippy::too_many_lines, reason = "this is still easy to follow")]
 fn print_decl(decl: &ast::DeclNode, indent: usize, prefix: &str) {
@@ -70,21 +95,54 @@ fn print_decl(decl: &ast::DeclNode, indent: usize, prefix: &str) {
                 dbg_style::IDENTIFIER.style(import.path().as_str())
             );
         }
-        ast::Decl::UseModel(use_model) => {
-            let alias = use_model.model_info().get_alias();
+        ast::Decl::DesignTarget(dt) => {
+            println!(
+                "{}{} {} {}",
+                "    ".repeat(indent),
+                dbg_style::TREE.style(prefix),
+                dbg_style::LABEL.style("DesignTarget:"),
+                dbg_style::IDENTIFIER.style(dt.target().as_str())
+            );
+        }
+        ast::Decl::ApplyDesign(ad) => {
+            print_apply_design(ad, indent, prefix);
+        }
+        ast::Decl::DesignParameter(p) => {
+            let instance_part = if p.instance_path().is_empty() {
+                String::new()
+            } else {
+                let segs = p
+                    .instance_path()
+                    .iter()
+                    .map(|i| i.as_str())
+                    .collect::<Vec<_>>()
+                    .join(".");
+                format!(".{segs}")
+            };
+            println!(
+                "{}{} {} {}{} = …",
+                "    ".repeat(indent),
+                dbg_style::TREE.style(prefix),
+                dbg_style::LABEL.style("DesignParameter:"),
+                dbg_style::IDENTIFIER.style(p.ident().as_str()),
+                dbg_style::LITERAL.style(instance_part)
+            );
+        }
+        ast::Decl::Submodel(submodel) => {
+            let alias = submodel.model_info().get_alias();
             let alias_str = format!(" as {}", alias.as_str());
             println!(
                 "{}{} {} \"{}\"{}",
                 "    ".repeat(indent),
                 dbg_style::TREE.style(prefix),
-                dbg_style::LABEL.style("UseModel:"),
-                dbg_style::IDENTIFIER.style(use_model.model_info().top_component().as_str()),
+                dbg_style::LABEL.style("Submodel:"),
+                dbg_style::IDENTIFIER.style(submodel.model_info().top_component().as_str()),
                 dbg_style::LITERAL.style(alias_str)
             );
 
             // Print subcomponents if any
-            if !use_model.model_info().subcomponents().is_empty() {
-                let subcomps: Vec<String> = use_model
+            if !submodel.model_info().subcomponents().is_empty() {
+                let subcomps: Vec<String> = submodel
                     .model_info()
                     .subcomponents()
                     .iter()

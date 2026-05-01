@@ -8,7 +8,7 @@ use oneil_analysis::{
     output::Independents,
     output::error::{IndependentsErrors, ModelEvalHasErrors, TreeErrors},
 };
-use oneil_ir as ir;
+use oneil_frontend::{CompilationUnit, InstancedModel};
 use oneil_shared::{
     load_result::LoadResult,
     paths::ModelPath,
@@ -53,7 +53,7 @@ impl Runtime {
         model_path: &ModelPath,
         parameter_name: &ParameterName,
     ) -> (Option<tree::Tree<tree::DependencyTreeValue>>, TreeErrors) {
-        let _ = self.eval_model(model_path);
+        let _ = self.eval_model(model_path, None);
         analysis::get_dependency_tree(model_path, parameter_name, self)
     }
 
@@ -91,7 +91,7 @@ impl Runtime {
         model_path: &ModelPath,
         parameter_name: &ParameterName,
     ) -> (Option<tree::Tree<tree::ReferenceTreeValue>>, TreeErrors) {
-        let _ = self.eval_model(model_path);
+        let _ = self.eval_model(model_path, None);
         analysis::get_reference_tree(self, model_path, parameter_name)
     }
 
@@ -122,16 +122,22 @@ impl Runtime {
         &mut self,
         model_path: &ModelPath,
     ) -> (Independents, IndependentsErrors) {
-        let _ = self.eval_model(model_path);
+        let _ = self.eval_model(model_path, None);
         analysis::get_independents(model_path, self)
     }
 }
 
 impl analysis::ExternalAnalysisContext for Runtime {
-    fn get_all_model_ir(&self) -> IndexMap<&ModelPath, &ir::Model> {
-        self.ir_cache
+    fn get_all_model_ir(&self) -> IndexMap<&ModelPath, &InstancedModel> {
+        self.unit_graph_cache
             .iter()
-            .filter_map(|(path, result)| result.value().map(|ir| (path, ir)))
+            .filter_map(|(unit, graph)| {
+                let CompilationUnit::Model(path) = unit else {
+                    return None;
+                };
+                let template: &InstancedModel = graph.root.as_ref();
+                Some((path, template))
+            })
             .collect()
     }
 
