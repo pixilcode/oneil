@@ -18,7 +18,7 @@ use oneil_ast::{
 use oneil_shared::span::Span;
 
 use crate::{
-    declaration::parse as parse_decl,
+    declaration::{parse as parse_decl, parse_design_target_line},
     error::{
         ParserError,
         parser_trait::ErrorHandlingParser,
@@ -59,7 +59,7 @@ fn model(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserPartialModelEr
         .parse(rest)
         .map_err(|error| handle_model_note_failure(rest, error))?;
 
-    let (rest, mut decls, decl_errors) = parse_decls(rest);
+    let (rest, mut decls, decl_errors) = parse_top_level_decls(rest);
     let (rest, sections, decls_without_section, section_errors) = parse_sections(rest);
 
     // for any decls where the section header parsing failed, add them to the top-level decls
@@ -151,60 +151,108 @@ fn handle_model_note_failure(
     }
 }
 
+/// Parses top-level declarations after the optional note.
+///
+/// For `.one` design files (when [`Config::require_design_header`](crate::Config::require_design_header)
+/// is set), a `design <model>` line is parsed eagerly before other declarations; missing or
+/// misplaced headers are reported and the rest of the file is still parsed for additional
+/// diagnostics.
+fn parse_top_level_decls(input: InputSpan<'_>) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
+    if input.extra.require_design_header {
+        parse_design_file_decls(input)
+    } else {
+        parse_decls_recur(input, vec![], vec![], false)
+    }
+}
+
+/// Parses the body of a `.one` design bundle.
+///
+/// On a successful `design <model>` header, sets
+/// [`Config::allow_design_shorthand`](crate::Config::allow_design_shorthand) on the input span
+/// so subsequent declarations may use shorthand parameter assignments. On failure, distinguishes
+/// between:
+///
+/// - whitespace-only / empty input → [`ParserError::design_header_missing`] ("missing design target")
+/// - any other content where the first declaration is not `design` → [`ParserError::design_header_not_first`]
+fn parse_design_file_decls(
+    input: InputSpan<'_>,
+) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
+    match parse_design_target_line(input) {
+        Ok((mut rest, node)) => {
+            rest.extra.allow_design_shorthand = true;
+            parse_decls_recur(rest, vec![node], vec![], false)
+        }
+        Err(nom::Err::Error(e) | nom::Err::Failure(e)) => {
+            let rest = skip_to_next_line_with_content(input, e.error_offset);
+            let (trimmed, _) = take_while::<_, _, nom::error::Error<_>>(char::is_whitespace)
+                .parse(input)
+                .expect("take_while whitespace always succeeds");
+            let span = Span::empty(source_location_from(trimmed));
+            let header_error = if input.fragment().chars().all(char::is_whitespace) {
+                ParserError::design_header_missing(span)
+            } else {
+                ParserError::design_header_not_first(span)
+            };
+            parse_decls_recur(rest, vec![], vec![header_error], true)
+        }
+        Err(nom::Err::Incomplete(_)) => unreachable!("design header uses complete parsers"),
+    }
+}
+
 /// Attempts to parse declarations with error recovery
 ///
 /// The function handles consecutive errors by avoiding duplicate error
 /// reporting for lines that might be continuations of previous failed
 /// declarations (e.g., multi-line piecewise functions).
-fn parse_decls(input: InputSpan<'_>) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
-    fn parse_decls_recur(
-        input: InputSpan<'_>,
-        mut acc_decls: Vec<DeclNode>,
-        mut acc_errors: Vec<ParserError>,
-        last_was_error: bool,
-    ) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
-        let result = parse_decl(input);
+///
+/// Whether design-body shorthand (`p.r = expr`) is enabled is read from
+/// [`Config::allow_design_shorthand`](crate::Config::allow_design_shorthand) on the input span's
+/// `extra`, set by [`parse_design_file_decls`] after a successful `design <model>` line.
+fn parse_decls_recur(
+    input: InputSpan<'_>,
+    mut acc_decls: Vec<DeclNode>,
+    mut acc_errors: Vec<ParserError>,
+    last_was_error: bool,
+) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
+    let result = parse_decl(input);
 
-        match result {
-            Ok((rest, decl)) => {
-                acc_decls.push(decl);
-                parse_decls_recur(rest, acc_decls, acc_errors, false)
-            }
-
-            Err(nom::Err::Error(e) | nom::Err::Failure(e)) => {
-                // Check if a section or the end of the file is next
-                // If it is, return the accumulated declarations and errors
-                let end_of_file = value((), take_while(char::is_whitespace).and(eof));
-                let section = value((), section);
-                if section.or(end_of_file).parse(input).is_ok() {
-                    return (input, acc_decls, acc_errors);
-                }
-
-                // We don't want to add the error if the current line could be a
-                // part of a previous faulty declaration, such as in the case of
-                // a piecewise function. ExpectDecl is the only possible Error,
-                // and it isn't a possible Failure, so we can use it to check
-                // if we were simply unable to find a declaration, rather than
-                // if we found a declaration, but it was invalid.
-                let is_possible_part_of_previous_decl =
-                    last_was_error && e.reason == ParserErrorReason::Expect(ExpectKind::Decl);
-
-                if !is_possible_part_of_previous_decl {
-                    acc_errors.push(e);
-                }
-
-                // All declarations must be terminated by an end of line, so we
-                // assume that the declaration parsing error is for a declaration
-                // that ends at the end of the line
-                let next_line = skip_to_next_line_with_content(input, e.error_offset);
-
-                parse_decls_recur(next_line, acc_decls, acc_errors, true)
-            }
-            Err(nom::Err::Incomplete(_needed)) => (input, acc_decls, acc_errors),
+    match result {
+        Ok((rest, decl)) => {
+            acc_decls.push(decl);
+            parse_decls_recur(rest, acc_decls, acc_errors, false)
         }
-    }
 
-    parse_decls_recur(input, vec![], vec![], false)
+        Err(nom::Err::Error(e) | nom::Err::Failure(e)) => {
+            // Check if a section or the end of the file is next
+            // If it is, return the accumulated declarations and errors
+            let end_of_file = value((), take_while(char::is_whitespace).and(eof));
+            let section = value((), section);
+            if section.or(end_of_file).parse(input).is_ok() {
+                return (input, acc_decls, acc_errors);
+            }
+
+            // We don't want to add the error if the current line could be a
+            // part of a previous faulty declaration, such as in the case of
+            // a piecewise function. ExpectDecl is the only possible Error,
+            // and it isn't a possible Failure, so we can use it to check
+            // if we were simply unable to find a declaration, rather than
+            // if we found a declaration, but it was invalid.
+            let is_possible_part_of_previous_decl =
+                last_was_error && e.reason == ParserErrorReason::Expect(ExpectKind::Decl);
+
+            if !is_possible_part_of_previous_decl {
+                acc_errors.push(e);
+            }
+
+            // All declarations must be terminated by an end of line, so we
+            // assume that the declaration parsing error is for a declaration
+            // that ends at the end of the line
+            let next_line = skip_to_next_line_with_content(input, e.error_offset);
+
+            parse_decls_recur(next_line, acc_decls, acc_errors, true)
+        }
+        Err(nom::Err::Incomplete(_needed)) => (input, acc_decls, acc_errors),
+    }
 }
 
 /// Parses the sections of a model with error recovery
@@ -278,7 +326,7 @@ fn parse_section(input: InputSpan<'_>) -> Option<(InputSpan<'_>, SectionResult, 
         .parse(rest)
         .expect("should always parse because its optional");
 
-    let (rest, decls, decl_errors) = parse_decls(rest);
+    let (rest, decls, decl_errors) = parse_decls_recur(rest, vec![], vec![], false);
     errors.extend(decl_errors);
 
     match header {
@@ -410,20 +458,21 @@ mod tests {
     }
 
     #[test]
-    fn use_without_as() {
-        let input = InputSpan::new_extra("use foo\n", Config::default());
-        let (rest, model) = parse_complete(input).expect("should parse model with use declaration");
+    fn submodel_without_as() {
+        let input = InputSpan::new_extra("submodel foo\n", Config::default());
+        let (rest, model) =
+            parse_complete(input).expect("should parse model with submodel declaration");
         assert!(model.note().is_none());
         assert_eq!(model.decls().len(), 1);
 
-        let Decl::UseModel(use_model_node) = model.decls()[0].clone().take_value() else {
-            panic!("Expected use declaration");
+        let Decl::Submodel(submodel_node) = model.decls()[0].clone().take_value() else {
+            panic!("Expected submodel declaration");
         };
 
-        let use_model_info = use_model_node.model_info();
-        assert_eq!(use_model_info.top_component().as_str(), "foo");
-        assert_eq!(use_model_info.subcomponents().len(), 0);
-        assert_eq!(use_model_info.get_alias().as_str(), "foo");
+        let submodel_info = submodel_node.model_info();
+        assert_eq!(submodel_info.top_component().as_str(), "foo");
+        assert_eq!(submodel_info.subcomponents().len(), 0);
+        assert_eq!(submodel_info.get_alias().as_str(), "foo");
 
         assert!(model.sections().is_empty());
         assert_eq!(rest.fragment(), &"");
@@ -557,15 +606,15 @@ mod tests {
     fn parse_model_failure_with_partial_result() {
         let input = InputSpan::new_extra(
             "\
-            use foo as bar
+            submodel foo as bar
 
-            from foo use as baz # missing `use` part
+            from foo submodel as baz # missing `submodel` part
 
             X: x = 1 + # incomplete
 
             section My Section
 
-            use foo as bar
+            submodel foo as bar
 
             import # missing import identifier
 
@@ -611,7 +660,7 @@ mod tests {
 
             assert_eq!(model.decls().len(), 1);
             assert_eq!(errors.len(), 1);
-            assert_eq!(errors[0].error_offset, 11);
+            assert_eq!(errors[0].error_offset, 15);
             assert_eq!(
                 errors[0].reason,
                 ParserErrorReason::Expect(ExpectKind::Decl)
@@ -620,7 +669,7 @@ mod tests {
     }
 
     mod section_error {
-        use crate::error::reason::{IncompleteKind, ParserErrorReason, SectionKind};
+        use crate::error::reason::{ExpectKind, IncompleteKind, ParserErrorReason, SectionKind};
 
         use super::*;
 
@@ -691,23 +740,171 @@ mod tests {
             assert_eq!(model.sections()[0].decls().len(), 0);
             assert_eq!(errors.len(), 1);
             assert_eq!(errors[0].error_offset, 18);
-            let ParserErrorReason::Incomplete {
-                kind: IncompleteKind::Decl(_),
-                cause,
-            } = errors[0].reason
-            else {
-                panic!("Unexpected reason {:?}", errors[0].reason);
-            };
-
-            assert_eq!(cause.start().offset, 12);
-            assert_eq!(cause.end().offset, 18);
+            match &errors[0].reason {
+                ParserErrorReason::Incomplete {
+                    kind: IncompleteKind::Decl(_),
+                    cause,
+                } => {
+                    assert_eq!(cause.start().offset, 12);
+                    assert_eq!(cause.end().offset, 18);
+                }
+                ParserErrorReason::Expect(ExpectKind::Decl) => {}
+                other @ (ParserErrorReason::Expect(_)
+                | ParserErrorReason::Incomplete { .. }
+                | ParserErrorReason::UnexpectedToken
+                | ParserErrorReason::TokenError(_)
+                | ParserErrorReason::NomError(_)) => panic!("Unexpected reason {other:?}"),
+            }
         }
     }
 
     mod declaration_error {
-        use crate::error::reason::{IncompleteKind, ParserErrorReason};
+        use crate::error::reason::{DeclKind, ExpectKind, IncompleteKind, ParserErrorReason};
 
         use super::*;
+
+        #[test]
+        fn design_file_requires_design_first_declaration() {
+            let input = InputSpan::new_extra(
+                "import foo\ndesign bar\n",
+                Config {
+                    require_design_header: true,
+                    ..Config::default()
+                },
+            );
+            let result = parse_complete(input);
+            let Err(nom::Err::Failure(e)) = result else {
+                panic!("Expected parse failure, got {result:?}");
+            };
+            assert!(e.error_collection.iter().any(|err| matches!(
+                &err.reason,
+                ParserErrorReason::Incomplete {
+                    kind: IncompleteKind::Decl(DeclKind::DesignHeaderNotFirst),
+                    ..
+                }
+            )));
+        }
+
+        #[test]
+        fn design_file_rejects_empty_body() {
+            let input = InputSpan::new_extra(
+                "",
+                Config {
+                    require_design_header: true,
+                    ..Config::default()
+                },
+            );
+            let result = parse_complete(input);
+            let Err(nom::Err::Failure(e)) = result else {
+                panic!("Expected parse failure for empty design file, got {result:?}");
+            };
+            assert!(e.error_collection.iter().any(|err| matches!(
+                &err.reason,
+                ParserErrorReason::Incomplete {
+                    kind: IncompleteKind::Decl(DeclKind::DesignHeaderMissing),
+                    ..
+                }
+            )));
+        }
+
+        #[test]
+        fn design_file_rejects_whitespace_only_body() {
+            let input = InputSpan::new_extra(
+                "   \n  \n",
+                Config {
+                    require_design_header: true,
+                    ..Config::default()
+                },
+            );
+            let result = parse_complete(input);
+            let Err(nom::Err::Failure(e)) = result else {
+                panic!("Expected parse failure for whitespace-only design file, got {result:?}");
+            };
+            assert!(e.error_collection.iter().any(|err| matches!(
+                &err.reason,
+                ParserErrorReason::Incomplete {
+                    kind: IncompleteKind::Decl(DeclKind::DesignHeaderMissing),
+                    ..
+                }
+            )));
+        }
+
+        #[test]
+        fn design_file_rejects_duplicate_design() {
+            let input = InputSpan::new_extra(
+                "design foo\ndesign bar\n",
+                Config {
+                    require_design_header: true,
+                    ..Config::default()
+                },
+            );
+            let result = parse_complete(input);
+            let Err(nom::Err::Failure(e)) = result else {
+                panic!("Expected parse failure, got {result:?}");
+            };
+            assert!(e.error_collection.iter().any(|err| matches!(
+                &err.reason,
+                ParserErrorReason::Incomplete {
+                    kind: IncompleteKind::Decl(DeclKind::DesignHeaderDuplicate),
+                    ..
+                }
+            )));
+        }
+
+        #[test]
+        fn section_body_accepts_apply() {
+            let input =
+                InputSpan::new_extra("section s\n  apply overlay to r\n", Config::default());
+            let (_, model) = parse_complete(input).expect("parse");
+            assert_eq!(model.sections().len(), 1);
+            let section = &model.sections()[0];
+            assert_eq!(section.decls().len(), 1);
+            assert!(matches!(
+                section.decls()[0].clone().take_value(),
+                Decl::ApplyDesign(_)
+            ));
+        }
+
+        #[test]
+        fn design_header_rejected_without_require_design_header() {
+            let input = InputSpan::new_extra("design foo\n", Config::default());
+            let result = parse_complete(input);
+            let Err(nom::Err::Failure(e)) = result else {
+                panic!("Expected parse failure");
+            };
+
+            let errors = &e.error_collection;
+            assert_eq!(errors.len(), 1);
+            let ParserErrorReason::Incomplete {
+                kind: IncompleteKind::Decl(DeclKind::DesignHeaderWrongFile),
+                ..
+            } = errors[0].reason
+            else {
+                panic!("Unexpected reason {:?}", errors[0].reason);
+            };
+        }
+
+        #[test]
+        fn design_header_allowed_when_configured() {
+            let input = InputSpan::new_extra(
+                "design foo\n",
+                Config {
+                    require_design_header: true,
+                    ..Config::default()
+                },
+            );
+            let (rest, model) = parse_complete(input).expect("should parse design header");
+            assert_eq!(model.decls().len(), 1);
+            assert_eq!(rest.fragment(), &"");
+        }
+
+        #[test]
+        fn apply_allowed_without_design_header_flag() {
+            let input = InputSpan::new_extra("apply my_overlay to r\n", Config::default());
+            let (rest, model) = parse_complete(input).expect("should parse apply");
+            assert_eq!(model.decls().len(), 1);
+            assert_eq!(rest.fragment(), &"");
+        }
 
         #[test]
         fn import_missing_path() {
@@ -723,16 +920,21 @@ mod tests {
             assert_eq!(model.decls().len(), 0);
             assert_eq!(errors.len(), 1);
             assert_eq!(errors[0].error_offset, 6);
-            let ParserErrorReason::Incomplete {
-                kind: IncompleteKind::Decl(_),
-                cause,
-            } = errors[0].reason
-            else {
-                panic!("Unexpected reason {:?}", errors[0].reason);
-            };
-
-            assert_eq!(cause.start().offset, 0);
-            assert_eq!(cause.end().offset, 6);
+            match &errors[0].reason {
+                ParserErrorReason::Incomplete {
+                    kind: IncompleteKind::Decl(_),
+                    cause,
+                } => {
+                    assert_eq!(cause.start().offset, 0);
+                    assert_eq!(cause.end().offset, 6);
+                }
+                ParserErrorReason::Expect(ExpectKind::Decl) => {}
+                other @ (ParserErrorReason::Expect(_)
+                | ParserErrorReason::Incomplete { .. }
+                | ParserErrorReason::UnexpectedToken
+                | ParserErrorReason::TokenError(_)
+                | ParserErrorReason::NomError(_)) => panic!("Unexpected reason {other:?}"),
+            }
         }
 
         #[test]
@@ -800,15 +1002,16 @@ mod tests {
 
             assert_eq!(model.decls().len(), 0);
             assert_eq!(errors.len(), 1);
+            // error_offset points to the token where `:` was expected (`x` at
+            // offset 5 in `"test x > 0\n"`), not somewhere later in the expr.
             assert_eq!(errors[0].error_offset, 5);
             let ParserErrorReason::Incomplete {
                 kind: IncompleteKind::Test(_),
                 cause,
-            } = errors[0].reason
+            } = &errors[0].reason
             else {
                 panic!("Unexpected reason {:?}", errors[0].reason);
             };
-
             assert_eq!(cause.start().offset, 0);
             assert_eq!(cause.end().offset, 4);
         }
@@ -840,13 +1043,13 @@ mod tests {
     }
 
     mod recovery_error {
-        use crate::error::reason::{IncompleteKind, ParserErrorReason};
+        use crate::error::reason::{ExpectKind, IncompleteKind, ParserErrorReason};
 
         use super::*;
 
         #[test]
         fn multiple_declaration_errors() {
-            let input = InputSpan::new_extra("import\nuse\nX: x\n", Config::default());
+            let input = InputSpan::new_extra("import\nsubmodel\nX: x\n", Config::default());
             let result = parse_complete(input);
             let Err(nom::Err::Failure(e)) = result else {
                 panic!("Expected error for multiple declaration errors");
@@ -860,19 +1063,27 @@ mod tests {
 
             // All errors should be declaration-related
             for error in errors {
-                let ParserErrorReason::Incomplete {
-                    kind: IncompleteKind::Decl(_) | IncompleteKind::Parameter(_),
-                    ..
-                } = error.reason
-                else {
-                    panic!("Expected declaration error, got {:?}", error.reason);
-                };
+                match &error.reason {
+                    ParserErrorReason::Incomplete {
+                        kind: IncompleteKind::Decl(_) | IncompleteKind::Parameter(_),
+                        ..
+                    }
+                    | ParserErrorReason::Expect(ExpectKind::Decl) => {}
+                    other @ (ParserErrorReason::Expect(_)
+                    | ParserErrorReason::Incomplete { .. }
+                    | ParserErrorReason::UnexpectedToken
+                    | ParserErrorReason::TokenError(_)
+                    | ParserErrorReason::NomError(_)) => {
+                        panic!("Expected declaration error, got {other:?}")
+                    }
+                }
             }
         }
 
         #[test]
         fn section_with_multiple_errors() {
-            let input = InputSpan::new_extra("section foo\nimport\nuse\nX: x\n", Config::default());
+            let input =
+                InputSpan::new_extra("section foo\nimport\nsubmodel\nX: x\n", Config::default());
             let result = parse_complete(input);
             let Err(nom::Err::Failure(e)) = result else {
                 panic!("Expected error for section with multiple errors");
@@ -889,7 +1100,7 @@ mod tests {
         #[test]
         fn mixed_valid_and_invalid_declarations() {
             let input = InputSpan::new_extra(
-                "import valid\nimport\nuse foo as bar\nuse invalid.\n",
+                "import valid\nimport\nsubmodel foo as bar\nsubmodel invalid.\n",
                 Config::default(),
             );
             let result = parse_complete(input);
@@ -909,10 +1120,10 @@ mod tests {
                 panic!("Expected import declaration");
             };
             assert_eq!(import_node.path().as_str(), "valid");
-            let Decl::UseModel(use_node) = model.decls()[1].clone().take_value() else {
-                panic!("Expected use model declaration");
+            let Decl::Submodel(submodel_node) = model.decls()[1].clone().take_value() else {
+                panic!("Expected submodel declaration");
             };
-            let alias = use_node.model_info().get_alias();
+            let alias = submodel_node.model_info().get_alias();
             assert_eq!(alias.as_str(), "bar");
         }
     }

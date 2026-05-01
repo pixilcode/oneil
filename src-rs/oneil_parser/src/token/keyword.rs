@@ -19,8 +19,21 @@ use crate::token::{
 
 /// Keywords that are valid in the Oneil language.
 pub const KEYWORDS: &[&str] = &[
-    "and", "as", "false", "from", "if", "import", "not", "or", "ref", "section", "test", "true",
-    "use", "with",
+    "and",
+    "apply",
+    "as",
+    "design",
+    "false",
+    "if",
+    "import",
+    "not",
+    "or",
+    "reference",
+    "section",
+    "submodel",
+    "test",
+    "to",
+    "true",
 ];
 
 /// Creates a keyword parser for the specified keyword string.
@@ -58,9 +71,19 @@ pub fn and(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
     keyword("and", error::ExpectKeyword::And).parse(input)
 }
 
+/// Parses the `apply` keyword token.
+pub fn apply(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
+    keyword("apply", error::ExpectKeyword::Apply).parse(input)
+}
+
 /// Parses the 'as' keyword token.
 pub fn as_(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
     keyword("as", error::ExpectKeyword::As).parse(input)
+}
+
+/// Parses the `design` keyword token.
+pub fn design(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
+    keyword("design", error::ExpectKeyword::Design).parse(input)
 }
 
 /// Parses the 'false' keyword token.
@@ -88,9 +111,14 @@ pub fn or(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
     keyword("or", error::ExpectKeyword::Or).parse(input)
 }
 
-/// Parses the 'ref' keyword token.
-pub fn ref_(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
-    keyword("ref", error::ExpectKeyword::Ref).parse(input)
+/// Parses the `reference` keyword token.
+pub fn reference(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
+    keyword("reference", error::ExpectKeyword::Reference).parse(input)
+}
+
+/// Parses the `submodel` keyword token.
+pub fn submodel(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
+    keyword("submodel", error::ExpectKeyword::Submodel).parse(input)
 }
 
 /// Parses the 'section' keyword token.
@@ -103,19 +131,14 @@ pub fn test(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
     keyword("test", error::ExpectKeyword::Test).parse(input)
 }
 
+/// Parses the `to` keyword token.
+pub fn to(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
+    keyword("to", error::ExpectKeyword::To).parse(input)
+}
+
 /// Parses the 'true' keyword token.
 pub fn true_(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
     keyword("true", error::ExpectKeyword::True).parse(input)
-}
-
-/// Parses the 'use' keyword token.
-pub fn use_(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
-    keyword("use", error::ExpectKeyword::Use).parse(input)
-}
-
-/// Parses the 'with' keyword token.
-pub fn with(input: InputSpan<'_>) -> Result<'_, Token<'_>, error::TokenError> {
-    keyword("with", error::ExpectKeyword::With).parse(input)
 }
 
 #[cfg(test)]
@@ -186,14 +209,6 @@ mod tests {
         }
 
         #[test]
-        fn ref_keyword() {
-            let input = InputSpan::new_extra("ref foo", Config::default());
-            let (rest, matched) = ref_(input).expect("should parse 'ref' keyword");
-            assert_eq!(matched.lexeme_str, "ref");
-            assert_eq!(rest.fragment(), &"foo");
-        }
-
-        #[test]
         fn section_keyword() {
             let input = InputSpan::new_extra("section test", Config::default());
             let (rest, matched) = section(input).expect("should parse 'section' keyword");
@@ -204,10 +219,10 @@ mod tests {
         #[test]
         #[expect(clippy::redundant_test_prefix, reason = "'test' describes the keyword")]
         fn test_keyword() {
-            let input = InputSpan::new_extra("test use", Config::default());
+            let input = InputSpan::new_extra("test rest", Config::default());
             let (rest, matched) = test(input).expect("should parse 'test' keyword");
             assert_eq!(matched.lexeme_str, "test");
-            assert_eq!(rest.fragment(), &"use");
+            assert_eq!(rest.fragment(), &"rest");
         }
 
         #[test]
@@ -219,18 +234,18 @@ mod tests {
         }
 
         #[test]
-        fn use_keyword() {
-            let input = InputSpan::new_extra("use foo", Config::default());
-            let (rest, matched) = use_(input).expect("should parse 'use' keyword");
-            assert_eq!(matched.lexeme_str, "use");
+        fn apply_keyword() {
+            let input = InputSpan::new_extra("apply foo", Config::default());
+            let (rest, matched) = apply(input).expect("should parse 'apply' keyword");
+            assert_eq!(matched.lexeme_str, "apply");
             assert_eq!(rest.fragment(), &"foo");
         }
 
         #[test]
-        fn with_keyword() {
-            let input = InputSpan::new_extra("with foo", Config::default());
-            let (rest, matched) = with(input).expect("should parse 'with' keyword");
-            assert_eq!(matched.lexeme_str, "with");
+        fn to_keyword() {
+            let input = InputSpan::new_extra("to foo", Config::default());
+            let (rest, matched) = to(input).expect("should parse 'to' keyword");
+            assert_eq!(matched.lexeme_str, "to");
             assert_eq!(rest.fragment(), &"foo");
         }
 
@@ -580,20 +595,6 @@ mod tests {
         }
 
         #[test]
-        fn ref_keyword() {
-            let input = InputSpan::new_extra("wrong", Config::default());
-            let res = ref_(input);
-            let Err(nom::Err::Error(token_error)) = res else {
-                panic!("expected TokenError::Expect(Keyword(Ref)), got {res:?}");
-            };
-
-            assert!(matches!(
-                token_error.kind,
-                TokenErrorKind::Expect(ExpectKind::Keyword(error::ExpectKeyword::Ref))
-            ));
-        }
-
-        #[test]
         #[expect(clippy::redundant_test_prefix, reason = "'test' describes the keyword")]
         fn test_keyword() {
             let input = InputSpan::new_extra("wrong", Config::default());
@@ -623,30 +624,30 @@ mod tests {
         }
 
         #[test]
-        fn use_keyword() {
+        fn apply_keyword() {
             let input = InputSpan::new_extra("wrong", Config::default());
-            let res = use_(input);
+            let res = apply(input);
             let Err(nom::Err::Error(token_error)) = res else {
-                panic!("expected TokenError::Expect(Keyword(Use)), got {res:?}");
+                panic!("expected TokenError::Expect(Keyword(Apply)), got {res:?}");
             };
 
             assert!(matches!(
                 token_error.kind,
-                TokenErrorKind::Expect(ExpectKind::Keyword(error::ExpectKeyword::Use))
+                TokenErrorKind::Expect(ExpectKind::Keyword(error::ExpectKeyword::Apply))
             ));
         }
 
         #[test]
-        fn with_keyword() {
+        fn to_keyword() {
             let input = InputSpan::new_extra("wrong", Config::default());
-            let res = with(input);
+            let res = to(input);
             let Err(nom::Err::Error(token_error)) = res else {
-                panic!("expected TokenError::Expect(Keyword(With)), got {res:?}");
+                panic!("expected TokenError::Expect(Keyword(To)), got {res:?}");
             };
 
             assert!(matches!(
                 token_error.kind,
-                TokenErrorKind::Expect(ExpectKind::Keyword(error::ExpectKeyword::With))
+                TokenErrorKind::Expect(ExpectKind::Keyword(error::ExpectKeyword::To))
             ));
         }
     }

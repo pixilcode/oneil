@@ -72,10 +72,15 @@ impl ParserErrorReason {
     }
 
     #[must_use]
-    pub(crate) const fn use_missing_model_info(use_span: Span) -> Self {
+    pub(crate) const fn submodel_missing_model_info(
+        keyword_span: Span,
+        keyword: SubmodelKeyword,
+    ) -> Self {
         Self::Incomplete {
-            cause: use_span,
-            kind: IncompleteKind::Decl(DeclKind::Use(UseKind::MissingModelInfo)),
+            cause: keyword_span,
+            kind: IncompleteKind::Decl(DeclKind::Submodel(SubmodelKind::MissingModelInfo {
+                after: keyword,
+            })),
         }
     }
 
@@ -88,10 +93,73 @@ impl ParserErrorReason {
     }
 
     #[must_use]
-    pub(crate) const fn use_missing_end_of_line(alias_span: Span) -> Self {
+    pub(crate) const fn submodel_missing_end_of_line(alias_span: Span) -> Self {
         Self::Incomplete {
             cause: alias_span,
-            kind: IncompleteKind::Decl(DeclKind::Use(UseKind::MissingEndOfLine)),
+            kind: IncompleteKind::Decl(DeclKind::Submodel(SubmodelKind::MissingEndOfLine)),
+        }
+    }
+
+    /// Missing target model name after `design`.
+    #[must_use]
+    pub(crate) const fn design_missing_target(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::DesignMissingTarget),
+        }
+    }
+
+    /// Missing design file name after `apply`.
+    #[must_use]
+    pub(crate) const fn apply_missing_file(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::ApplyMissingFile),
+        }
+    }
+
+    /// Missing `to <target>` clause on an `apply` declaration.
+    #[must_use]
+    pub(crate) const fn apply_missing_target(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::ApplyMissingTarget),
+        }
+    }
+
+    /// Top-level `design <model>` in a `.on` model file (only allowed in `.one` bundles).
+    #[must_use]
+    pub(crate) const fn design_header_wrong_file(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::DesignHeaderWrongFile),
+        }
+    }
+
+    /// Duplicate `design <model>` declaration in a `.one` design bundle.
+    #[must_use]
+    pub(crate) const fn design_header_duplicate(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::DesignHeaderDuplicate),
+        }
+    }
+
+    /// First top-level declaration in a `.one` design bundle is not `design <model>`.
+    #[must_use]
+    pub(crate) const fn design_header_not_first(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::DesignHeaderNotFirst),
+        }
+    }
+
+    /// `.one` design bundle is empty / has no `design <model>` declaration.
+    #[must_use]
+    pub(crate) const fn design_header_missing(cause: Span) -> Self {
+        Self::Incomplete {
+            cause,
+            kind: IncompleteKind::Decl(DeclKind::DesignHeaderMissing),
         }
     }
 
@@ -205,6 +273,14 @@ impl ParserErrorReason {
         Self::Incomplete {
             cause: value_span,
             kind: IncompleteKind::Parameter(ParameterKind::MissingEndOfLine),
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn parameter_missing_instance_path_segment(dot_span: Span) -> Self {
+        Self::Incomplete {
+            cause: dot_span,
+            kind: IncompleteKind::Parameter(ParameterKind::MissingInstancePathSegment),
         }
     }
 
@@ -398,15 +474,29 @@ pub enum DeclKind {
         /// The kind of import error
         ImportKind,
     ),
-    /// Found an incomplete `use` declaration
-    Use(
-        /// The kind of use error
-        UseKind,
+    /// Found an incomplete `submodel` (or `reference`) declaration
+    Submodel(
+        /// The kind of submodel error
+        SubmodelKind,
     ),
     /// Found an incomplete model path
     ModelMissingSubcomponent,
     /// Found an incomplete alias after `as`
     AsMissingAlias,
+    /// Missing model identifier after `design`.
+    DesignMissingTarget,
+    /// Missing design file name after `apply`.
+    ApplyMissingFile,
+    /// `apply <file>` without a `to <target>` clause.
+    ApplyMissingTarget,
+    /// `design <model>` at file top level is only valid in `.one` design bundle files.
+    DesignHeaderWrongFile,
+    /// Only one `design <model>` declaration is allowed per `.one` design bundle.
+    DesignHeaderDuplicate,
+    /// In a `.one` design bundle, the first top-level declaration must be `design <model>`.
+    DesignHeaderNotFirst,
+    /// `.one` design bundle has no `design <model>` declaration at all (empty file).
+    DesignHeaderMissing,
 }
 
 /// The different kind of `import` errors
@@ -418,13 +508,36 @@ pub enum ImportKind {
     MissingEndOfLine,
 }
 
-/// The different kind of `use` errors
+/// The different kind of `submodel` / `reference` errors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UseKind {
-    /// Missing the model info
-    MissingModelInfo,
+pub enum SubmodelKind {
+    /// Missing the model info after the leading keyword
+    MissingModelInfo {
+        /// The keyword that introduced the declaration
+        after: SubmodelKeyword,
+    },
     /// Missing end of line
     MissingEndOfLine,
+}
+
+/// Which keyword introduced the submodel declaration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubmodelKeyword {
+    /// `submodel` keyword
+    Submodel,
+    /// `reference` keyword
+    Reference,
+}
+
+impl SubmodelKeyword {
+    /// Returns the textual lexeme of the keyword.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Submodel => "submodel",
+            Self::Reference => "reference",
+        }
+    }
 }
 
 /// The different kind of incomplete expression errors
@@ -473,6 +586,8 @@ pub enum ParameterKind {
     MissingValue,
     /// Found a missing end of line
     MissingEndOfLine,
+    /// Found a missing identifier after `.` in an instance path (`param.sat = …`)
+    MissingInstancePathSegment,
     /// Found a missing unit
     MissingUnit,
     /// Found a missing minimum value in limits

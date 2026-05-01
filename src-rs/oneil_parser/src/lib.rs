@@ -23,6 +23,10 @@ pub use config::Config;
 
 /// Parses a complete Oneil model from source code.
 ///
+/// Pass [`Config::for_model_path`] when the source comes from disk so `.on` vs `.one`
+/// selects design-file rules: `.one` sources parse a required `design <model>` line right
+/// after the optional note, before other top-level declarations.
+///
 /// # Errors
 ///
 /// Returns an error if the input contains syntax errors, is incomplete, or tokenization fails.
@@ -36,6 +40,9 @@ pub fn parse_model(
 
 /// Parses a single declaration from source code.
 ///
+/// When `config` sets [`Config::require_design_header`](Config::require_design_header) (`.one`
+/// semantics), only a `design <model>` line is accepted; otherwise any top-level declaration.
+///
 /// # Errors
 ///
 /// Returns an error if the input is not a valid declaration or contains syntax errors.
@@ -43,7 +50,16 @@ pub fn parse_declaration(
     input: &str,
     config: Option<Config>,
 ) -> Result<DeclNode, error::ParserError> {
-    parse(input, config, declaration::parse_complete)
+    let config = config.unwrap_or_default();
+    if config.require_design_header {
+        parse(
+            input,
+            Some(config),
+            declaration::parse_design_target_complete,
+        )
+    } else {
+        parse(input, Some(config), declaration::parse_complete)
+    }
 }
 
 /// Parses a mathematical expression from source code.

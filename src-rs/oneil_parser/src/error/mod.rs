@@ -18,7 +18,7 @@ mod context;
 mod display;
 
 pub mod reason;
-use reason::ParserErrorReason;
+use reason::{ParserErrorReason, SubmodelKeyword};
 
 pub mod parser_trait;
 
@@ -115,25 +115,93 @@ impl ParserError {
         }
     }
 
-    /// Creates a new `ParserError` for a missing path in a use declaration
-    pub(crate) fn use_missing_model_info(use_token: Span) -> impl Fn(Self) -> Self {
-        move |error| error.convert_reason(ParserErrorReason::use_missing_model_info(use_token))
+    /// Creates a new `ParserError` for a missing model info in a submodel declaration
+    pub(crate) fn submodel_missing_model_info(
+        keyword_span: Span,
+        keyword: SubmodelKeyword,
+    ) -> impl Fn(Self) -> Self {
+        move |error| {
+            error.convert_reason(ParserErrorReason::submodel_missing_model_info(
+                keyword_span,
+                keyword,
+            ))
+        }
     }
 
-    /// Creates a new `ParserError` for a missing alias in a use declaration
+    /// Creates a new `ParserError` for a missing alias after `as`
     pub(crate) fn as_missing_alias(as_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(error, ParserErrorReason::as_missing_alias(as_token))
         }
     }
 
-    /// Creates a new `ParserError` for a missing end of line in a use declaration
-    pub(crate) fn use_missing_end_of_line(alias_span: Span) -> impl Fn(TokenError) -> Self {
+    /// Creates a new `ParserError` for a missing end of line in a submodel declaration
+    pub(crate) fn submodel_missing_end_of_line(alias_span: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
                 error,
-                ParserErrorReason::use_missing_end_of_line(alias_span),
+                ParserErrorReason::submodel_missing_end_of_line(alias_span),
             )
+        }
+    }
+
+    /// Missing model name after `design`.
+    pub(crate) fn design_missing_target(design_kw_span: Span) -> impl Fn(TokenError) -> Self {
+        move |error: TokenError| {
+            Self::new_from_token_error(
+                error,
+                ParserErrorReason::design_missing_target(design_kw_span),
+            )
+        }
+    }
+
+    /// Missing design file identifier after `apply`.
+    pub(crate) fn apply_missing_file(after_kw: Span) -> impl Fn(TokenError) -> Self {
+        move |error: TokenError| {
+            Self::new_from_token_error(error, ParserErrorReason::apply_missing_file(after_kw))
+        }
+    }
+
+    /// Missing `to <target>` clause after `apply <file>`.
+    pub(crate) fn apply_missing_target(file_span: Span) -> impl Fn(TokenError) -> Self {
+        move |error: TokenError| {
+            Self::new_from_token_error(error, ParserErrorReason::apply_missing_target(file_span))
+        }
+    }
+
+    /// `design <model>` used in a non-design (`.on`) source file.
+    #[must_use]
+    pub(crate) const fn design_header_wrong_file(line_span: Span) -> Self {
+        Self {
+            error_offset: line_span.start().offset,
+            reason: ParserErrorReason::design_header_wrong_file(line_span),
+        }
+    }
+
+    /// Duplicate `design <model>` in a `.one` design bundle.
+    #[must_use]
+    pub(crate) const fn design_header_duplicate(line_span: Span) -> Self {
+        Self {
+            error_offset: line_span.start().offset,
+            reason: ParserErrorReason::design_header_duplicate(line_span),
+        }
+    }
+
+    /// First top-level declaration in a `.one` design bundle is not `design <model>`.
+    #[must_use]
+    pub(crate) const fn design_header_not_first(cause_span: Span) -> Self {
+        Self {
+            error_offset: cause_span.start().offset,
+            reason: ParserErrorReason::design_header_not_first(cause_span),
+        }
+    }
+
+    /// Empty `.one` design bundle: no `design <model>` declaration at all.
+    #[must_use]
+    pub(crate) const fn design_header_missing(cause_span: Span) -> Self {
+        Self {
+            error_offset: cause_span.start().offset,
+            reason: ParserErrorReason::design_header_missing(cause_span),
         }
     }
 
@@ -253,6 +321,18 @@ impl ParserError {
             Self::new_from_token_error(
                 error,
                 ParserErrorReason::parameter_missing_equals_sign(ident_span),
+            )
+        }
+    }
+
+    /// Creates a new `ParserError` for a missing identifier after `.` in an instance path
+    pub(crate) fn parameter_missing_instance_path_segment(
+        dot_span: Span,
+    ) -> impl Fn(TokenError) -> Self {
+        move |error| {
+            Self::new_from_token_error(
+                error,
+                ParserErrorReason::parameter_missing_instance_path_segment(dot_span),
             )
         }
     }
