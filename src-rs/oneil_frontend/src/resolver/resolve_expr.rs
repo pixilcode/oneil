@@ -1,0 +1,1338 @@
+//! Expression resolution for the Oneil model loader
+
+use indexmap::IndexMap;
+
+use oneil_ast as ast;
+use oneil_ir::{self as ir, Dependencies};
+use oneil_shared::{
+    search::search,
+    span::Span,
+    symbols::{BuiltinFunctionName, PyFunctionName},
+};
+
+use crate::{
+    ExternalResolutionContext, ResolutionContext,
+    context::MAX_BEST_MATCH_DISTANCE,
+    error::{self, VariableResolutionError},
+    resolver::{resolve_unit::resolve_unit, resolve_variable::resolve_variable},
+};
+
+/// Resolves an AST expression into a model expression.
+pub fn resolve_expr<E>(
+    value: &ast::ExprNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    let span = value.span();
+
+    match &**value {
+        ast::Expr::ComparisonOp {
+            op,
+            left,
+            right,
+            rest_chained,
+        } => resolve_comparison_expression(span, op, left, right, rest_chained, resolution_context),
+        ast::Expr::BinaryOp { op, left, right } => {
+            resolve_binary_expression(span, op, left, right, resolution_context)
+        }
+        ast::Expr::UnaryOp { op, expr } => {
+            resolve_unary_expression(span, op, expr, resolution_context)
+        }
+        ast::Expr::FunctionCall { name, args } => {
+            resolve_function_call_expression(span, name, args, resolution_context)
+        }
+        ast::Expr::UnitCast { expr, unit } => {
+            resolve_unit_cast_expression(span, expr, unit, resolution_context)
+        }
+        ast::Expr::Variable(variable) => resolve_variable_expression(variable, resolution_context),
+        ast::Expr::Literal(literal) => Ok(resolve_literal_expression(span, literal)),
+        ast::Expr::Parenthesized { expr } => {
+            resolve_parenthesized_expression(expr, resolution_context)
+        }
+    }
+}
+
+/// Resolves a comparison expression with optional chained comparisons.
+fn resolve_comparison_expression<E>(
+    span: Span,
+    op: &ast::ComparisonOpNode,
+    left: &ast::ExprNode,
+    right: &ast::ExprNode,
+    rest_chained: &[(ast::ComparisonOpNode, ast::ExprNode)],
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    let left = resolve_expr(left, resolution_context);
+    let right = resolve_expr(right, resolution_context);
+    let op_with_span = resolve_comparison_op(op);
+
+    // Resolve the chained comparisons
+    let rest_chained = rest_chained.iter().map(|(op, expr)| {
+        let expr = resolve_expr(expr, resolution_context);
+        let op_with_span = resolve_comparison_op(op);
+        expr.map(|expr| (op_with_span, expr))
+    });
+
+    let left_right_result = error::combine_errors(left, right);
+    let rest_chained_result = error::combine_error_list(rest_chained);
+    let ((left, right), rest_chained) =
+        error::combine_errors(left_right_result, rest_chained_result)?;
+
+    let expr = ir::Expr::comparison_op(span, op_with_span, left, right, rest_chained);
+    Ok(expr)
+}
+
+/// Resolves a binary operation expression.
+fn resolve_binary_expression<E>(
+    span: Span,
+    op: &ast::BinaryOpNode,
+    left: &ast::ExprNode,
+    right: &ast::ExprNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    let left = resolve_expr(left, resolution_context);
+    let right = resolve_expr(right, resolution_context);
+    let op_with_span = resolve_binary_op(op);
+
+    let (left, right) = error::combine_errors(left, right)?;
+
+    let expr = ir::Expr::binary_op(span, op_with_span, left, right);
+    Ok(expr)
+}
+
+/// Resolves a unary operation expression.
+fn resolve_unary_expression<E>(
+    span: Span,
+    op: &ast::UnaryOpNode,
+    expr: &ast::ExprNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    let expr = resolve_expr(expr, resolution_context);
+    let op_with_span = resolve_unary_op(op);
+
+    match expr {
+        Ok(expr) => Ok(ir::Expr::unary_op(span, op_with_span, expr)),
+        Err(errors) => Err(errors),
+    }
+}
+
+/// Resolves a function call expression.
+fn resolve_function_call_expression<E>(
+    span: Span,
+    name: &ast::IdentifierNode,
+    args: &[ast::ExprNode],
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    let name_with_span = resolve_function_name(name, resolution_context);
+    let args = args.iter().map(|arg| resolve_expr(arg, resolution_context));
+
+    let args = error::combine_error_list(args)?;
+
+    let name_with_span = name_with_span.map_err(|e| vec![e])?;
+    let expr = ir::Expr::function_call(span, name.span(), name_with_span, args);
+    Ok(expr)
+}
+
+/// Resolves a variable expression.
+fn resolve_variable_expression<E>(
+    variable: &ast::VariableNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    resolve_variable(variable, resolution_context).map_err(|error| vec![error])
+}
+
+/// Resolves a literal expression.
+fn resolve_literal_expression(span: Span, literal: &ast::LiteralNode) -> ir::Expr {
+    let literal = resolve_literal(literal);
+    ir::Expr::literal(span, literal)
+}
+
+/// Resolves a parenthesized expression.
+fn resolve_parenthesized_expression<E>(
+    expr: &ast::ExprNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    resolve_expr(expr, resolution_context)
+}
+
+/// Resolves a unit cast expression.
+fn resolve_unit_cast_expression<E>(
+    span: Span,
+    expr: &ast::ExprNode,
+    unit: &ast::UnitExprNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::Expr, Vec<VariableResolutionError>>
+where
+    E: ExternalResolutionContext,
+{
+    let expr = resolve_expr(expr, resolution_context)?;
+    let unit = resolve_unit(unit, resolution_context).map_err(|errs| {
+        errs.into_iter()
+            .map(VariableResolutionError::from)
+            .collect::<Vec<VariableResolutionError>>()
+    })?;
+    Ok(ir::Expr::unit_cast(span, expr, unit))
+}
+
+/// Converts an AST comparison operation to a model comparison operation.
+fn resolve_comparison_op(op: &ast::ComparisonOpNode) -> ir::ComparisonOp {
+    match &**op {
+        ast::ComparisonOp::LessThan => ir::ComparisonOp::LessThan,
+        ast::ComparisonOp::LessThanEq => ir::ComparisonOp::LessThanEq,
+        ast::ComparisonOp::GreaterThan => ir::ComparisonOp::GreaterThan,
+        ast::ComparisonOp::GreaterThanEq => ir::ComparisonOp::GreaterThanEq,
+        ast::ComparisonOp::Eq => ir::ComparisonOp::Eq,
+        ast::ComparisonOp::NotEq => ir::ComparisonOp::NotEq,
+    }
+}
+
+/// Converts an AST binary operation to a model binary operation.
+fn resolve_binary_op(op: &ast::BinaryOpNode) -> ir::BinaryOp {
+    match &**op {
+        ast::BinaryOp::Add => ir::BinaryOp::Add,
+        ast::BinaryOp::Sub => ir::BinaryOp::Sub,
+        ast::BinaryOp::EscapedSub => ir::BinaryOp::EscapedSub,
+        ast::BinaryOp::Mul => ir::BinaryOp::Mul,
+        ast::BinaryOp::Div => ir::BinaryOp::Div,
+        ast::BinaryOp::EscapedDiv => ir::BinaryOp::EscapedDiv,
+        ast::BinaryOp::Mod => ir::BinaryOp::Mod,
+        ast::BinaryOp::Pow => ir::BinaryOp::Pow,
+        ast::BinaryOp::And => ir::BinaryOp::And,
+        ast::BinaryOp::Or => ir::BinaryOp::Or,
+        ast::BinaryOp::MinMax => ir::BinaryOp::MinMax,
+    }
+}
+
+/// Converts an AST unary operation to a model unary operation.
+fn resolve_unary_op(op: &ast::UnaryOpNode) -> ir::UnaryOp {
+    match &**op {
+        ast::UnaryOp::Neg => ir::UnaryOp::Neg,
+        ast::UnaryOp::Not => ir::UnaryOp::Not,
+    }
+}
+
+/// Resolves a function name to a model function name.
+fn resolve_function_name<E>(
+    name: &ast::IdentifierNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ir::FunctionName, VariableResolutionError>
+where
+    E: ExternalResolutionContext,
+{
+    let name_span = name.span();
+
+    if resolution_context.has_builtin_function(name) {
+        let name = BuiltinFunctionName::from(name.as_str());
+        return Ok(ir::FunctionName::builtin(name, name_span));
+    }
+
+    let name = PyFunctionName::from(name.as_str());
+    let python_paths = resolution_context.lookup_imported_function(&name);
+    match python_paths.len() {
+        0 => {
+            let best_match =
+                get_best_match_function_name_in_active_model(resolution_context, &name);
+
+            Err(VariableResolutionError::undefined_function(
+                name.as_str().to_string(),
+                name_span,
+                best_match,
+            ))
+        }
+        1 => Ok(ir::FunctionName::imported(
+            python_paths[0].clone(),
+            name,
+            name_span,
+        )),
+        _ => Err(VariableResolutionError::multiple_functions_found(
+            name.as_str().to_string(),
+            name_span,
+            python_paths,
+        )),
+    }
+}
+
+fn get_best_match_function_name_in_active_model<E>(
+    resolution_context: &ResolutionContext<'_, E>,
+    name: &PyFunctionName,
+) -> Option<String>
+where
+    E: ExternalResolutionContext,
+{
+    let imported_functions = resolution_context.get_active_model_imported_functions();
+    let builtin_functions = resolution_context.get_builtin_functions();
+    let functions: Vec<&str> = imported_functions
+        .map(PyFunctionName::as_str)
+        .chain(builtin_functions.map(BuiltinFunctionName::as_str))
+        .collect();
+
+    search(name.as_str(), &functions)
+        .and_then(|result| result.some_if_within_distance(MAX_BEST_MATCH_DISTANCE))
+        .map(String::from)
+}
+
+/// Converts an AST literal to a model literal.
+fn resolve_literal(literal: &ast::LiteralNode) -> ir::Literal {
+    match &**literal {
+        ast::Literal::Number(number) => ir::Literal::number(*number),
+        ast::Literal::String(string) => ir::Literal::string(string.clone()),
+        ast::Literal::Boolean(boolean) => ir::Literal::boolean(*boolean),
+    }
+}
+
+/// Extracts internal dependencies from an expression.
+///
+/// Note that these dependencies include both parameters and builtin variables.
+pub fn get_expr_internal_dependencies(expr: &ast::ExprNode) -> IndexMap<ast::Identifier, Span> {
+    struct ExprInternalDependencyVisitor {
+        dependencies: IndexMap<ast::Identifier, Span>,
+    }
+
+    impl ast::ExprVisitor for ExprInternalDependencyVisitor {
+        fn visit_variable(mut self, _span: Span, var: &ast::VariableNode) -> Self {
+            match &**var {
+                ast::Variable::Identifier(identifier_node) => {
+                    let identifier = ast::Identifier::from(identifier_node.as_str());
+                    let identifier_span = identifier_node.span();
+                    self.dependencies.insert(identifier, identifier_span);
+                    self
+                }
+
+                ast::Variable::ModelParameter {
+                    reference_model: _,
+                    parameter: _,
+                } => {
+                    // an accessor implies that the dependency is on a parameter
+                    // outside of the current model, so it doesn't count as an
+                    // internal dependency
+                    self
+                }
+            }
+        }
+    }
+
+    let visitor = ExprInternalDependencyVisitor {
+        dependencies: IndexMap::new(),
+    };
+    let visitor = expr.pre_order_visit(visitor);
+    visitor.dependencies
+}
+
+/// Extracts dependencies from an expression.
+///
+/// This should only be called for expressions that are guaranteed to be valid and resolved.
+///
+/// # Panics
+///
+/// This function will panic if it encounters a variable that has not been completely resolved.
+pub fn get_expr_dependencies(expr: &ir::Expr) -> Dependencies {
+    struct ExprDependencyVisitor {
+        dependencies: Dependencies,
+    }
+
+    impl ir::ExprVisitor for ExprDependencyVisitor {
+        fn visit_variable(mut self, span: Span, variable: &ir::Variable) -> Self {
+            match variable {
+                ir::Variable::Builtin { ident, ident_span } => {
+                    self.dependencies.insert_builtin(ident.clone(), *ident_span);
+                    self
+                }
+
+                ir::Variable::Parameter {
+                    parameter_name,
+                    parameter_span,
+                } => {
+                    self.dependencies
+                        .insert_parameter(parameter_name.clone(), *parameter_span);
+                    self
+                }
+
+                ir::Variable::External {
+                    reference_name,
+                    parameter_name,
+                    ..
+                } => {
+                    self.dependencies.insert_external(
+                        reference_name.clone(),
+                        parameter_name.clone(),
+                        span,
+                    );
+                    self
+                }
+            }
+        }
+    }
+
+    let visitor = ExprDependencyVisitor {
+        dependencies: Dependencies::new(),
+    };
+    let visitor = expr.pre_order_visit(visitor);
+    visitor.dependencies
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::test::{
+        external_context::TestExternalContext, resolution_context::ResolutionContextBuilder,
+        test_ast, test_ir, test_model_path,
+    };
+
+    use oneil_ast as ast;
+    use oneil_ir as ir;
+
+    fn make_resolution_context<'a>(
+        external: &'a mut TestExternalContext,
+        parameters: Vec<ir::Parameter>,
+        python_import_paths: Vec<&'a str>,
+    ) -> ResolutionContext<'a, TestExternalContext> {
+        let model_path = test_model_path("test");
+        ResolutionContextBuilder::new()
+            .with_active_model(model_path)
+            .with_parameters(parameters)
+            .with_python_import_paths(python_import_paths)
+            .with_external_context(external)
+            .build()
+    }
+
+    /// Asserts `expr` is `Variable::Parameter` with the given name.
+    /// Linking no longer pins instance keys (deferred entirely to eval).
+    fn assert_unpinned_parameter(expr: ir::Expr, expected_name: &str) {
+        let ir::Expr::Variable {
+            variable: ir::Variable::Parameter { parameter_name, .. },
+            ..
+        } = expr
+        else {
+            panic!("expected Variable::Parameter, got {expr:?}");
+        };
+        assert_eq!(parameter_name.as_str(), expected_name);
+    }
+
+    #[test]
+    fn resolve_literal_number() {
+        // create the expression
+        let literal = test_ast::literal_number_expr_node(42.0);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&literal, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::Literal { span: _, value } = result else {
+            panic!("Expected literal expression, got {result:?}");
+        };
+
+        assert_eq!(value, ir::Literal::Number(42.0));
+    }
+
+    #[test]
+    fn resolve_literal_string() {
+        // create the expression
+        let literal = test_ast::literal_string_expr_node("hello");
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&literal, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::Literal { span: _, value } = result else {
+            panic!("Expected literal expression, got {result:?}");
+        };
+
+        assert_eq!(value, ir::Literal::String("hello".to_string()));
+    }
+
+    #[test]
+    fn resolve_literal_boolean() {
+        // create the expression
+        let literal = test_ast::literal_boolean_expr_node(true);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&literal, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::Literal { span: _, value } = result else {
+            panic!("Expected literal expression, got {result:?}");
+        };
+
+        assert_eq!(value, ir::Literal::Boolean(true));
+    }
+
+    #[test]
+    fn resolve_binary_op_() {
+        // create the expression
+        let ast_left = test_ast::literal_number_expr_node(1.0);
+        let ast_right = test_ast::literal_number_expr_node(2.0);
+        let ast_op = test_ast::binary_op_node(ast::BinaryOp::Add);
+        let expr = test_ast::binary_op_expr_node(ast_op, ast_left, ast_right);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::BinaryOp {
+            span: _,
+            op,
+            left,
+            right,
+        } = result
+        else {
+            panic!("Expected binary operation, got {result:?}");
+        };
+
+        assert_eq!(op, ir::BinaryOp::Add);
+
+        let ir::Expr::Literal { span: _, value } = *left else {
+            panic!("Expected literal expression on left, got {left:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(1.0));
+
+        let ir::Expr::Literal { span: _, value } = *right else {
+            panic!("Expected literal expression on right, got {right:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(2.0));
+    }
+
+    #[test]
+    fn resolve_unary_op_() {
+        // create the expression
+        let ast_inner_expr = test_ast::literal_number_expr_node(5.0);
+        let ast_op = test_ast::unary_op_node(ast::UnaryOp::Neg);
+        let expr = test_ast::unary_op_expr_node(ast_op, ast_inner_expr);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::UnaryOp { span: _, op, expr } = result else {
+            panic!("Expected unary operation, got {result:?}");
+        };
+
+        assert_eq!(op, ir::UnaryOp::Neg);
+
+        let ir::Expr::Literal { span: _, value } = *expr else {
+            panic!("Expected literal expression, got {expr:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(5.0));
+    }
+
+    #[test]
+    fn resolve_function_call_builtin() {
+        // create the expression
+        let ast_arg = test_ast::literal_number_expr_node(1.0);
+        let ast_name = test_ast::identifier_node("foo");
+        let expr = test_ast::function_call_expr_node(ast_name, vec![ast_arg]);
+
+        let mut external = TestExternalContext::new().with_builtin_functions(["foo"]);
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::FunctionCall {
+            span: _,
+            name_span: _,
+            name,
+            mut args,
+        } = result
+        else {
+            panic!("Expected function call, got {result:?}");
+        };
+
+        let ir::FunctionName::Builtin(name, _name_span) = name else {
+            panic!("Expected builtin function, got {name:?}");
+        };
+
+        assert_eq!(name.as_str(), "foo");
+
+        assert_eq!(args.len(), 1);
+
+        let ir::Expr::Literal { span: _, value } = args.remove(0) else {
+            panic!("Expected literal argument, got {:?}", args[0]);
+        };
+
+        assert_eq!(value, ir::Literal::Number(1.0));
+    }
+
+    #[test]
+    fn resolve_function_call_imported() {
+        // create the expression
+        let ast_arg = test_ast::literal_number_expr_node(42.0);
+        let ast_name = test_ast::identifier_node("custom_function");
+        let expr = test_ast::function_call_expr_node(ast_name, vec![ast_arg]);
+
+        let mut external =
+            TestExternalContext::new().with_python_import_functions("test", ["custom_function"]);
+
+        let resolution_context = make_resolution_context(&mut external, vec![], vec!["test"]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::FunctionCall {
+            span: _,
+            name_span: _,
+            name,
+            mut args,
+        } = result
+        else {
+            panic!("Expected function call, got {result:?}");
+        };
+
+        let ir::FunctionName::Imported {
+            python_path,
+            name,
+            name_span: _,
+        } = name
+        else {
+            panic!("Expected imported function, got {name:?}");
+        };
+
+        assert_eq!(python_path.as_path(), &PathBuf::from("test.py"));
+        assert_eq!(name.as_str(), "custom_function");
+
+        assert_eq!(args.len(), 1);
+
+        let ir::Expr::Literal { span: _, value } = args.remove(0) else {
+            panic!("Expected literal argument, got {:?}", args[0]);
+        };
+
+        assert_eq!(value, ir::Literal::Number(42.0));
+    }
+
+    #[test]
+    fn resolve_variable_builtin() {
+        // create the expression
+        let ast_variable = test_ast::identifier_variable_node("x");
+        let expr = test_ast::variable_expr_node(ast_variable);
+
+        let mut external = TestExternalContext::new().with_builtin_variables(["x"]);
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::Variable { span: _, variable } = result else {
+            panic!("Expected variable expression, got {result:?}");
+        };
+
+        let ir::Variable::Builtin { ident, .. } = variable else {
+            panic!("Expected builtin variable, got {variable:?}");
+        };
+
+        assert_eq!(ident.as_str(), "x");
+    }
+
+    #[test]
+    fn resolve_variable_parameter() {
+        // create the expression
+        let variable_ast = test_ast::identifier_variable_node("param");
+        let expr = test_ast::variable_expr_node(variable_ast);
+
+        let parameter = test_ir::ParameterBuilder::new()
+            .with_name_str("param")
+            .with_simple_number_value(42.0)
+            .build();
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![parameter], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::Variable { span: _, variable } = result else {
+            panic!("Expected variable expression, got {result:?}");
+        };
+
+        let ir::Variable::Parameter { parameter_name, .. } = variable else {
+            panic!("Expected parameter variable, got {variable:?}");
+        };
+
+        assert_eq!(parameter_name.as_str(), "param");
+    }
+
+    #[test]
+    fn resolve_variable_undefined_defers_to_walk() {
+        // File-time resolution can no longer "see" whether a bare
+        // identifier is undefined: the binding scope is a per-instance
+        // concept (designs may add or shadow parameters). Unknown bare
+        // names lower to `Variable::Parameter { instance_key: None }`;
+        // the walk emits any diagnostic against the live binding scope.
+        let variable_ast = test_ast::identifier_variable_node("undefined");
+        let expr = test_ast::variable_expr_node(variable_ast);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        let result = resolve_expr(&expr, &resolution_context);
+
+        let result = result.expect("undefined bare names resolve at file-time");
+        let ir::Expr::Variable {
+            variable: ir::Variable::Parameter { parameter_name, .. },
+            ..
+        } = result
+        else {
+            panic!("expected unpinned Parameter variable, got {result:?}");
+        };
+        assert_eq!(parameter_name.as_str(), "undefined");
+    }
+
+    #[test]
+    fn resolve_complex_expression() {
+        // create the expression: (1 + 2) * foo(1)
+        let ast_left_1 = test_ast::literal_number_expr_node(1.0);
+        let ast_right_1 = test_ast::literal_number_expr_node(2.0);
+        let ast_add_op = test_ast::binary_op_node(ast::BinaryOp::Add);
+        let inner_binary = test_ast::binary_op_expr_node(ast_add_op, ast_left_1, ast_right_1);
+
+        let ast_func_arg = test_ast::literal_number_expr_node(1.0);
+        let ast_func_name = test_ast::identifier_node("foo");
+        let func_call = test_ast::function_call_expr_node(ast_func_name, vec![ast_func_arg]);
+
+        let ast_mul_op = test_ast::binary_op_node(ast::BinaryOp::Mul);
+        let expr = test_ast::binary_op_expr_node(ast_mul_op, inner_binary, func_call);
+
+        let mut external = TestExternalContext::new().with_python_import_functions("test", ["foo"]);
+        let resolution_context = make_resolution_context(&mut external, vec![], vec!["test"]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::BinaryOp {
+            span: _,
+            op,
+            left,
+            right,
+        } = result
+        else {
+            panic!("Expected binary operation, got {result:?}");
+        };
+
+        assert_eq!(op, ir::BinaryOp::Mul);
+
+        // check left side (1 + 2)
+        let ir::Expr::BinaryOp {
+            span: _,
+            op: left_op,
+            left: left_left,
+            right: left_right,
+        } = *left
+        else {
+            panic!("Expected binary operation on left side, got {left:?}");
+        };
+
+        assert_eq!(left_op, ir::BinaryOp::Add);
+
+        let ir::Expr::Literal { span: _, value } = *left_left else {
+            panic!("Expected literal on left side, got {left_left:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(1.0));
+
+        let ir::Expr::Literal { span: _, value } = *left_right else {
+            panic!("Expected literal on right side, got {left_right:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(2.0));
+
+        // check right side (foo(1))
+        let ir::Expr::FunctionCall {
+            span: _,
+            name_span: _,
+            name,
+            mut args,
+        } = *right
+        else {
+            panic!("Expected function call on right side, got {right:?}");
+        };
+
+        let ir::FunctionName::Imported {
+            python_path,
+            name,
+            name_span: _,
+        } = name
+        else {
+            panic!("Expected imported function, got {name:?}");
+        };
+
+        assert_eq!(python_path.as_path(), &PathBuf::from("test.py"));
+        assert_eq!(name.as_str(), "foo");
+
+        assert_eq!(args.len(), 1);
+
+        let ir::Expr::Literal { span: _, value } = args.remove(0) else {
+            panic!("Expected literal argument, got {:?}", args[0]);
+        };
+
+        assert_eq!(value, ir::Literal::Number(1.0));
+    }
+
+    #[test]
+    fn resolve_binary_op_all_operations() {
+        // create the operations
+        let operations = vec![
+            (ast::BinaryOp::Add, ir::BinaryOp::Add),
+            (ast::BinaryOp::Sub, ir::BinaryOp::Sub),
+            (ast::BinaryOp::EscapedSub, ir::BinaryOp::EscapedSub),
+            (ast::BinaryOp::Mul, ir::BinaryOp::Mul),
+            (ast::BinaryOp::Div, ir::BinaryOp::Div),
+            (ast::BinaryOp::EscapedDiv, ir::BinaryOp::EscapedDiv),
+            (ast::BinaryOp::Mod, ir::BinaryOp::Mod),
+            (ast::BinaryOp::Pow, ir::BinaryOp::Pow),
+            (ast::BinaryOp::And, ir::BinaryOp::And),
+            (ast::BinaryOp::Or, ir::BinaryOp::Or),
+            (ast::BinaryOp::MinMax, ir::BinaryOp::MinMax),
+        ];
+
+        for (ast_op, expected_ir_op) in operations {
+            // create the binary operation node
+            let ast_op_node = test_ast::binary_op_node(ast_op);
+
+            // resolve the binary operation
+            let result = resolve_binary_op(&ast_op_node);
+
+            // check the result
+            assert_eq!(result, expected_ir_op);
+        }
+    }
+
+    #[test]
+    fn resolve_comparison_op_all_operations() {
+        // create the operations
+        let operations = vec![
+            (ast::ComparisonOp::LessThan, ir::ComparisonOp::LessThan),
+            (ast::ComparisonOp::LessThanEq, ir::ComparisonOp::LessThanEq),
+            (
+                ast::ComparisonOp::GreaterThan,
+                ir::ComparisonOp::GreaterThan,
+            ),
+            (
+                ast::ComparisonOp::GreaterThanEq,
+                ir::ComparisonOp::GreaterThanEq,
+            ),
+            (ast::ComparisonOp::Eq, ir::ComparisonOp::Eq),
+            (ast::ComparisonOp::NotEq, ir::ComparisonOp::NotEq),
+        ];
+
+        for (ast_op, expected_ir_op) in operations {
+            // create the comparison operation node
+            let ast_op_node = test_ast::comparison_op_node(ast_op);
+
+            // resolve the comparison operation
+            let result = resolve_comparison_op(&ast_op_node);
+
+            // check the result
+            assert_eq!(result, expected_ir_op);
+        }
+    }
+
+    #[test]
+    fn resolve_unary_op_all_operations() {
+        // create the operations
+        let operations = vec![
+            (ast::UnaryOp::Neg, ir::UnaryOp::Neg),
+            (ast::UnaryOp::Not, ir::UnaryOp::Not),
+        ];
+
+        for (ast_op, expected_ir_op) in operations {
+            // create the unary operation node
+            let ast_op_node = test_ast::unary_op_node(ast_op);
+
+            // resolve the unary operation
+            let result = resolve_unary_op(&ast_op_node);
+
+            // check the result
+            assert_eq!(result, expected_ir_op);
+        }
+    }
+
+    #[test]
+    fn resolve_function_name_builtin() {
+        // create the builtin functions
+        let builtin_functions = ["min", "max", "sin", "cos", "tan"];
+
+        let mut external = TestExternalContext::new().with_builtin_functions(builtin_functions);
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the function names
+        for func_name in builtin_functions {
+            // create the function name node
+            let ast_func_name_node = test_ast::identifier_node(func_name);
+
+            // resolve the function name
+            let result = resolve_function_name(&ast_func_name_node, &resolution_context)
+                .expect("builtin function should be resolved");
+
+            // check the result
+            let ir::FunctionName::Builtin(name, _name_span) = result else {
+                panic!("Expected builtin function, got {result:?}");
+            };
+
+            assert_eq!(name.as_str(), func_name);
+        }
+    }
+
+    #[test]
+    fn resolve_function_name_imported() {
+        // create the function names
+        let imported_functions = vec![
+            "custom_function",
+            "my_special_function",
+            "external_lib_function",
+            "user_defined_function",
+        ];
+
+        let mut external =
+            TestExternalContext::new().with_python_import_functions("test", &imported_functions);
+        let resolution_context = make_resolution_context(&mut external, vec![], vec!["test"]);
+
+        // resolve the function names
+        for func_name in imported_functions {
+            // create the function name node
+            let ast_func_name_node = test_ast::identifier_node(func_name);
+
+            // resolve the function name
+            let result = resolve_function_name(&ast_func_name_node, &resolution_context)
+                .expect("imported function should be resolved");
+
+            // check the result
+            let ir::FunctionName::Imported {
+                python_path,
+                name,
+                name_span: _,
+            } = result
+            else {
+                panic!("Expected imported function, got {result:?}");
+            };
+
+            assert_eq!(python_path.as_path(), &PathBuf::from("test.py"));
+            assert_eq!(name.as_str(), func_name);
+        }
+    }
+
+    #[test]
+    fn resolve_literal_all_types() {
+        // Test number
+        let ast_number = test_ast::literal_number_node(42.5);
+        let ir_number = resolve_literal(&ast_number);
+        assert_eq!(ir_number, ir::Literal::Number(42.5));
+
+        // Test string
+        let ast_string = test_ast::literal_string_node("test string");
+        let ir_string = resolve_literal(&ast_string);
+        assert_eq!(ir_string, ir::Literal::String("test string".to_string()));
+
+        // Test boolean
+        let ast_bool = test_ast::literal_boolean_node(false);
+        let ir_bool = resolve_literal(&ast_bool);
+        assert_eq!(ir_bool, ir::Literal::Boolean(false));
+    }
+
+    #[test]
+    fn resolve_expression_with_unknown_bare_names_defers_to_walk() {
+        // Both operands are unknown bare names. File-time no longer errors
+        // on these; both lower to unpinned `Variable::Parameter` and the
+        // resulting binary op expression resolves successfully. The walk's
+        // `reclassify_and_link` is what emits the actual diagnostics.
+        let ast_left_var = test_ast::identifier_variable_node("undefined1");
+        let ast_left_expr = test_ast::variable_expr_node(ast_left_var);
+        let ast_right_var = test_ast::identifier_variable_node("undefined2");
+        let ast_right_expr = test_ast::variable_expr_node(ast_right_var);
+        let ast_add_op = test_ast::binary_op_node(ast::BinaryOp::Add);
+        let expr = test_ast::binary_op_expr_node(ast_add_op, ast_left_expr, ast_right_expr);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        let result = resolve_expr(&expr, &resolution_context);
+
+        let ir::Expr::BinaryOp { left, right, .. } =
+            result.expect("unknown bare names resolve at file-time")
+        else {
+            panic!("expected binary op");
+        };
+        assert_unpinned_parameter(*left, "undefined1");
+        assert_unpinned_parameter(*right, "undefined2");
+    }
+
+    #[test]
+    fn resolve_parenthesized_expression() {
+        // Test a simple parenthesized expression: (1 + 2)
+        let ast_left = test_ast::literal_number_expr_node(1.0);
+        let ast_right = test_ast::literal_number_expr_node(2.0);
+        let ast_add_op = test_ast::binary_op_node(ast::BinaryOp::Add);
+        let inner_expr = test_ast::binary_op_expr_node(ast_add_op, ast_left, ast_right);
+        let expr = test_ast::parenthesized_expr_node(inner_expr);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::BinaryOp {
+            span: _,
+            op,
+            left,
+            right,
+        } = result
+        else {
+            panic!("Expected binary operation, got {result:?}");
+        };
+        assert_eq!(op, ir::BinaryOp::Add);
+
+        let ir::Expr::Literal { span: _, value } = *left else {
+            panic!("Expected literal on left side, got {left:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(1.0));
+
+        let ir::Expr::Literal { span: _, value } = *right else {
+            panic!("Expected literal on right side, got {right:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(2.0));
+    }
+
+    #[test]
+    fn resolve_nested_parenthesized_expression() {
+        // Test nested parentheses: ((1 + 2) * 3)
+        let ast_inner_left = test_ast::literal_number_expr_node(1.0);
+        let ast_inner_right = test_ast::literal_number_expr_node(2.0);
+        let ast_add_op = test_ast::binary_op_node(ast::BinaryOp::Add);
+        let inner_binary =
+            test_ast::binary_op_expr_node(ast_add_op, ast_inner_left, ast_inner_right);
+        let inner_parenthesized = test_ast::parenthesized_expr_node(inner_binary);
+        let ast_outer_right = test_ast::literal_number_expr_node(3.0);
+        let ast_mul_op = test_ast::binary_op_node(ast::BinaryOp::Mul);
+        let expr = test_ast::binary_op_expr_node(ast_mul_op, inner_parenthesized, ast_outer_right);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::BinaryOp {
+            span: _,
+            op,
+            left,
+            right,
+        } = result
+        else {
+            panic!("Expected binary operation, got {result:?}");
+        };
+        assert_eq!(op, ir::BinaryOp::Mul);
+
+        let ir::Expr::BinaryOp {
+            span: _,
+            op: left_op,
+            left: left_left,
+            right: left_right,
+        } = *left
+        else {
+            panic!("Expected binary operation on left side, got {left:?}");
+        };
+        assert_eq!(left_op, ir::BinaryOp::Add);
+
+        let ir::Expr::Literal { span: _, value } = *left_left else {
+            panic!("Expected literal on left side, got {left_left:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(1.0));
+
+        let ir::Expr::Literal { span: _, value } = *left_right else {
+            panic!("Expected literal on right side, got {left_right:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(2.0));
+
+        let ir::Expr::Literal { span: _, value } = *right else {
+            panic!("Expected literal on right side, got {right:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(3.0));
+    }
+
+    #[test]
+    fn resolve_single_literal_multiple_parentheses() {
+        // Test a single literal wrapped in multiple parentheses: ((42))
+        let ast_inner_literal = test_ast::literal_number_expr_node(42.0);
+        let first_parentheses = test_ast::parenthesized_expr_node(ast_inner_literal);
+        let expr = test_ast::parenthesized_expr_node(first_parentheses);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::Literal { span: _, value } = result else {
+            panic!("Expected literal expression, got {result:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(42.0));
+    }
+
+    #[test]
+    fn resolve_comparison_expression() {
+        // Test a simple comparison expression: x < 5
+        let left_var = test_ast::identifier_variable_node("x");
+        let left_expr = test_ast::variable_expr_node(left_var);
+        let right_expr = test_ast::literal_number_expr_node(5.0);
+        let op = test_ast::comparison_op_node(ast::ComparisonOp::LessThan);
+        let rest_chained = [];
+
+        let expr = test_ast::comparison_op_expr_node(op, left_expr, right_expr, rest_chained);
+
+        let mut external = TestExternalContext::new().with_builtin_variables(["x"]);
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::ComparisonOp {
+            span: _,
+            op,
+            left,
+            right,
+            rest_chained,
+        } = result
+        else {
+            panic!("Expected comparison operation, got {result:?}");
+        };
+        assert_eq!(op, ir::ComparisonOp::LessThan);
+
+        let ir::Expr::Variable { span: _, variable } = *left else {
+            panic!("Expected variable expression, got {left:?}");
+        };
+        let ir::Variable::Builtin { ident, .. } = variable else {
+            panic!("Expected builtin variable, got {variable:?}");
+        };
+        assert_eq!(ident.as_str(), "x");
+
+        let ir::Expr::Literal { span: _, value } = *right else {
+            panic!("Expected literal expression, got {right:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(5.0));
+
+        assert!(rest_chained.is_empty());
+    }
+
+    #[test]
+    fn resolve_chained_comparison_expression() {
+        // Test a chained comparison expression: 1 < x < 10
+        let left_expr = test_ast::literal_number_expr_node(1.0);
+        let middle_var = test_ast::identifier_variable_node("x");
+        let middle_expr = test_ast::variable_expr_node(middle_var);
+        let right_expr = test_ast::literal_number_expr_node(10.0);
+
+        let op1 = test_ast::comparison_op_node(ast::ComparisonOp::LessThan);
+        let op2 = test_ast::comparison_op_node(ast::ComparisonOp::LessThan);
+
+        let expr =
+            test_ast::comparison_op_expr_node(op1, left_expr, middle_expr, [(op2, right_expr)]);
+
+        let mut external = TestExternalContext::new().with_builtin_variables(["x"]);
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        // resolve the expression
+        let result = resolve_expr(&expr, &resolution_context);
+
+        // check the result
+        let Ok(result) = result else {
+            panic!("Expected successful result, got {result:?}");
+        };
+
+        let ir::Expr::ComparisonOp {
+            span: _,
+            op,
+            left,
+            right,
+            mut rest_chained,
+        } = result
+        else {
+            panic!("Expected comparison operation, got {result:?}");
+        };
+
+        assert_eq!(op, ir::ComparisonOp::LessThan);
+
+        let ir::Expr::Literal { span: _, value } = *left else {
+            panic!("Expected literal expression, got {left:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(1.0));
+
+        let ir::Expr::Variable { span: _, variable } = *right else {
+            panic!("Expected variable expression, got {right:?}");
+        };
+        let ir::Variable::Builtin { ident, .. } = variable else {
+            panic!("Expected builtin variable, got {variable:?}");
+        };
+        assert_eq!(ident.as_str(), "x");
+
+        assert_eq!(rest_chained.len(), 1);
+        let (chained_op, chained_expr) = rest_chained.remove(0);
+        assert_eq!(chained_op, ir::ComparisonOp::LessThan);
+
+        let ir::Expr::Literal { span: _, value } = chained_expr else {
+            panic!("Expected literal expression, got {chained_expr:?}");
+        };
+        assert_eq!(value, ir::Literal::Number(10.0));
+    }
+
+    #[test]
+    fn resolve_comparison_expression_error_from_left_operand() {
+        // Test error propagation from left operand of comparison expression
+        let left_var = test_ast::identifier_variable_node("undefined_left");
+        let left_expr = test_ast::variable_expr_node(left_var);
+        let right_expr = test_ast::literal_number_expr_node(5.0);
+        let op = test_ast::comparison_op_node(ast::ComparisonOp::LessThan);
+        let rest_chained = [];
+
+        let expr = test_ast::comparison_op_expr_node(op, left_expr, right_expr, rest_chained);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        let result = resolve_expr(&expr, &resolution_context);
+
+        let ir::Expr::ComparisonOp { left, .. } =
+            result.expect("unknown bare names resolve at file-time")
+        else {
+            panic!("expected comparison op");
+        };
+        assert_unpinned_parameter(*left, "undefined_left");
+    }
+
+    #[test]
+    fn resolve_comparison_expression_with_unknown_bare_names_in_all_operands() {
+        // Three positions - left, right, chained - each holding an
+        // unknown bare name. File-time resolves them all to unpinned
+        // `Variable::Parameter`; the walk attributes any errors.
+        let left_var = test_ast::identifier_variable_node("undefined_left");
+        let left_expr = test_ast::variable_expr_node(left_var);
+        let right_var = test_ast::identifier_variable_node("undefined_right");
+        let right_expr = test_ast::variable_expr_node(right_var);
+        let chained_var = test_ast::identifier_variable_node("undefined_chained");
+        let chained_expr = test_ast::variable_expr_node(chained_var);
+
+        let op1 = test_ast::comparison_op_node(ast::ComparisonOp::LessThan);
+        let op2 = test_ast::comparison_op_node(ast::ComparisonOp::LessThan);
+
+        let expr =
+            test_ast::comparison_op_expr_node(op1, left_expr, right_expr, [(op2, chained_expr)]);
+
+        let mut external = TestExternalContext::new();
+        let resolution_context = make_resolution_context(&mut external, vec![], vec![]);
+
+        let result = resolve_expr(&expr, &resolution_context);
+
+        let ir::Expr::ComparisonOp {
+            left,
+            right,
+            rest_chained,
+            ..
+        } = result.expect("unknown bare names resolve at file-time")
+        else {
+            panic!("expected comparison op");
+        };
+        assert_unpinned_parameter(*left, "undefined_left");
+        assert_unpinned_parameter(*right, "undefined_right");
+        assert_eq!(rest_chained.len(), 1);
+        assert_unpinned_parameter(
+            rest_chained.into_iter().next().expect("checked len == 1").1,
+            "undefined_chained",
+        );
+    }
+}
