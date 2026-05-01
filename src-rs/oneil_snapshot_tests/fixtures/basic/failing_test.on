@@ -1,0 +1,8 @@
+# Model with a test that should fail
+Mass: m = 5 :kg
+Acceleration: a = 9.81 :m/s^2
+Force: f = m * a :N
+Threshold: t = 100 :N
+
+# This test fails: 49.05 N is not greater than 100 N
+test: f > t

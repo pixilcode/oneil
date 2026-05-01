@@ -1,0 +1,8 @@
+# Design with a unit-mismatching override on `leaf.lng`: the leaf
+# parameter is a length (`:m`), the override uses time (`:s`). The
+# apply pass rejects the override and records a unit-mismatch
+# diagnostic carrying the chain `[apply bad to l (mid.on)]`.
+
+design leaf
+
+lng = 7 :s

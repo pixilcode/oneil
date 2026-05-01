@@ -1,0 +1,4 @@
+# Parent declares a length parameter so the design override below can
+# attempt to retype it as time, exercising the overlay unit-mismatch check.
+
+Length: L = 5 :m

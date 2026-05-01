@@ -1,0 +1,4 @@
+design ./mid
+
+# Adds a new parameter to the mid instance.
+z = 42.0

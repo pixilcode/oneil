@@ -1,0 +1,14 @@
+# Parent that pulls `propulsion` in and extracts its `inner` (gravity)
+# reference up to the parent scope via the `[inner]` extraction block.
+# With `mars_override.one`, `g.inner` is overridden to Mars gravity:
+# `result` and `g_ref` change, while the constants `thrust_out` and
+# `mass_out` (defined inside the intermediate) stay the same.
+submodel mid_with_matching as propulsion [inner]
+
+# Gravity-dependent: changes under the Mars overlay.
+Earth Mission: result = ratio.propulsion
+Gravity Reference: g_ref = g.inner :m/s^2
+
+# Constants inside the intermediate: unaffected by the gravity override.
+Thruster: thrust_out = thrust.propulsion :N
+Payload: mass_out = payload.propulsion :kg

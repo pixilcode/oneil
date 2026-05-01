@@ -1,0 +1,13 @@
+# `a` includes `b` as a submodel. Combined with `b.on` (which submodels
+# `a` back), this forms a compilation-unit cycle. Building `a`'s unit
+# graph recurses into `b`, which tries to recurse back into `a` — the
+# back-edge sits on `b`'s `submodel a as a` declaration. The
+# `CompilationCycleError` is attributed to the cycle *target* `a.on`
+# (the file the cycle closes back onto, the "root of the problem"
+# from this build's perspective) at `a`'s own outgoing reference
+# (this `submodel b as b` line). It surfaces with the full chain:
+#
+#   compilation cycle detected: a.on -> b.on -> a.on
+submodel b as b
+
+X: x = 1

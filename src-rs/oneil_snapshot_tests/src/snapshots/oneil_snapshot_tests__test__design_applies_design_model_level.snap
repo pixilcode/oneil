@@ -1,0 +1,8 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+expression: "run_fixture(\"design_applies_design/parent.on\")"
+---
+Model: fixtures/design_applies_design/parent.on
+Tests: 0/0
+Parameters:
+  y = Number(Scalar(16.0))

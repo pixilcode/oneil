@@ -1,0 +1,14 @@
+design parent_transitive
+
+# The overlay RHS references `multiplier` (a parent-local parameter). In the *old*
+# phased evaluator, params were partitioned by whether they (transitively) depended on
+# external refs. Because `multiplier = 2 * src.base` does depend on `src.base`, it was
+# scheduled to evaluate *after* refs — but the child's overlay is evaluated *during*
+# the child's phase-2 setup, triggering a lookup of a not-yet-evaluated parent param
+# and panicking.
+#
+# Under lazy evaluation, the overlay's cross-model lookup simply forces
+# `parent.multiplier` on demand (which in turn forces `src.base`), so this file works.
+#
+# Expected: c.base = 2 * (2 * 3) = 12
+base.c = 2 * multiplier

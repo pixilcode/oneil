@@ -1,0 +1,4 @@
+design nested_param_parent
+
+# Override the main thruster's thrust to 1000N
+thrust.main_thruster = 1000 :N

@@ -1,0 +1,16 @@
+# Test: `use` creates unique instances, so an overlay applied `for` one of
+# them does not bleed into the other.
+submodel ../gravity_earth as planet_a
+submodel ../gravity_earth as planet_b
+
+# Apply the Mars-gravity overlay only to planet_a.
+apply mars_override to planet_a
+
+# Calculate 100kg weight on each planet.
+# Planet A (overlaid Mars): w = 100 * 3.72 = 372 N
+# Planet B (unchanged Earth): w = 100 * 9.81 = 981 N
+# Total: 1353 N
+Payload: mass = 100 :kg
+Weight A: w_a = mass * g.planet_a :N
+Weight B: w_b = mass * g.planet_b :N
+Total Weight: total = w_a + w_b :N

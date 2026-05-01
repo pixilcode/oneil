@@ -1,0 +1,4 @@
+submodel leaf as l
+
+# Forwards the leaf value up so the parent can read it.
+Forwarded: y = x.l

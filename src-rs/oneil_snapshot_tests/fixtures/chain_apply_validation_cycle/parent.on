@@ -1,0 +1,15 @@
+# Root model in a two-hop apply chain. `parent` references `mid`, which
+# in turn applies a design (`cycle`) that retargets the leaf's `x` so
+# it depends on `y`. Combined with the leaf's existing `y = 2 * x`,
+# this introduces a parameter cycle — surfaced by the post-build SCC
+# pass as a `ParameterCycle` validation diagnostic on each member.
+#
+# The chain provenance lets the runtime fan out the failure against
+# every file on the chain when `eval_model(parent.on)` runs:
+#
+# - `mid.on`: generic "applied design produced invalid contributions"
+#   diagnostic at the `apply cycle to l` span.
+#
+# `parent.on` itself is silent because the apply lives one hop deeper.
+
+submodel mid as m

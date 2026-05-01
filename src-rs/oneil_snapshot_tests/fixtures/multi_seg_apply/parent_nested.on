@@ -1,0 +1,11 @@
+# Same semantics as parent.on but uses nested bracket syntax instead of a
+# dotted path.  `apply mid_design to m [ override_leaf to l ]` is equivalent
+# to two separate applies: mid_design → m and override_leaf → m.l.
+submodel mid as m
+
+apply mid_design to m [
+    override_leaf to l
+]
+
+Result: result = y.m
+Mid added: mid_z = z.m

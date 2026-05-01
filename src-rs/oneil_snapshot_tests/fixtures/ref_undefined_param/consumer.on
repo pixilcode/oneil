@@ -1,0 +1,13 @@
+# Consumer references `target.on` and correctly accesses `g.planet`,
+# but also tries `nosuchparam.planet` which does not exist on `target.on`.
+# This exercises the validation-pass `UndefinedReferenceParameter` check,
+# which was previously surfaced at resolver time in `load_model_with_submodel_with_error`.
+reference ../gravity_earth as planet
+
+Mass: m = 100 :kg
+
+# g.planet is valid — `g` exists on `target.on`.
+Force: f = m * g.planet :N
+
+# nosuchparam.planet is NOT valid — `target.on` has no `nosuchparam`.
+Bad: bad = nosuchparam.planet :m/s^2

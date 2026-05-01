@@ -1,0 +1,7 @@
+# Intermediate model that owns the failing `apply` statement. The
+# `apply cycle to l` line is the chain hop that should receive a
+# generic contribution diagnostic when the design's override on
+# `leaf.x` introduces a cycle.
+
+submodel leaf as l
+apply cycle to l

@@ -1,0 +1,7 @@
+# Intermediate model that owns the failing `apply` statement. The
+# `apply bad to l` line is the chain hop that should receive a
+# generic contribution diagnostic when `bad.one`'s override fails the
+# unit compatibility check on `leaf.lng`.
+
+submodel leaf as l
+apply bad to l

@@ -1,0 +1,8 @@
+# Parent uses a child plus a sibling `source` reference. The parent-local `multiplier`
+# transitively depends on `src.base` (written as `base.src` — parameter.reference);
+# this is the parameter that the design's overlay RHS ultimately references.
+reference source as src
+submodel child as c
+
+Parent multiplier: multiplier = 2 * base.src
+Passthrough from c: x = base.c

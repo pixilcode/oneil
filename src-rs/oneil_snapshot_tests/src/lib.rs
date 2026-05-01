@@ -15,7 +15,7 @@ mod util {
         Runtime,
         output::{self, OneilError},
     };
-    use oneil_shared::paths::ModelPath;
+    use oneil_shared::paths::{DesignPath, ModelPath};
 
     /// Runs the full evaluation pipeline on an Oneil model file and returns
     /// a formatted string containing any errors and the evaluation output.
@@ -31,13 +31,29 @@ mod util {
     ///
     /// This function does not return a `Result`; parse, resolution, and
     /// evaluation errors are included in the returned string.
-    #[expect(clippy::unwrap_used, reason = "writing to a String is infallible")]
     #[must_use]
     pub fn run_model_and_format(path: &Path, path_prefix: Option<&Path>) -> String {
+        run_model_and_format_with_design(path, None, path_prefix)
+    }
+
+    /// Runs the full evaluation pipeline on an Oneil model file with an optional
+    /// design file applied, and returns a formatted string containing any errors
+    /// and the evaluation output.
+    ///
+    /// When a design path is provided, the design file's parameter overrides are
+    /// applied to the model being evaluated (simulating the CLI `--design` flag).
+    #[expect(clippy::unwrap_used, reason = "writing to a String is infallible")]
+    #[must_use]
+    pub fn run_model_and_format_with_design(
+        path: &Path,
+        design_path: Option<&Path>,
+        path_prefix: Option<&Path>,
+    ) -> String {
         let path = ModelPath::from_path_with_ext(path);
+        let design_path = design_path.map(DesignPath::from_path_with_ext);
 
         let mut runtime = Runtime::new();
-        let (model_opt, errors) = runtime.eval_model(&path);
+        let (model_opt, errors) = runtime.eval_model(&path, design_path.as_ref());
 
         let mut out = String::new();
 
@@ -90,6 +106,7 @@ mod util {
     }
 
     /// Formats a single error as a stable, readable string.
+    #[expect(clippy::unwrap_used, reason = "writing to a String is infallible")]
     fn format_error(error: &OneilError, path_prefix: Option<&Path>) -> String {
         let path_str = normalize_path(error.path(), path_prefix);
 
@@ -101,7 +118,36 @@ mod util {
             .as_deref()
             .map_or_else(|| path_str.clone(), |loc| format!("{path_str}:{loc}"));
 
-        format!("error: {}\n  at {}", error.message(), at)
+        let message = normalize_message(error.message(), path_prefix);
+        let mut out = format!("error: {message}\n  at {at}");
+
+        for ctx in error.context() {
+            let (kind, text) = match ctx {
+                oneil_shared::error::Context::Note(msg) => {
+                    ("note", normalize_message(msg, path_prefix))
+                }
+                oneil_shared::error::Context::Help(msg) => {
+                    ("help", normalize_message(msg, path_prefix))
+                }
+            };
+            write!(out, "\n  {kind}: {text}").unwrap();
+        }
+
+        out
+    }
+
+    /// Strips occurrences of `prefix` from anywhere in `message`, so
+    /// diagnostic strings that embed absolute paths (e.g. cycle chains
+    /// of compilation units) render portably across machines.
+    fn normalize_message(message: &str, prefix: Option<&Path>) -> String {
+        let Some(prefix) = prefix else {
+            return message.to_string();
+        };
+        let mut prefix_str = prefix.display().to_string();
+        if !prefix_str.ends_with(std::path::MAIN_SEPARATOR) {
+            prefix_str.push(std::path::MAIN_SEPARATOR);
+        }
+        message.replace(&prefix_str, "")
     }
 
     /// Formats an evaluated model's output (tests and parameters) for snapshots.
@@ -129,8 +175,13 @@ mod util {
         if !params.is_empty() {
             out.push_str("Parameters:\n");
             for (name, param) in params {
+                let prefix = match param.print_level {
+                    output::PrintLevel::Performance => "$ ",
+                    output::PrintLevel::Trace => "* ",
+                    output::PrintLevel::None => "",
+                };
                 let value_str = format_value(&param.value);
-                writeln!(out, "  {name} = {value_str}").unwrap();
+                writeln!(out, "  {prefix}{name} = {value_str}").unwrap();
             }
         }
 

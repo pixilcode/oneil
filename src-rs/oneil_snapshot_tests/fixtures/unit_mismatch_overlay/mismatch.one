@@ -1,0 +1,8 @@
+# Override `L` with a value declared in seconds. The design-application
+# step in `InstanceGraph::build` compares the overlay's declared unit
+# against the target's declared unit and surfaces a `ParameterUnitMismatch`
+# error rather than silently retyping the parameter.
+
+design parent
+
+L = 7 :s

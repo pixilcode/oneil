@@ -1,0 +1,14 @@
+# Root model in a two-hop apply scenario. `parent` references `mid`,
+# which in turn applies a unit-mismatching design (`bad`) onto its
+# own leaf. The contribution-time unit-mismatch fires inside the
+# design's RHS, but `ContributionDiagnostic::applied_via` lets the
+# runtime surface a generic "applied design produced invalid
+# contributions" diagnostic at the `apply bad to l` site on `mid.on`,
+# alongside the full diagnostic at the design assignment in `bad.one`.
+#
+# Verifies three-file fan-out for one underlying contribution error:
+#   - `bad.one`        — full unit-mismatch diagnostic at the assignment span
+#   - `mid.on`         — generic "applied design ... invalid" at the apply span
+#   - `parent.on`      — generic "submodel `m` has errors" at the import span
+
+submodel mid as m

@@ -1,0 +1,5 @@
+# Submodel used by `parent.on`. Declares `length` so that a misspelled
+# overlay targeting `lenght` exercises the apply pass's overlay-target
+# missing check (with `length` as the best-match suggestion).
+
+Length: length = 5 :m

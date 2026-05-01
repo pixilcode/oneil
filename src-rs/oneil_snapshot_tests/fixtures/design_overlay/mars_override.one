@@ -1,0 +1,7 @@
+# Override gravity to Mars-like value on whatever planet instance this is
+# applied to. Targets gravity_earth so it can be applied to any submodel or
+# reference whose model is gravity_earth. Shared by shared_ref.on and
+# two_instances.on.
+design ../gravity_earth
+
+g = 3.72 :m/s^2

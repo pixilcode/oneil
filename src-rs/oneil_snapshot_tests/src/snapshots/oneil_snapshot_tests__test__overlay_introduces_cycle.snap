@@ -1,0 +1,14 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+expression: "run_fixture_with_design(\"cycle_via_overlay/parent.on\",\n\"cycle_via_overlay/cycle.one\",)"
+---
+error: design `cycle.one` introduced a circular dependency in parameters - x -> y -> x
+  at fixtures/cycle_via_overlay/cycle.one:6:1
+  note: overrides `x` in `parent.on` at line 6:8
+
+error: circular dependency detected in parameters - y -> x -> y
+  at fixtures/cycle_via_overlay/parent.on:7:9
+---
+
+Model: fixtures/cycle_via_overlay/parent.on
+Tests: 0/0

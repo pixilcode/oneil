@@ -1,0 +1,10 @@
+design target
+
+# Override existing parameter
+radius = 10
+
+# New output parameter
+$ area = pi * radius^2
+
+# New traced parameter
+* diameter = 2 * radius

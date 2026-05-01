@@ -1,0 +1,10 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+expression: output
+---
+Model: fixtures/overlay_anchor_scope/parent.on
+Tests: 0/0
+Parameters:
+  multiplier = Number(Scalar(10.0))
+  x = Number(Scalar(20.0))
+  y = Number(Scalar(5.0))
