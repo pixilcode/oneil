@@ -526,11 +526,11 @@ Gravity of Earth: g = 9.8 :m/s^2
 Mass of box: m_b = 5 :kg
 
 # reference with alias
-ref constants as c
+reference constants as c
 Weight of box: w_b = m_b * g.c :N
 
 # reference without alias
-ref constants
+reference constants
 Weight of box: w_b = m_b * g.constants :N
 ```
 
@@ -546,18 +546,19 @@ Solar panel cost: cost = 500 :$
 
 
 # === satellite.on ===
-use radar
-use solar_panel as solar
+submodel radar
+submodel solar_panel as solar
 
 Satellite cost: cost = cost.radar + cost.solar :$
 
 
 # === product.on ===
-use satellite
-ref satellite.radar
-ref satellite.solar_panel as solar
-# ... or using `with` syntax ...
-use satellite with [radar, solar_panel as solar]
+# Import satellite as a whole; cost.satellite.radar, cost.satellite.solar, etc.
+submodel satellite
+
+# ... or extract submodels directly to parent scope with an extraction list:
+submodel satellite [radar, solar_panel as solar]
+# Now accessible as cost.radar, cost.solar
 ```
 
 Note that in the case of a submodel, *the submodel and reference name may be different*. If an alias is provided, it will be used as the reference name, but not as the submodel name. The submodel name will always be the name of the model.

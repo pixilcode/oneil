@@ -12,3 +12,6 @@ oncmp_config.toml
 
 # cargo
 /target
+
+# git worktrees
+/.worktrees

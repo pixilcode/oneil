@@ -18,8 +18,22 @@ EndOfLine = { LineBreak | Comment | ? end of file ? } ;
 OptEndOfLine = [ EndOfLine ] ;
 
 (* Top Level Structure *)
+(* Design files (`.one`) must begin with `DesignTargetDecl`. *)
 Model = [ EndOfLine ], [ Note ], { Declaration } { Section } ;
-Declaration = ImportDecl | UseDecl | ParameterDecl | TestDecl ;
+Declaration = DesignTargetDecl | ImportDecl | ApplyDecl | SubmodelDecl | DesignBodyParameterDecl | ParameterDecl | TestDecl ;
+
+(* Declares that this file parameterizes another model; path may include directory prefixes *)
+DesignTargetDecl = "design", [ DirectoryPath ], Identifier, EndOfLine ;
+
+(* Applies a design to a reference path; nested applies are inside `[ … ]` and omit `apply` *)
+ApplyDecl = "apply", [ DirectoryPath ], Identifier, "to", Identifier, { ".", Identifier },
+            [ "[", { ApplyBody, EndOfLine }, "]" ], EndOfLine ;
+ApplyBody = [ DirectoryPath ], Identifier, "to", Identifier, { ".", Identifier },
+            [ "[", { ApplyBody, EndOfLine }, "]" ] ;
+
+(* Parameter assignment in a design file; supports `param.instance = value` for nested scopes *)
+(* `$` and `*`/`**` only apply to new parameters (additions); they are ignored on overrides *)
+DesignBodyParameterDecl = [ Performance ], [ Trace ], Identifier, [ ".", Identifier ], "=", ( Expr [ ":", UnitExpr ] | PiecewiseExpr ), EndOfLine, [ Note ] ;
 
 (* Notes *)
 Note = SingleLineNote | MultiLineNote ;
@@ -29,15 +43,16 @@ MultiLineNoteDelimiter = "~~~", "~"*, LineBreak ;
 NoteLine = { Any character except LineBreak or MultiLineNoteDelimiter }, LineBreak ; (* can contain anything except the multi-note delimiter*)
 
 (* Sections *)
-Section = "section", Label, EndOfLine, [ Note ], { ImportDecl | UseDecl | ParameterDecl | TestDecl } ;
+Section = "section", Label, EndOfLine, [ Note ], { ImportDecl | ApplyDecl | SubmodelDecl | DesignBodyParameterDecl | ParameterDecl | TestDecl } ;
 
 (* Imports *)
 ImportDecl = "import", Identifier, EndOfLine ;
-UseDecl = ("use" | "ref"), [ DirectoryPath ], ModelInfo, [ "with", SubmodelList ], EndOfLine ;
+(* `submodel` imports the model both as a reference and as a submodel; *)
+(* `reference` imports it as a reference only. *)
+SubmodelDecl = ("submodel" | "reference"), [ DirectoryPath ], ModelInfo, [ SubmodelList ], EndOfLine ;
 DirectoryPath = DirectoryName, "/", { DirectoryName, "/" } ;
 DirectoryName = Identifier | ".." | "." ;
-ModelInfo = Identifier, [ SubmodelComponents ], [ AsAlias ] ;
-SubmodelComponents = ".", Identifier, { ".", Identifier }  ;
+ModelInfo = Identifier, [ AsAlias ] ;
 AsAlias = "as", Identifier ;
 (* Note the optional trailing comma - this makes git diffs easier to read *)
 SubmodelList = ModelInfo | "[", [ SubmodelListInner ], OptEndOfLine, "]" ;
