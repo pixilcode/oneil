@@ -1,0 +1,7 @@
+# Parent declares two independent parameters; the overlay turns them into a
+# cycle by retargeting `x`'s RHS so it depends on `y`, which already depends
+# on `x`. The cross-instance SCC pass in
+# `oneil_analysis::validate_instance_graph` runs over the composed graph
+# (post-design) and emits one `ParameterCycle` diagnostic per cycle member.
+First: x = 1
+Second: y = 2 * x

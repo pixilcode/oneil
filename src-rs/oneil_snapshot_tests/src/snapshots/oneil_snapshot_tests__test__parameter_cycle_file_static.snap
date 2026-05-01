@@ -1,0 +1,13 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+expression: "run_fixture(\"parameter_cycle/cycle.on\")"
+---
+error: circular dependency detected in parameters - b -> a -> b
+  at fixtures/parameter_cycle/cycle.on:5:9
+
+error: circular dependency detected in parameters - a -> b -> a
+  at fixtures/parameter_cycle/cycle.on:4:8
+---
+
+Model: fixtures/parameter_cycle/cycle.on
+Tests: 0/0

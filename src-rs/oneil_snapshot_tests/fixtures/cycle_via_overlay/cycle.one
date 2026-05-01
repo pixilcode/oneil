@@ -1,0 +1,6 @@
+# Override `x` so it now reads `y`. Combined with `y = 2 * x` this produces a
+# cycle on the root instance, surfaced as a `ParameterCycle` validation
+# diagnostic (post-build SCC over the composed graph).
+design parent
+
+x = y

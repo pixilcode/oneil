@@ -1,0 +1,11 @@
+# Applies a design to `m.l` — a two-segment target where `m` is a submodel
+# of this file and `l` is a submodel of `mid`. Verifies that the resolver
+# threads through the intermediate model and the instancing pass lands the
+# override on the correct deep instance.
+#
+# Expected: result = y.m = x.l = 10.0 (overridden by override_leaf)
+submodel mid as m
+
+apply override_leaf to m.l
+
+Result: result = y.m

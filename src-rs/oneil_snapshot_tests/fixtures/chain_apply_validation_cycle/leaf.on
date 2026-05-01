@@ -1,0 +1,6 @@
+# Leaf model targeted by `cycle.one`. Declares two independent
+# parameters; the design's override retargets `x` onto `y`, turning
+# the pair into a strongly-connected component.
+
+First: x = 1
+Second: y = 2 * x

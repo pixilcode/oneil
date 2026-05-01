@@ -1,0 +1,6 @@
+# Closes the `a -> b -> a` compilation cycle. The `submodel a as a`
+# below is the back-edge: building `b` recurses into `a`, which is
+# already on the build stack.
+submodel a as a
+
+Y: y = 2

@@ -1,0 +1,5 @@
+# Leaf model targeted by `bad.one`. Declares `lng` as a length so the
+# `bad.one` override (which assigns a value with seconds) trips the
+# overlay unit-mismatch check.
+
+Length: lng = 5 :m

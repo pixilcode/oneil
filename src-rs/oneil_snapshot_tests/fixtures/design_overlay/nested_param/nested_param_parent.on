@@ -1,0 +1,4 @@
+# Spacecraft with main thruster
+submodel nested_param_child as main_thruster
+
+Total Thrust: total = thrust.main_thruster :N

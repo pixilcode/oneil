@@ -1,0 +1,9 @@
+# Design file that adds new parameters to child model
+
+design child
+
+# Add a new parameter that references the existing one
+doubled = 2 * base
+
+# Add another new parameter
+constant = 42

@@ -1,0 +1,9 @@
+# Scoped override targeting parameter `lenght` on submodel `c` — `c` is
+# `child.on`, which has `length` (not `lenght`). The apply pass's
+# overlay-target-missing check should surface a best-match suggestion of
+# `length`. Per the language convention the LHS is `<param>.<scope>`, so
+# `lenght.c` parses as param=`lenght`, scope=[`c`].
+
+design parent
+
+lenght.c = 7 :m

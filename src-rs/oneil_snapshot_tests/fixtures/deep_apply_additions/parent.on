@@ -1,0 +1,17 @@
+# Parent reads a value forwarded from an intermediate (`mid`) that has
+# itself applied a design adding a new parameter on the leaf. Even though
+# the parent never sees `apply` or `squared` directly, the addition lands
+# on the deep leaf instance and the value flows up through `mid`'s own
+# `Variable::External` reference.
+#
+# Verifies:
+#   - the apply pass propagates additions to the right grandchild
+#     instance even when the apply is declared one level down,
+#   - parent reads `mid.forwarded` and gets the augmented value; the
+#     `External` reference resolves through the same instance subtree
+#     that `mid`'s apply augmented.
+
+submodel mid as m
+
+# y = mid.forwarded = squared.l = base * base = 16
+Squared via mid: y = forwarded.m

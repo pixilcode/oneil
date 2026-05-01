@@ -1,0 +1,8 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+expression: "run_fixture(\"multi_seg_apply/parent.on\")"
+---
+Model: fixtures/multi_seg_apply/parent.on
+Tests: 0/0
+Parameters:
+  result = Number(Scalar(10.0))

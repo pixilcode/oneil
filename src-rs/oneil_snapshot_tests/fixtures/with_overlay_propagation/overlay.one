@@ -1,0 +1,8 @@
+# Overrides the deep child via `parent.inner` (the extracted alias).
+# Because `parent.inner` and `parent.mid.inner` resolve to the same
+# instance, the overlay is observable through both aliases — `direct`
+# reads it via the alias, while `via_mid` and `doubled_mid` reach the
+# same instance through `mid`.
+design parent
+
+value.inner = 99

@@ -1,0 +1,5 @@
+# File-static parameter cycle: `a` depends on `b` and `b` depends on `a`,
+# with no overlays involved. Caught by the post-build SCC pass in
+# `oneil_analysis::validate_instance_graph` without any design composition.
+First: a = b
+Second: b = a

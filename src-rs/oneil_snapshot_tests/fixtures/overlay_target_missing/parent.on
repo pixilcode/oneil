@@ -1,0 +1,7 @@
+# Parent has a child submodel. The design fixture issues a scoped override
+# targeting `lenght.c`, which routes the overlay to parameter `lenght` on
+# `c` (= `child.on`). `child.on` declares `length` (not `lenght`), so the
+# overlay-target existence check should reject it with a best-match
+# suggestion.
+
+submodel child as c

@@ -1,0 +1,7 @@
+# Intermediate model that owns the apply on its leaf reference. The
+# design's `squared` addition lands on this mid's `l` instance.
+
+submodel leaf as l
+apply augment to l
+
+Forward squared from leaf: forwarded = squared.l

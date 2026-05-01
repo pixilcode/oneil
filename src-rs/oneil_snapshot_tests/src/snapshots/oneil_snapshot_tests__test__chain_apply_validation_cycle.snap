@@ -1,0 +1,20 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+expression: "run_fixture(\"chain_apply_validation_cycle/parent.on\")"
+---
+error: applied design `cycle.one` produced invalid contributions
+  at fixtures/chain_apply_validation_cycle/mid.on:7:7
+
+error: circular dependency detected in parameters - y -> x -> y
+  at fixtures/chain_apply_validation_cycle/leaf.on:6:9
+
+error: design `cycle.one` introduced a circular dependency in parameters - x -> y -> x
+  at fixtures/chain_apply_validation_cycle/cycle.one:7:1
+  note: overrides `x` in `leaf.on` at line 5:8
+
+error: submodel `m` has errors
+  at fixtures/chain_apply_validation_cycle/parent.on:15:10
+---
+
+Model: fixtures/chain_apply_validation_cycle/parent.on
+Tests: 0/0

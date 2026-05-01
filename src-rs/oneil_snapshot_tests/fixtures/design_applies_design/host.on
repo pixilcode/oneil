@@ -1,0 +1,4 @@
+# Host model. Has a leaf submodel but no direct apply.
+# The apply comes from `outer.one`, which also adds `result` here.
+
+submodel leaf as l

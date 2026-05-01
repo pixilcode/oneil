@@ -1,0 +1,4 @@
+# Model with syntax error
+Mass: m = 10 :kg
+Bad syntax here @
+Force: f = m * 9.81

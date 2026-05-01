@@ -1,0 +1,10 @@
+# Error case: `wrong_target_design.one` declares `design ../../gravity_mars`,
+# but the `planet` reference resolves to `gravity_earth.on`. Applying the
+# design `to planet` should produce a clear "design target / reference
+# mismatch" error rather than silently doing nothing.
+submodel ../../gravity_earth as planet
+
+apply wrong_target_design to planet
+
+Mass: m = 100 :kg
+Surface Weight: w = m * g.planet :N

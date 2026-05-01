@@ -1,0 +1,6 @@
+# Adds a new parameter (`squared`) to whichever leaf instance this design
+# is applied to. Read upward via `forwarded.m` in the parent.
+
+design leaf
+
+squared = base * base

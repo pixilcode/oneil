@@ -1,0 +1,7 @@
+# Parent references two children and exposes a parent-local scalar.
+submodel child as a
+submodel child as b
+
+Parent multiplier: multiplier = 10
+Base from a: x = base.a
+Base from b: y = base.b

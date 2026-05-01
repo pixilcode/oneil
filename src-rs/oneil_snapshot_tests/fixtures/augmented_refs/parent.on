@@ -1,0 +1,14 @@
+# Parent model that uses a child and applies a design with augmented params
+
+submodel child as c
+apply augment to c
+
+# Reference existing parameter from child (syntax is param.ref)
+From child: x = base.c
+
+# Reference design-augmented parameters
+Doubled from design: y = doubled.c
+Constant from design: z = constant.c
+
+# Compute using augmented param
+Sum: total = base.c + doubled.c + constant.c

@@ -1,0 +1,8 @@
+design host
+
+# Apply inner.one to the leaf submodel. This nested apply propagates
+# to any model that applies outer.one, via apply_design_recursive.
+apply inner to l
+
+# Add a result parameter that reads the squared value from the leaf.
+result = squared.l

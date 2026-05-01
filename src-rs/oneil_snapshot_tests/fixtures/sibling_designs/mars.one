@@ -1,0 +1,6 @@
+# Mars surface gravity overlay for whichever planet instance this
+# applies to.
+
+design ../gravity_earth
+
+g = 3.72 :m/s^2

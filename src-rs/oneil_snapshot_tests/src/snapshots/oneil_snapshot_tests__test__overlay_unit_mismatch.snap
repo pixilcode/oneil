@@ -1,0 +1,13 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 270
+expression: output
+---
+error: unit mismatch: parameter `L` declared as `m` but design applies value with unit `s`
+  at fixtures/unit_mismatch_overlay/mismatch.one:8:1
+---
+
+Model: fixtures/unit_mismatch_overlay/parent.on
+Tests: 0/0
+Parameters:
+  L = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(5.0)), unit: Unit { dimension_map: DimensionMap({Distance: 1.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "m", exponent: 1.0 } } })

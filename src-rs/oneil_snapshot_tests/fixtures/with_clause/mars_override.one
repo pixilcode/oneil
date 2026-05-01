@@ -1,0 +1,6 @@
+# Override gravity to Mars value through the `inner` alias extracted to the
+# parent scope.  Parameters that depend on `g.inner` change; constants in
+# the intermediate (`thrust`, `payload`) are unaffected.
+design with_extract_through_mid
+
+g.inner = 3.72 :m/s^2

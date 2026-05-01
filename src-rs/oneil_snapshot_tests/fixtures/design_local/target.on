@@ -1,0 +1,4 @@
+# Simple model with one parameter
+# This is the target model for design augmentation tests
+
+Radius: radius = 5 :m

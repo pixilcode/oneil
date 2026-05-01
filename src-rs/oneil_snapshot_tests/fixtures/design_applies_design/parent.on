@@ -1,0 +1,9 @@
+# Parent applies outer.one to its host submodel. outer.one itself
+# applies inner.one to the leaf inside host, so inner.one's additions
+# propagate two levels deep via design-applies-design recursion.
+
+submodel host as h
+apply outer to h
+
+# outer.one adds `result` to h; read it at the parent level.
+Propagated result: y = result.h

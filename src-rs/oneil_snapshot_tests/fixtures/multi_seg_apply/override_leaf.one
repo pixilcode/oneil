@@ -1,0 +1,4 @@
+# Override x on leaf directly.
+design ./leaf
+
+x = 10.0

@@ -1,0 +1,11 @@
+# Design file that augments the target model with new parameters
+# These new parameters don't exist on the target but should be evaluable
+
+design target
+
+# Override existing parameter
+radius = 10
+
+# Add new parameters (design-local augmentation)
+diameter = 2 * radius
+circumference = pi * diameter

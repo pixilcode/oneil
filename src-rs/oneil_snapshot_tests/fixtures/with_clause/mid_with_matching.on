@@ -1,0 +1,9 @@
+# Propulsion system with Earth-based gravity. Imports `gravity_earth` as
+# a submodel under the local alias `inner` (so it can be extracted from
+# above) and computes a thrust-to-weight ratio that depends on `g.inner`.
+submodel ../gravity_earth as inner
+
+# Thrust-to-weight ratio for 1000N thruster with 100kg payload
+Thrust: thrust = 1000 :N
+Payload: payload = 100 :kg
+T/W Ratio: ratio = thrust / (payload * g.inner)

@@ -1,0 +1,19 @@
+# Two sibling submodels of the same model, each overlaid by a different
+# design. The instance graph creates an independent instance per
+# `submodel` import, so applying `mars` to `planet_a` must not bleed
+# into `planet_b`, which receives `moon`'s gravity instead.
+
+submodel ../gravity_earth as planet_a
+submodel ../gravity_earth as planet_b
+
+apply mars to planet_a
+apply moon to planet_b
+
+# Sample 100 kg payload weighed on each instance.
+# planet_a (mars overlay):  100 * 3.72 = 372 N
+# planet_b (moon overlay):  100 * 1.62 = 162 N
+# total:                    534 N
+Payload: mass = 100 :kg
+Weight A: w_a = mass * g.planet_a :N
+Weight B: w_b = mass * g.planet_b :N
+Total Weight: total = w_a + w_b :N
