@@ -71,8 +71,8 @@
           "end": "(?=#)|$"
         },
         {
-          "comment": "use declaration",
-          "begin": "^(\\s*)(use)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+          "comment": "submodel declaration",
+          "begin": "^(\\s*)(submodel)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
           "beginCaptures": {
             "2": {
               "name": "keyword.control.oneil"
@@ -82,7 +82,7 @@
           "patterns": [
             {
               "name": "keyword.control.oneil",
-              "match": "\\b(as|with)\\b"
+              "match": "\\bas\\b"
             },
             {
               "begin": "\\[",
@@ -97,8 +97,8 @@
           ]
         },
         {
-          "comment": "ref declaration",
-          "begin": "^(\\s*)(ref)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+          "comment": "reference declaration",
+          "begin": "^(\\s*)(reference)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
           "beginCaptures": {
             "2": {
               "name": "keyword.control.oneil"
@@ -109,6 +109,42 @@
             {
               "name": "keyword.control.oneil",
               "match": "\\bas\\b"
+            }
+          ]
+        },
+        {
+          "comment": "design declaration",
+          "begin": "^(\\s*)(design)(\\s+)",
+          "beginCaptures": {
+            "2": {
+              "name": "keyword.control.oneil"
+            }
+          },
+          "end": "(?=#)|$"
+        },
+        {
+          "comment": "apply declaration",
+          "begin": "^(\\s*)(apply)(\\s+)",
+          "beginCaptures": {
+            "2": {
+              "name": "keyword.control.oneil"
+            }
+          },
+          "end": "(?=#)|$",
+          "patterns": [
+            {
+              "name": "keyword.control.oneil",
+              "match": "\\bto\\b"
+            },
+            {
+              "begin": "\\[",
+              "end": "\\]",
+              "patterns": [
+                {
+                  "name": "keyword.control.oneil",
+                  "match": "\\bto\\b"
+                }
+              ]
             }
           ]
         },

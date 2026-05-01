@@ -47,7 +47,7 @@
           "oneil"
         ],
         "extensions": [
-          ".on"
+          ".on",".one"
         ],
         "configuration": "./language-configuration.json",
         "icon": {
