@@ -51,6 +51,11 @@ impl Test {
         &self.expr
     }
 
+    /// Returns a mutable reference to the test expression.
+    pub const fn expr_mut(&mut self) -> &mut Expr {
+        &mut self.expr
+    }
+
     /// Returns the dependencies of this test.
     #[must_use]
     pub const fn dependencies(&self) -> &Dependencies {

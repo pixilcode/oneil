@@ -75,6 +75,17 @@ impl<T, E> LoadResult<T, E> {
         }
     }
 
+    /// Returns a mutable reference to the value if present: `Some` for
+    /// [`Success`](LoadResult::Success) or [`Partial`](LoadResult::Partial),
+    /// `None` for [`Failure`](LoadResult::Failure).
+    #[must_use]
+    pub const fn value_mut(&mut self) -> Option<&mut T> {
+        match self {
+            Self::Success(v) | Self::Partial(v, _) => Some(v),
+            Self::Failure => None,
+        }
+    }
+
     /// Returns the error if present: `Some` for [`Partial`](LoadResult::Partial),
     /// `None` for [`Success`](LoadResult::Success) or [`Failure`](LoadResult::Failure).
     #[must_use]
