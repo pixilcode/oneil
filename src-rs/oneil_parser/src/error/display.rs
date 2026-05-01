@@ -3,7 +3,7 @@ use oneil_ast::{BinaryOp, ComparisonOp, UnaryOp, UnitOp};
 use crate::{
     error::reason::{
         DeclKind, ExpectKind, ExprKind, ImportKind, IncompleteKind, ParameterKind,
-        ParserErrorReason, SectionKind, TestKind, UnitKind, UseKind,
+        ParserErrorReason, SectionKind, SubmodelKind, TestKind, UnitKind,
     },
     token::error::{IncompleteKind as TokenIncompleteKind, TokenErrorKind},
 };
@@ -50,9 +50,28 @@ impl fmt::Display for DeclKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Import(import_kind) => import_kind.fmt(f),
-            Self::Use(use_kind) => use_kind.fmt(f),
+            Self::Submodel(submodel_kind) => submodel_kind.fmt(f),
             Self::ModelMissingSubcomponent => write!(f, "expected submodel name after `.`"),
             Self::AsMissingAlias => write!(f, "expected model alias after `as`"),
+            Self::DesignMissingTarget => write!(f, "expected model name after `design`"),
+            Self::ApplyMissingFile => write!(f, "expected design file name after `apply`"),
+            Self::ApplyMissingTarget => write!(f, "expected `to <target>` after `apply <file>`"),
+            Self::DesignHeaderWrongFile => write!(
+                f,
+                "`design` declaration is only allowed in `.one` design bundle files"
+            ),
+            Self::DesignHeaderDuplicate => write!(
+                f,
+                "only one `design` declaration is allowed per design bundle"
+            ),
+            Self::DesignHeaderNotFirst => write!(
+                f,
+                "in a `.one` design bundle, `design <model>` must be the first declaration after the optional note"
+            ),
+            Self::DesignHeaderMissing => write!(
+                f,
+                "missing `design <model>` declaration; `.one` design bundle must declare a target model"
+            ),
         }
     }
 }
@@ -66,10 +85,12 @@ impl fmt::Display for ImportKind {
     }
 }
 
-impl fmt::Display for UseKind {
+impl fmt::Display for SubmodelKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingModelInfo => write!(f, "expected model after `use`"),
+            Self::MissingModelInfo { after } => {
+                write!(f, "expected submodel name after `{}`", after.as_str())
+            }
             Self::MissingEndOfLine => write!(f, "unexpected character"),
         }
     }
@@ -137,6 +158,9 @@ impl fmt::Display for ParameterKind {
             Self::MissingEqualsSign => write!(f, "expected `=`"),
             Self::MissingValue => write!(f, "expected parameter value after `=`"),
             Self::MissingEndOfLine => write!(f, "unexpected character"),
+            Self::MissingInstancePathSegment => {
+                write!(f, "expected model identifier after `.`")
+            }
             Self::MissingUnit => write!(f, "expected unit after `:`"),
             Self::LimitMissingMin => write!(f, "expected limit minimum value"),
             Self::LimitMissingComma => write!(f, "expected `,`"),

@@ -78,7 +78,7 @@ fn parameter_decl(input: InputSpan<'_>) -> Result<'_, ParameterNode, ParserError
         ))
         .parse(rest)?;
 
-    let (rest, value_node) = parameter_value
+    let (rest, value_node) = parse_parameter_value
         .or_fail_with(ParserError::parameter_missing_value(
             equals_token.lexeme_span,
         ))
@@ -121,7 +121,7 @@ fn parameter_decl(input: InputSpan<'_>) -> Result<'_, ParameterNode, ParserError
 }
 
 /// Parse a performance indicator (`$`).
-fn performance_marker(input: InputSpan<'_>) -> Result<'_, PerformanceMarkerNode, ParserError> {
+pub fn performance_marker(input: InputSpan<'_>) -> Result<'_, PerformanceMarkerNode, ParserError> {
     dollar
         .convert_errors()
         .map(|token| token.into_node_with_value(PerformanceMarker::new()))
@@ -129,7 +129,7 @@ fn performance_marker(input: InputSpan<'_>) -> Result<'_, PerformanceMarkerNode,
 }
 
 /// Parse a trace level indicator (`*` or `**`).
-fn trace_level(input: InputSpan<'_>) -> Result<'_, TraceLevelNode, ParserError> {
+pub fn trace_level(input: InputSpan<'_>) -> Result<'_, TraceLevelNode, ParserError> {
     let single_star = star.map(|token| token.into_node_with_value(TraceLevel::Trace));
     let double_star = star_star.map(|token| token.into_node_with_value(TraceLevel::Debug));
 
@@ -203,8 +203,8 @@ fn discrete_limits(input: InputSpan<'_>) -> Result<'_, LimitsNode, ParserError> 
     Ok((rest, node))
 }
 
-/// Parse a parameter value (either simple or piecewise).
-fn parameter_value(input: InputSpan<'_>) -> Result<'_, ParameterValueNode, ParserError> {
+/// Parses the right-hand side of `= …` for a parameter or design shorthand line (simple or piecewise).
+pub fn parse_parameter_value(input: InputSpan<'_>) -> Result<'_, ParameterValueNode, ParserError> {
     simple_value.or(piecewise_value).parse(input)
 }
 
