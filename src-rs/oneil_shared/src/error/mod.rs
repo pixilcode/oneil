@@ -267,6 +267,29 @@ impl OneilError {
         self.context_with_source.as_slice()
     }
 
+    /// Creates an `OneilError` from explicit parts.
+    ///
+    /// Prefer `from_error` / `from_error_with_source` when possible; use this
+    /// constructor only when the primary path and location need to differ from
+    /// the host model (e.g. a design-file cycle attribution).
+    #[must_use]
+    pub const fn from_parts(
+        message: String,
+        path: PathBuf,
+        location: Option<ErrorLocation>,
+        context: Vec<Context>,
+        context_with_source: Vec<(Context, ErrorLocation)>,
+    ) -> Self {
+        Self {
+            path,
+            message,
+            location,
+            context,
+            context_with_source,
+            is_internal_error: false,
+        }
+    }
+
     /// Returns whether the error is an internal error.
     ///
     /// Internal errors are errors that are not important for the user to see,

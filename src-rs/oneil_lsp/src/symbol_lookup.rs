@@ -23,11 +23,13 @@ pub enum SymbolAtPosition {
     ParameterDefinition { name: ParameterName, span: Span },
     /// A parameter reference (cursor is on a parameter used in an expression)
     ParameterReference { name: ParameterName, span: Span },
-    /// An external parameter reference (e.g., `x.model_name`)
+    /// An external parameter reference (e.g., `parameter.reference_model`)
     ///
-    /// This occurs when the cursor is on the parameter name part (e.g., `x`)
+    /// This occurs when the cursor is on the parameter name part.
+    /// The model path is resolved lazily from the live instance graph
+    /// (via `reference_name`) rather than stored at resolve time.
     ExternalParameterReference {
-        model_path: ModelPath,
+        reference_name: ReferenceName,
         parameter_name: ParameterName,
         span: Span,
     },
@@ -81,7 +83,7 @@ impl SymbolAtPosition {
 
 /// Finds the symbol at a given byte offset in a model
 pub fn find_symbol_at_offset(
-    model: oneil_runtime::output::reference::ModelIrReference<'_>,
+    model: oneil_runtime::output::reference::ModelTemplateReference<'_>,
     offset: usize,
 ) -> Option<SymbolAtPosition> {
     // Check if cursor is on a parameter definition or in the parameter expressions
@@ -105,13 +107,15 @@ pub fn find_symbol_at_offset(
         }
     }
 
-    // Check if cursor is on a submodel import name
-    for (submodel_name, submodel_import) in model.submodel_models() {
+    // Check if cursor is on a submodel import name. The submodel map is keyed
+    // by alias (= reference name); the underlying source-level model name
+    // surfaced to the LSP comes from the `SubmodelImport.name()` field.
+    for (_alias, submodel_import) in model.submodel_models() {
         if span_contains_offset(*submodel_import.name_span(), offset) {
-            let submodel_path = submodel_import.reference_import().path().clone();
+            let submodel_path = submodel_import.path().clone();
 
             return Some(SymbolAtPosition::ModelImportDefinition {
-                name: ModelImportName::Submodel(submodel_name.clone()),
+                name: ModelImportName::Submodel(submodel_import.name().clone()),
                 path: submodel_path,
                 span: *submodel_import.name_span(),
             });
@@ -243,13 +247,11 @@ fn find_symbol_in_variable(
             }
         }),
         ir::Variable::External {
-            model_path,
             reference_name,
             reference_span,
             parameter_name,
             parameter_span,
         } => find_symbol_in_external_variable(
-            model_path,
             reference_name,
             *reference_span,
             parameter_name,
@@ -266,7 +268,6 @@ fn find_symbol_in_variable(
 }
 
 fn find_symbol_in_external_variable(
-    model_path: &ModelPath,
     reference_name: &ReferenceName,
     reference_span: Span,
     parameter_name: &ParameterName,
@@ -280,7 +281,7 @@ fn find_symbol_in_external_variable(
         })
     } else if span_contains_offset(parameter_span, offset) {
         Some(SymbolAtPosition::ExternalParameterReference {
-            model_path: model_path.clone(),
+            reference_name: reference_name.clone(),
             parameter_name: parameter_name.clone(),
             span: parameter_span,
         })

@@ -4,11 +4,11 @@ use anstream::println;
 use indexmap::IndexMap;
 use oneil_runtime::output::{
     ir,
-    reference::{ModelIrReference, ReferenceImportReference, SubmodelImportReference},
+    reference::{ModelTemplateReference, ReferenceImportReference, SubmodelImportReference},
 };
 use oneil_shared::{
     paths::PythonPath,
-    symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex},
+    symbols::{ParameterName, ReferenceName, TestIndex},
 };
 
 use crate::stylesheet::debug as dbg_style;
@@ -89,7 +89,7 @@ pub struct IrPrintConfig {
 /// Collects all errors from the model IR by traversing the hierarchy. If there are errors, they
 /// are printed. If there are no errors or `display_partial` is true, the IR is displayed.
 /// When displaying, only the top-level model IR is shown unless `recursive` is true.
-pub fn print(ir_result: ModelIrReference<'_>, ir_print_config: &IrPrintConfig) {
+pub fn print(ir_result: ModelTemplateReference<'_>, ir_print_config: &IrPrintConfig) {
     println!("{}", dbg_style::ROOT_HEADER.style("ModelCollection"));
     println!(
         "{} {}",
@@ -104,7 +104,7 @@ pub fn print(ir_result: ModelIrReference<'_>, ir_print_config: &IrPrintConfig) {
 ///
 /// When `recursive` is true and `model_ref` is `Some`, also prints nested submodels and references.
 fn print_model(
-    model_ref: ModelIrReference<'_>,
+    model_ref: ModelTemplateReference<'_>,
     indent: usize,
     prefix: &str,
     config: &IrPrintConfig,
@@ -252,12 +252,15 @@ fn print_python_imports(imports: &IndexMap<PythonPath, ir::PythonImport>, indent
     }
 }
 
-/// Prints submodels, showing the reference path each submodel refers to.
+/// Prints submodels, showing the source-level model name behind each alias.
+///
+/// The map is keyed by alias (= reference name); the source-level model name
+/// (e.g., the `foo` in `submodel foo as bar`) is taken from `SubmodelImport.name`.
 fn print_submodels(
-    submodels: &IndexMap<&SubmodelName, SubmodelImportReference<'_>>,
+    submodels: &IndexMap<&ReferenceName, SubmodelImportReference<'_>>,
     indent: usize,
 ) {
-    for (i, (identifier, submodel)) in submodels.iter().enumerate() {
+    for (i, (alias, submodel)) in submodels.iter().enumerate() {
         let is_last = i == submodels.len() - 1;
         let prefix = if is_last { "└──" } else { "├──" };
         println!(
@@ -265,8 +268,8 @@ fn print_submodels(
             "    ".repeat(indent),
             dbg_style::TREE.style(prefix),
             dbg_style::LABEL.style("Submodel:"),
-            dbg_style::IDENTIFIER.style(identifier.as_str()),
-            dbg_style::IDENTIFIER.style(submodel.reference_name().as_str())
+            dbg_style::IDENTIFIER.style(alias.as_str()),
+            dbg_style::IDENTIFIER.style(submodel.name().as_str())
         );
     }
 }
@@ -670,15 +673,15 @@ fn print_variable(var: &ir::Variable, indent: usize) {
             );
         }
         ir::Variable::External {
-            model_path: model,
+            reference_name,
             parameter_name,
             ..
         } => {
             println!(
-                "{}    ├── External Variable: \"{}\" from \"{}\"",
+                "{}    ├── External Variable: \"{}.{}\"",
                 "    ".repeat(indent),
                 parameter_name.as_str(),
-                model.as_path().display()
+                reference_name.as_str(),
             );
         }
     }

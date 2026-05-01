@@ -314,25 +314,18 @@ fn get_parameter_from_model<'runtime>(
             return model_ref.parameters().get(parameter.as_str()).map(|p| &**p);
         };
 
-        // check if the submodel is a reference or a submodel
-        // NOTE: although all submodels are also references, we need to check both since
-        //       the submodel name might be different from the reference name
+        // `ModelReference::references` is the unified eval-time child map
+        // populated by `seed_subtree`: it merges every named child of the
+        // host (cross-file `reference` imports, owned `submodel`s, and
+        // extraction-list aliases) keyed by their reference name. A single
+        // lookup against this map therefore navigates any of the three
+        // import flavors without us having to branch on what kind of
+        // child it is.
         let references = model_ref.references();
-        let submodels = model_ref.submodels();
         let model = references
             .iter()
             .find(|(name, _)| name.as_str() == submodel.as_str())
-            .map(|(_, m)| *m)
-            .or_else(|| {
-                let (_, ref_name) = submodels
-                    .iter()
-                    .find(|(name, _)| name.as_str() == submodel.as_str())?;
-
-                references
-                    .iter()
-                    .find(|(name, _)| *name == ref_name)
-                    .map(|(_, m)| *m)
-            })?;
+            .map(|(_, m)| *m)?;
 
         recurse(model, parameter, param_vec)
     }
@@ -414,7 +407,9 @@ fn get_model_parameters_by_filter(
         }
 
         if recursive {
-            // NOTE: all submodels are also references, so we can simply use the references map
+            // `ModelReference::references` is the unified eval-time child
+            // map (cross-file references + owned submodels + extraction
+            // aliases), so iterating it walks every named child once.
             let references = model_ref.references();
             references.values().fold(parameters, |parameters, model| {
                 recurse(*model, print_level, recursive, parameters)

@@ -12,8 +12,11 @@ pub use context::{ExternalEvaluationContext, IrLoadError};
 pub use error::{EvalError, EvalErrors};
 
 pub use eval_expr::eval_expr_in_model;
-pub use eval_model::eval_model;
-pub use eval_unit::eval_unit_external as eval_unit;
+pub use eval_model::eval_model_from_graph;
+
+// Re-export the instance graph from oneil_frontend so downstream crates don't need
+// to depend on oneil_frontend directly.
+pub use oneil_frontend::{ApplyDesign, InstanceGraph, InstancedModel};
 
 #[cfg(test)]
 mod test_context;

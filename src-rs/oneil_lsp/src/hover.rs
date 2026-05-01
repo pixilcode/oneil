@@ -31,7 +31,7 @@ pub fn hover_markdown(
     match symbol {
         SymbolAtPosition::ParameterDefinition { name, .. }
         | SymbolAtPosition::ParameterReference { name, .. } => {
-            let (model, _) = runtime.load_ir(current_model_path);
+            let (model, _) = runtime.load_and_lower(current_model_path);
             let model = model?;
             let param = model.get_parameter(name)?;
             Some(format_parameter_hover(
@@ -41,25 +41,49 @@ pub fn hover_markdown(
             ))
         }
         SymbolAtPosition::ExternalParameterReference {
-            model_path,
+            reference_name,
             parameter_name,
             ..
         } => {
-            let (model, _) = runtime.load_ir(model_path);
+            // Resolve the reference name to a model path via the current model's imports.
+            let (current_model, _) = runtime.load_and_lower(current_model_path);
+            let current_model = current_model?;
+            let external_model_path = current_model
+                .reference_imports()
+                .get(reference_name)
+                .map(|r| r.path.clone())
+                .or_else(|| {
+                    current_model
+                        .submodel_imports()
+                        .get(reference_name)
+                        .map(|s| s.instance.path().clone())
+                })?;
+            let (model, _) = runtime.load_and_lower(&external_model_path);
             let model = model?;
             let param = model.get_parameter(parameter_name)?;
-            Some(format_parameter_hover(model_path, param, workspace_roots))
+            Some(format_parameter_hover(
+                &external_model_path,
+                param,
+                workspace_roots,
+            ))
         }
         SymbolAtPosition::ModelImportDefinition { path, .. } => {
             format_model_hover_from_path(runtime, path, workspace_roots)
         }
         SymbolAtPosition::ModelImportReference { reference_name, .. } => {
             let imported_path = {
-                let (model, _) = runtime.load_ir(current_model_path);
+                let (model, _) = runtime.load_and_lower(current_model_path);
                 let model = model?;
-                let references = model.reference_imports();
-                let reference = references.get(reference_name)?;
-                reference.path().clone()
+                model
+                    .reference_imports()
+                    .get(reference_name)
+                    .map(|r| r.path.clone())
+                    .or_else(|| {
+                        model
+                            .submodel_imports()
+                            .get(reference_name)
+                            .map(|s| s.instance.path().clone())
+                    })?
             };
 
             format_model_hover_from_path(runtime, &imported_path, workspace_roots)
@@ -115,13 +139,13 @@ fn format_model_hover_from_path(
     path: &ModelPath,
     workspace_roots: &[PathBuf],
 ) -> Option<HoverContents> {
-    let (model, _) = runtime.load_ir(path);
+    let (model, _) = runtime.load_and_lower(path);
     let model = model?;
     Some(format_model_hover(&model, workspace_roots))
 }
 
 fn format_model_hover(
-    model: &oneil_runtime::output::reference::ModelIrReference<'_>,
+    model: &oneil_runtime::output::reference::ModelTemplateReference<'_>,
     workspace_roots: &[PathBuf],
 ) -> HoverContents {
     let path = path_as_marked_string(model.path().as_path(), workspace_roots);

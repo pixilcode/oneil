@@ -2,11 +2,16 @@
 //!
 //! Provides [`ModelReference`] for navigating evaluated models,
 //! [`EvalErrorReference`] for inspecting evaluation failures,
-//! [`ModelIrReference`] for navigating resolved IR models, and
+//! [`ModelTemplateReference`] for navigating lowered template models, and
 //! [`ResolutionErrorReference`] for inspecting resolution failures.
 
 use crate::output;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
+use oneil_frontend::{
+    CompilationUnit, InstancedModel,
+    instance::graph::UnitGraphCache,
+    instance::imports::{ReferenceImport, SubmodelImport},
+};
 use oneil_ir as ir;
 use oneil_shared::{
     paths::{ModelPath, PythonPath},
@@ -14,7 +19,7 @@ use oneil_shared::{
     symbols::{ParameterName, ReferenceName, SubmodelName, TestIndex},
 };
 
-use crate::cache::{EvalCache, IrCache};
+use crate::cache::EvalCache;
 
 /// A reference to an evaluated model within a model hierarchy.
 ///
@@ -39,17 +44,14 @@ impl<'runtime> ModelReference<'runtime> {
         &self.model.path
     }
 
-    /// Returns a map of submodel names to their model references or evaluation errors.
+    /// Returns the set of aliases declared as submodels on this model.
     ///
-    /// # Panics
-    ///
-    /// Panics if any submodel has not been visited and
-    /// added to the model collection. This should never be
-    /// the case as long as creating the `EvalResult`
-    /// resolves successfully.
+    /// Each alias is also a key in [`Self::references`]. The set is provided
+    /// so consumers can preserve the submodel-vs-reference distinction
+    /// declared in source.
     #[must_use]
-    pub fn submodels(&self) -> IndexMap<&'runtime SubmodelName, &'runtime ReferenceName> {
-        self.model.submodels.iter().collect()
+    pub const fn submodels(&self) -> &'runtime IndexSet<ReferenceName> {
+        &self.model.submodels
     }
 
     /// Returns a map of reference names to their model references or evaluation errors.
@@ -65,10 +67,10 @@ impl<'runtime> ModelReference<'runtime> {
         self.model
             .references
             .iter()
-            .filter_map(|(reference_name, model_path)| {
+            .filter_map(|(reference_name, child_key)| {
                 let entry = self
                     .eval_cache
-                    .get_entry(model_path)
+                    .get_entry_instance(child_key)
                     .expect("reference should be in cache");
 
                 let model = entry.value()?;
@@ -116,27 +118,33 @@ impl<'runtime> ModelReference<'runtime> {
     }
 }
 
-/// A reference to a resolved IR model within a model hierarchy.
+/// A reference to a lowered template model within a model hierarchy.
 ///
-/// This stores a reference to an IR model, the path it was loaded from,
-/// and a reference to the IR cache.
+/// Wraps an [`InstancedModel`] template from the unit graph cache together with
+/// a handle to the cache so child references can be followed transitively.
 #[derive(Debug, Clone, Copy)]
-pub struct ModelIrReference<'runtime> {
-    model: &'runtime ir::Model,
-    ir_cache: &'runtime IrCache,
+pub struct ModelTemplateReference<'runtime> {
+    model: &'runtime InstancedModel,
+    unit_graph_cache: &'runtime UnitGraphCache,
 }
 
-impl<'runtime> ModelIrReference<'runtime> {
-    /// Creates a new `ModelIrReference` for the given model, IR cache, and path.
+impl<'runtime> ModelTemplateReference<'runtime> {
+    /// Creates a new `ModelTemplateReference` for the given model and unit graph cache.
     #[must_use]
-    pub const fn new(model: &'runtime ir::Model, ir_cache: &'runtime IrCache) -> Self {
-        Self { model, ir_cache }
+    pub const fn new(
+        model: &'runtime InstancedModel,
+        unit_graph_cache: &'runtime UnitGraphCache,
+    ) -> Self {
+        Self {
+            model,
+            unit_graph_cache,
+        }
     }
 
     /// Returns the path of this model.
     #[must_use]
     pub const fn path(&self) -> &'runtime ModelPath {
-        self.model.get_path()
+        self.model.path()
     }
 
     /// Returns the optional model-level documentation note.
@@ -145,37 +153,28 @@ impl<'runtime> ModelIrReference<'runtime> {
         self.model.note()
     }
 
-    /// Returns a map of submodel names to their `SubmodelImport`s.
+    /// Returns a map of submodel aliases (= reference names) to their
+    /// `SubmodelImport`s.
     ///
     /// If you need the model reference itself, use `submodel_models` instead.
     #[must_use]
-    pub fn submodel_imports(
-        &self,
-    ) -> IndexMap<&'runtime SubmodelName, &'runtime ir::SubmodelImport> {
-        self.model.get_submodels().iter().collect()
+    pub fn submodel_imports(&self) -> IndexMap<&'runtime ReferenceName, &'runtime SubmodelImport> {
+        self.model.submodels().iter().collect()
     }
 
-    /// Returns a map of submodel names to their IR model references.
-    ///
-    /// # Panics
-    ///
-    /// Panics if any submodel's reference has not been visited and
-    /// added to the IR cache.
+    /// Returns a map of submodel aliases (= reference names) to their
+    /// template model references.
     #[must_use]
     pub fn submodel_models(
         &self,
-    ) -> IndexMap<&'runtime SubmodelName, SubmodelImportReference<'runtime>> {
+    ) -> IndexMap<&'runtime ReferenceName, SubmodelImportReference<'runtime>> {
         self.model
-            .get_submodels()
+            .submodels()
             .iter()
-            .map(|(name, submodel_import)| {
+            .map(|(alias, submodel_import)| {
                 (
-                    name,
-                    SubmodelImportReference::new(
-                        submodel_import,
-                        self.ir_cache,
-                        self.model.get_references(),
-                    ),
+                    alias,
+                    SubmodelImportReference::new(alias, submodel_import, self.unit_graph_cache),
                 )
             })
             .collect()
@@ -187,27 +186,22 @@ impl<'runtime> ModelIrReference<'runtime> {
     #[must_use]
     pub fn reference_imports(
         &self,
-    ) -> IndexMap<&'runtime ReferenceName, &'runtime ir::ReferenceImport> {
-        self.model.get_references().iter().collect()
+    ) -> IndexMap<&'runtime ReferenceName, &'runtime ReferenceImport> {
+        self.model.references().iter().collect()
     }
 
-    /// Returns a map of reference names to their IR model references
-    ///
-    /// # Panics
-    ///
-    /// Panics if any reference has not been visited and
-    /// added to the IR cache.
+    /// Returns a map of reference names to their template model references.
     #[must_use]
     pub fn reference_models(
         &self,
     ) -> IndexMap<&'runtime ReferenceName, ReferenceImportReference<'runtime>> {
         self.model
-            .get_references()
+            .references()
             .iter()
             .map(|(name, reference_import)| {
                 (
                     name,
-                    ReferenceImportReference::new(reference_import, self.ir_cache),
+                    ReferenceImportReference::new(name, reference_import, self.unit_graph_cache),
                 )
             })
             .collect()
@@ -216,139 +210,140 @@ impl<'runtime> ModelIrReference<'runtime> {
     /// Returns a map of parameter names to their parameter data.
     #[must_use]
     pub fn parameters(&self) -> IndexMap<&'runtime ParameterName, &'runtime ir::Parameter> {
-        self.model.get_parameters().iter().collect()
+        self.model.parameters().iter().collect()
     }
 
     /// Returns a parameter by its name.
     #[must_use]
     pub fn get_parameter(&self, name: &ParameterName) -> Option<&'runtime ir::Parameter> {
-        self.model.get_parameters().get(name)
+        self.model.parameters().get(name)
     }
 
     /// Returns the list of tests for this model.
     #[must_use]
     pub const fn tests(&self) -> &'runtime IndexMap<TestIndex, ir::Test> {
-        self.model.get_tests()
+        self.model.tests()
     }
 
     /// Returns the Python imports for this model.
     #[must_use]
     pub const fn python_imports(&self) -> &'runtime IndexMap<PythonPath, ir::PythonImport> {
-        self.model.get_python_imports()
+        self.model.python_imports()
     }
 }
 
 /// A reference to a submodel import within a model.
 #[derive(Debug, Clone, Copy)]
 pub struct SubmodelImportReference<'runtime> {
-    submodel_import: &'runtime ir::SubmodelImport,
-    ir_cache: &'runtime IrCache,
-    references: &'runtime IndexMap<ReferenceName, ir::ReferenceImport>,
+    alias: &'runtime ReferenceName,
+    submodel_import: &'runtime SubmodelImport,
+    unit_graph_cache: &'runtime UnitGraphCache,
 }
 
 impl<'runtime> SubmodelImportReference<'runtime> {
-    /// Creates a new `SubmodelImportReference` for the given submodel import and IR cache.
+    /// Creates a new `SubmodelImportReference` for the given submodel import and unit graph cache.
     #[must_use]
     pub const fn new(
-        submodel_import: &'runtime ir::SubmodelImport,
-        ir_cache: &'runtime IrCache,
-        references: &'runtime IndexMap<ReferenceName, ir::ReferenceImport>,
+        alias: &'runtime ReferenceName,
+        submodel_import: &'runtime SubmodelImport,
+        unit_graph_cache: &'runtime UnitGraphCache,
     ) -> Self {
         Self {
+            alias,
             submodel_import,
-            ir_cache,
-            references,
+            unit_graph_cache,
         }
     }
 
-    /// Returns the name of the submodel.
+    /// Returns the source-level name of the submodel
+    /// (`foo` in `submodel foo as bar`).
     #[must_use]
     pub const fn name(&self) -> &'runtime SubmodelName {
-        self.submodel_import.name()
+        &self.submodel_import.name
     }
 
-    /// Returns the span of the name of the submodel.
+    /// Returns the span of the source-level name of the submodel.
     #[must_use]
     pub const fn name_span(&self) -> &'runtime Span {
-        self.submodel_import.name_span()
+        &self.submodel_import.name_span
     }
 
-    /// Returns the reference name of the submodel.
+    /// Returns the alias under which the submodel is bound in the parent
+    /// (`bar` in `submodel foo as bar`).
     #[must_use]
     pub const fn reference_name(&self) -> &'runtime ReferenceName {
-        self.submodel_import.reference_name()
+        self.alias
     }
 
-    /// Returns the reference import of the submodel.
-    #[expect(
-        clippy::missing_panics_doc,
-        reason = "the panic only happens if an internal invariant is violated"
-    )]
+    /// Returns the file path of the submodel.
     #[must_use]
-    pub fn reference_import(&self) -> ReferenceImportReference<'runtime> {
-        let reference_name = self.submodel_import.reference_name();
-        let reference_import = self
-            .references
-            .get(reference_name)
-            .expect("reference should be found");
+    pub fn path(&self) -> &'runtime ModelPath {
+        self.submodel_import.instance.path()
+    }
 
-        ReferenceImportReference::new(reference_import, self.ir_cache)
+    /// Returns a [`ModelTemplateReference`] navigating the submodel's
+    /// embedded subtree.
+    #[must_use]
+    pub fn model(&self) -> ModelTemplateReference<'runtime> {
+        ModelTemplateReference::new(
+            self.submodel_import.instance.as_ref(),
+            self.unit_graph_cache,
+        )
     }
 }
 
 /// A reference to a reference import within a model.
 #[derive(Debug, Clone, Copy)]
 pub struct ReferenceImportReference<'runtime> {
-    reference_import: &'runtime ir::ReferenceImport,
-    ir_cache: &'runtime IrCache,
+    name: &'runtime ReferenceName,
+    reference_import: &'runtime ReferenceImport,
+    unit_graph_cache: &'runtime UnitGraphCache,
 }
 
 impl<'runtime> ReferenceImportReference<'runtime> {
-    /// Creates a new `ReferenceImportReference` for the given reference import and IR cache.
+    /// Creates a new `ReferenceImportReference` for the given reference import and unit graph cache.
     #[must_use]
     pub const fn new(
-        reference_import: &'runtime ir::ReferenceImport,
-        ir_cache: &'runtime IrCache,
+        name: &'runtime ReferenceName,
+        reference_import: &'runtime ReferenceImport,
+        unit_graph_cache: &'runtime UnitGraphCache,
     ) -> Self {
         Self {
+            name,
             reference_import,
-            ir_cache,
+            unit_graph_cache,
         }
     }
 
-    /// Returns the name of the reference.
+    /// Returns the alias under which the referenced model is bound.
     #[must_use]
     pub const fn name(&self) -> &'runtime ReferenceName {
-        self.reference_import.name()
+        self.name
     }
 
     /// Returns the span of the name of the reference.
     #[must_use]
     pub const fn name_span(&self) -> &'runtime Span {
-        self.reference_import.name_span()
+        &self.reference_import.name_span
     }
 
     /// Returns the path of the reference.
     #[must_use]
     pub const fn path(&self) -> &'runtime ModelPath {
-        self.reference_import.path()
+        &self.reference_import.path
     }
 
     /// Returns the model that this reference imports. If the referenced model
-    /// failed to resolve, returns `None`.
-    #[expect(
-        clippy::missing_panics_doc,
-        reason = "the panic only happens if an internal invariant is violated"
-    )]
+    /// failed to resolve or has not been loaded, returns `None`.
     #[must_use]
-    pub fn model(&self) -> Option<ModelIrReference<'runtime>> {
-        let entry = self
-            .ir_cache
-            .get_entry(self.reference_import.path())
-            .expect("reference should be in cache");
-
-        let ir = entry.value()?;
-
-        Some(ModelIrReference::new(ir, self.ir_cache))
+    pub fn model(&self) -> Option<ModelTemplateReference<'runtime>> {
+        let path = &self.reference_import.path;
+        let graph = self
+            .unit_graph_cache
+            .get(&CompilationUnit::Model(path.clone()))?;
+        Some(ModelTemplateReference::new(
+            graph.root.as_ref(),
+            self.unit_graph_cache,
+        ))
     }
 }

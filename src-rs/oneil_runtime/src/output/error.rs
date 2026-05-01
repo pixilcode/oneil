@@ -71,11 +71,13 @@ impl RuntimeErrors {
                     python_import_errors,
                     parameter_errors,
                     test_errors,
+                    design_resolution_errors,
                 } => model_import_errors
                     .values()
                     .chain(python_import_errors.values())
                     .chain(parameter_errors.values().flatten())
                     .chain(test_errors.values().flatten())
+                    .chain(design_resolution_errors.iter())
                     .collect(),
             })
             .chain(self.python_import_errors.values())
@@ -123,6 +125,8 @@ pub enum ModelError {
         parameter_errors: Box<IndexMap<ParameterName, Vec<OneilError>>>,
         /// Errors from model tests.
         test_errors: Box<IndexMap<TestIndex, Vec<OneilError>>>,
+        /// Design / `apply` resolution errors not tied to a single parameter.
+        design_resolution_errors: Box<Vec<OneilError>>,
     },
 }
 
@@ -137,11 +141,13 @@ impl ModelError {
                 python_import_errors,
                 parameter_errors,
                 test_errors,
+                design_resolution_errors,
             } => model_import_errors
                 .values()
                 .chain(python_import_errors.values())
                 .chain(parameter_errors.values().flatten())
                 .chain(test_errors.values().flatten())
+                .chain(design_resolution_errors.iter())
                 .collect(),
         }
     }

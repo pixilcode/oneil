@@ -6,9 +6,9 @@
 //! to it when creating an [`EvalContext`].
 
 use oneil_builtins as builtins;
-use oneil_ir as ir;
 use oneil_output::{self as output, Unit, Value};
 use oneil_shared::{
+    EvalInstanceKey,
     load_result::LoadResult,
     paths::ModelPath,
     span::Span,
@@ -16,7 +16,7 @@ use oneil_shared::{
 };
 
 use crate::{
-    context::{ExternalEvaluationContext, IrLoadError},
+    context::ExternalEvaluationContext,
     error::{EvalError, EvalErrors},
 };
 
@@ -52,10 +52,6 @@ impl Default for TestExternalContext {
 }
 
 impl ExternalEvaluationContext for TestExternalContext {
-    fn lookup_ir(&self, _path: &ModelPath) -> Option<LoadResult<&ir::Model, IrLoadError>> {
-        panic!("no tests currently use this method")
-    }
-
     fn lookup_builtin_variable(&self, name: &BuiltinValueName) -> Option<&Value> {
         self.builtin_ref.get_value(name)
     }
@@ -91,10 +87,9 @@ impl ExternalEvaluationContext for TestExternalContext {
         self.builtin_ref.get_prefix(name)
     }
 
-    #[expect(unreachable_code, reason = "this is unused in tests")]
     fn get_preloaded_models(
         &self,
-    ) -> impl Iterator<Item = (ModelPath, &LoadResult<output::Model, EvalErrors>)> {
-        (unimplemented!("this is unused in tests") as Vec<_>).into_iter()
+    ) -> impl Iterator<Item = (EvalInstanceKey, &LoadResult<output::Model, EvalErrors>)> {
+        std::iter::empty()
     }
 }

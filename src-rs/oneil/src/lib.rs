@@ -17,11 +17,11 @@ mod rust_lib {
     pub use oneil_builtins as builtins;
     pub use oneil_cli as cli;
     pub use oneil_eval as eval;
+    pub use oneil_frontend as resolver;
     pub use oneil_ir as ir;
     pub use oneil_lsp as lsp;
     pub use oneil_output as output;
     pub use oneil_parser as parser;
-    pub use oneil_resolver as resolver;
     pub use oneil_runtime as runtime;
     pub use oneil_shared as shared;
 

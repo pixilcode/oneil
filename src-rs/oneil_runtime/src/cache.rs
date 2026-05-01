@@ -5,10 +5,10 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use indexmap::IndexMap;
 use oneil_eval as eval;
 use oneil_parser::error::ParserError;
-use oneil_resolver as resolver;
 #[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
 use oneil_shared::{
+    EvalInstanceKey,
     load_result::LoadResult,
     paths::{ModelPath, SourcePath},
 };
@@ -28,9 +28,14 @@ pub fn source_hash(source: &str) -> u64 {
 /// Result of inserting a source into the cache.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InsertSourceResult {
-    /// The source was inserted as a new entry.
+    /// The path had no prior cache entry; the source was inserted fresh.
     InsertedNewSource,
-    /// A source with the same hash already exists in the cache.
+    /// The path was already cached and the content has changed; the old entry
+    /// was replaced. Derived caches (AST, unit graphs, eval) must be
+    /// invalidated.
+    UpdatedExistingSource,
+    /// A source with the same hash already exists in the cache; nothing was
+    /// changed.
     MatchingSourceExists,
 }
 
@@ -85,22 +90,29 @@ impl SourceCache {
         path: SourcePath,
         result: Result<String, SourceError>,
     ) -> InsertSourceResult {
+        let is_update = self.entries.contains_key(&path);
         match result {
             Ok(source) => {
-                // if the result is a source, compute the hash and check if it already exists
                 let hash = source_hash(source.as_str());
-
                 if self.contains_matching(&path, hash) {
                     InsertSourceResult::MatchingSourceExists
                 } else {
-                    let result = Ok(SourceCacheEntry { hash, source });
-                    self.entries.insert(path, result);
-                    InsertSourceResult::InsertedNewSource
+                    self.entries
+                        .insert(path, Ok(SourceCacheEntry { hash, source }));
+                    if is_update {
+                        InsertSourceResult::UpdatedExistingSource
+                    } else {
+                        InsertSourceResult::InsertedNewSource
+                    }
                 }
             }
             Err(e) => {
                 self.entries.insert(path, Err(e));
-                InsertSourceResult::InsertedNewSource
+                if is_update {
+                    InsertSourceResult::UpdatedExistingSource
+                } else {
+                    InsertSourceResult::InsertedNewSource
+                }
             }
         }
     }
@@ -123,11 +135,63 @@ impl SourceCache {
 /// Cache for parsed AST models keyed by path.
 pub type AstCache = ModelCache<output::ast::ModelNode, Vec<ParserError>>;
 
-/// Cache for resolved IR models keyed by path.
-pub type IrCache = ModelCache<output::ir::Model, resolver::ResolutionErrorCollection>;
+/// Cache for evaluated output models keyed by file path and import instance.
+#[derive(Debug, Default)]
+pub struct EvalCache {
+    entries: IndexMap<EvalInstanceKey, LoadResult<output::Model, eval::EvalErrors>>,
+}
 
-/// Cache for evaluated output models keyed by path.
-pub type EvalCache = ModelCache<output::Model, eval::EvalErrors>;
+impl EvalCache {
+    /// Creates an empty evaluation cache.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the cached entry for the root instance of `path`, if present.
+    #[must_use]
+    pub fn get_entry(
+        &self,
+        path: &ModelPath,
+    ) -> Option<&LoadResult<output::Model, eval::EvalErrors>> {
+        self.entries.get(&EvalInstanceKey::root(path.clone()))
+    }
+
+    /// Returns the cached entry for a specific evaluated instance.
+    #[must_use]
+    pub fn get_entry_instance(
+        &self,
+        key: &EvalInstanceKey,
+    ) -> Option<&LoadResult<output::Model, eval::EvalErrors>> {
+        self.entries.get(key)
+    }
+
+    /// Inserts a result for an evaluated instance, replacing any existing entry.
+    pub fn insert(
+        &mut self,
+        key: EvalInstanceKey,
+        result: LoadResult<output::Model, eval::EvalErrors>,
+    ) {
+        self.entries.insert(key, result);
+    }
+
+    /// Clears all cached evaluations.
+    ///
+    /// The eval cache cannot be selectively invalidated: when any source file
+    /// changes, models that transitively depend on it hold stale results. A full
+    /// clear is the only safe option; re-evaluation is always done fresh by
+    /// [`eval_model_with_designs`](oneil_eval::eval_model_with_designs) anyway.
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    /// Iterates all instance keys and their load results.
+    pub fn iter(
+        &self,
+    ) -> indexmap::map::Iter<'_, EvalInstanceKey, LoadResult<output::Model, eval::EvalErrors>> {
+        self.entries.iter()
+    }
+}
 
 /// Cache for Python import function maps keyed by path.
 ///
@@ -210,18 +274,6 @@ impl<T, E> ModelCache<T, E> {
         self.entries.get(path)
     }
 
-    /// Returns the value for `path`, if present.
-    #[must_use]
-    pub fn get_value(&self, path: &ModelPath) -> Option<&T> {
-        self.entries.get(path).and_then(LoadResult::value)
-    }
-
-    /// Returns the error for `path`, if present.
-    #[must_use]
-    pub fn get_error(&self, path: &ModelPath) -> Option<&E> {
-        self.entries.get(path).and_then(LoadResult::error)
-    }
-
     /// Inserts a [`LoadResult`] for `path`, replacing any existing entry.
     pub fn insert(&mut self, path: ModelPath, result: LoadResult<T, E>) {
         self.entries.insert(path, result);
@@ -230,28 +282,5 @@ impl<T, E> ModelCache<T, E> {
     /// Removes the cached entry for `path`, if present.
     pub fn remove(&mut self, path: &ModelPath) {
         self.entries.swap_remove(path);
-    }
-
-    /// Returns whether `path` has a cached entry.
-    #[must_use]
-    pub fn contains(&self, path: &ModelPath) -> bool {
-        self.entries.contains_key(path)
-    }
-
-    /// Returns the number of cached entries.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// Returns `true` if the cache is empty.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Returns an iterator over path–result pairs.
-    pub fn iter(&self) -> indexmap::map::Iter<'_, ModelPath, LoadResult<T, E>> {
-        self.entries.iter()
     }
 }
