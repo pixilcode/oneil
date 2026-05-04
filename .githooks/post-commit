@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Guard against re-entry: the `git commit --amend` below would retrigger this
+# hook, causing an infinite loop.
+if [[ "${GIT_HOOK_NO_RECURSE:-}" == "1" ]]; then
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "» Running clippy --fix..."
+
+# The index is clean post-commit (it matches HEAD), but the working tree may
+# still have unstaged edits, so --allow-dirty is required. --allow-staged is
+# not needed because nothing should be staged after a commit.
+if ! cargo clippy --fix --all-targets --all-features --allow-dirty; then
+    echo "  clippy --fix errored; skipping amend."
+    exit 0
+fi
+
+if [[ -z "$(git diff --name-only)" ]]; then
+    echo "  No fixes applied."
+    exit 0
+fi
+
+echo "» Fixes applied; verifying build..."
+
+if ! cargo build --all-features; then
+    echo "  Build failed after clippy --fix; reverting."
+    git checkout -- .
+    exit 0
+fi
+
+echo "» Build succeeded; amending commit with fixes..."
+
+git add -u
+GIT_HOOK_NO_RECURSE=1 git commit --amend --no-edit
+echo "  Done."
