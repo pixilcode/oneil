@@ -1,17 +1,221 @@
-//! The [`EvalError`] enum and its trait implementations.
+//! Errors for Oneil: value-level checked operations, evaluation-time diagnostics, and conversions
+//! between them.
 
 use std::{error::Error, fmt};
 
+use indexmap::{IndexMap, IndexSet};
 use oneil_shared::{
     EvalInstanceKey,
     error::{AsOneilDiagnostic, Context as ErrorContext, DiagnosticKind, ErrorLocation},
     span::Span,
-    symbols::{BuiltinFunctionName, ParameterName, PyFunctionName, ReferenceName},
+    symbols::{BuiltinFunctionName, ParameterName, PyFunctionName, ReferenceName, TestIndex},
 };
 
-use crate::{DisplayUnit, ExpectedType, Interval, NumberType, Value, ValueType};
+use crate::{DisplayUnit, Interval, NumberType, Value, ValueType};
 
-use super::expected_argument_count::ExpectedArgumentCount;
+// Expected arity for validating function calls.
+
+/// Represents the expected number of arguments for a function call.
+///
+/// This enum is used to specify argument count requirements when validating
+/// function calls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpectedArgumentCount {
+    /// Exactly the specified number of arguments is required.
+    Exact(usize),
+    /// At least the specified number of arguments is required.
+    AtLeast(usize),
+    /// At most the specified number of arguments is allowed.
+    AtMost(usize),
+    /// Between the minimum (inclusive) and maximum (inclusive) number of arguments is required.
+    Between(usize, usize),
+}
+
+impl fmt::Display for ExpectedArgumentCount {
+    /// Formats the expected argument count for diagnostics.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Exact(1) => write!(f, "1 argument"),
+            Self::Exact(count) => write!(f, "{count} arguments"),
+            Self::AtLeast(1) => write!(f, "at least 1 argument"),
+            Self::AtLeast(count) => write!(f, "at least {count} arguments"),
+            Self::AtMost(1) => write!(f, "at most 1 argument"),
+            Self::AtMost(count) => write!(f, "at most {count} arguments"),
+            Self::Between(min, max) => write!(f, "between {min} and {max} arguments"),
+        }
+    }
+}
+
+/// Represents the expected type for type checking operations in value-level errors.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExpectedType {
+    /// A boolean value.
+    Boolean,
+    /// A string value.
+    String,
+    /// A unitless number (scalar or interval without units).
+    Number {
+        /// The type of the expected number, if specified.
+        number_type: Option<NumberType>,
+    },
+    /// A number with a unit (measured number).
+    MeasuredNumber {
+        /// The type of the expected number, if specified.
+        number_type: Option<NumberType>,
+        /// The unit of the expected measured number, if specified.
+        unit: Option<DisplayUnit>,
+    },
+    /// Either a unitless number or a number with a unit.
+    NumberOrMeasuredNumber {
+        /// The type of the expected number, if specified.
+        number_type: Option<NumberType>,
+    },
+}
+
+impl ExpectedType {
+    /// Returns an expected type with the same kind as `value_type` (boolean, string, unitless
+    /// number, or measured number including display unit), while treating scalar vs interval as
+    /// unspecified (`number_type: None` on number variants).
+    ///
+    /// ```
+    /// # use oneil_output::{ExpectedType, NumberType, ValueType};
+    /// let vt = ValueType::Number {
+    ///     number_type: NumberType::Interval,
+    /// };
+    /// assert_eq!(
+    ///     ExpectedType::matching_value_type_ignoring_number_kind(&vt),
+    ///     ExpectedType::Number { number_type: None }
+    /// );
+    /// ```
+    #[must_use]
+    pub fn matching_value_type_ignoring_number_kind(value_type: &ValueType) -> Self {
+        match value_type {
+            ValueType::Boolean => Self::Boolean,
+            ValueType::String => Self::String,
+            ValueType::Number { .. } => Self::Number { number_type: None },
+            ValueType::MeasuredNumber { unit, .. } => Self::MeasuredNumber {
+                number_type: None,
+                unit: Some(unit.display_unit.clone()),
+            },
+        }
+    }
+}
+
+impl fmt::Display for ExpectedType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let number_type_to_string = |type_: &Option<NumberType>| match type_ {
+            Some(NumberType::Scalar) => "scalar",
+            Some(NumberType::Interval) => "interval",
+            None => "number",
+        };
+
+        let unit_to_string = |unit: &Option<DisplayUnit>| {
+            unit.as_ref()
+                .map_or_else(|| "a unit".to_string(), |unit| format!("unit `{unit}`"))
+        };
+
+        match self {
+            Self::Boolean => write!(f, "boolean"),
+            Self::String => write!(f, "string"),
+            Self::Number { number_type: type_ } => {
+                let type_str = number_type_to_string(type_);
+                write!(f, "unitless {type_str}")
+            }
+            Self::MeasuredNumber {
+                number_type: type_,
+                unit,
+            } => {
+                let type_str = number_type_to_string(type_);
+                let unit_str = unit_to_string(unit);
+                write!(f, "{type_str} with {unit_str}")
+            }
+            Self::NumberOrMeasuredNumber { number_type: type_ } => {
+                let type_str = number_type_to_string(type_);
+                write!(f, "{type_str}")
+            }
+        }
+    }
+}
+
+/// Errors that can occur when evaluating a binary operation.
+///
+/// Note that all `ValueType`s are boxed to decrease the size
+/// of the error enum.
+#[derive(Debug, Clone, PartialEq)]
+pub enum BinaryEvalError {
+    /// Unit mismatch between operands.
+    UnitMismatch {
+        /// Unit of the left-hand side.
+        lhs_unit: DisplayUnit,
+        /// Unit of the right-hand side.
+        rhs_unit: DisplayUnit,
+    },
+    /// Type mismatch between operands.
+    TypeMismatch {
+        /// Expected type implied by the left-hand side.
+        expected_type_from_lhs: ExpectedType,
+        /// Actual type of the right-hand side.
+        rhs_type: Box<ValueType>,
+    },
+    /// Left-hand side has an invalid type.
+    InvalidLhsType {
+        /// Type that was expected for the left-hand side.
+        expected_type: ExpectedType,
+        /// Actual type of the left-hand side.
+        lhs_type: Box<ValueType>,
+    },
+    /// Right-hand side has an invalid type.
+    InvalidRhsType {
+        /// Type that was expected for the right-hand side.
+        expected_type: ExpectedType,
+        /// Actual type of the right-hand side.
+        rhs_type: Box<ValueType>,
+    },
+    /// Exponent has units (not allowed).
+    ExponentHasUnits {
+        /// Unit of the exponent (must be unitless).
+        exponent_unit: DisplayUnit,
+    },
+    /// Exponent is an interval (not allowed when base has unit).
+    ExponentIsInterval {
+        /// Interval used as exponent (must be scalar when base has unit).
+        exponent_interval: Interval,
+    },
+}
+
+/// Errors that can occur when evaluating a unary operation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnaryEvalError {
+    /// Negation was applied to a value whose type does not support it.
+    InvalidNegType {
+        /// Actual type of the value.
+        value_type: Box<ValueType>,
+    },
+    /// Logical not was applied to a value whose type does not support it.
+    InvalidNotType {
+        /// Actual type of the value.
+        value_type: Box<ValueType>,
+    },
+}
+
+/// Errors that can occur when converting a value to a specific unit.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnitConversionError {
+    /// Unit mismatch between the value unit and the requested target unit.
+    UnitMismatch {
+        /// Unit of the value being converted.
+        value_unit: DisplayUnit,
+        /// Unit requested by the caller.
+        target_unit: DisplayUnit,
+    },
+    /// Value type is not convertible to the target unit.
+    InvalidType {
+        /// Value type of the value that could not be converted.
+        value_type: Box<ValueType>,
+        /// Requested target unit for the conversion.
+        target_unit: Box<DisplayUnit>,
+    },
+}
 
 /// Errors that can occur during expression evaluation.
 ///
@@ -1601,5 +1805,232 @@ impl AsOneilDiagnostic for EvalError {
 
     fn is_internal_diagnostic(&self) -> bool {
         matches!(self, Self::ParameterHasError { .. })
+    }
+}
+
+// EvalWarning and diagnostics.
+
+/// Non-fatal issues produced while evaluating expressions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EvalWarning {
+    /// Python function evaluation failed and a fallback result was used instead.
+    UsedFallback {
+        /// The name of the Python function that was called.
+        function_name: PyFunctionName,
+        /// The source span of the function call.
+        function_call_span: Span,
+        /// The error message from Python or from conversion.
+        message: String,
+        /// The traceback from Python.
+        traceback: Option<String>,
+    },
+}
+
+impl fmt::Display for EvalWarning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UsedFallback {
+                function_name,
+                function_call_span: _,
+                message: _,
+                traceback: _,
+            } => {
+                let function_name = function_name.as_str();
+                write!(
+                    f,
+                    "python function `{function_name}` failed; using fallback"
+                )
+            }
+        }
+    }
+}
+
+impl AsOneilDiagnostic for EvalWarning {
+    fn kind(&self) -> DiagnosticKind {
+        DiagnosticKind::Warning
+    }
+
+    fn message(&self) -> String {
+        self.to_string()
+    }
+
+    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
+        match self {
+            Self::UsedFallback {
+                function_name: _,
+                function_call_span,
+                message: _,
+                traceback: _,
+            } => Some(ErrorLocation::from_source_and_span(
+                source,
+                *function_call_span,
+            )),
+        }
+    }
+
+    fn context(&self) -> Vec<ErrorContext> {
+        match self {
+            Self::UsedFallback {
+                function_name: _,
+                function_call_span: _,
+                message,
+                traceback,
+            } => traceback.as_ref().map_or_else(
+                || vec![ErrorContext::Note(message.clone())],
+                |traceback| {
+                    vec![
+                        ErrorContext::Note(message.clone()),
+                        ErrorContext::Note(traceback.clone()),
+                    ]
+                },
+            ),
+        }
+    }
+}
+
+/// Errors collected while evaluating a single model (parameters, tests, and broken references).
+#[derive(Debug, Clone)]
+pub struct ModelEvalErrors {
+    /// Errors that occurred during evaluation of the parameters.
+    pub parameters: IndexMap<ParameterName, Vec<EvalError>>,
+    /// Errors that occurred during evaluation of the tests.
+    pub tests: IndexMap<TestIndex, Vec<EvalError>>,
+    /// References that had errors.
+    pub references: IndexSet<EvalInstanceKey>,
+}
+
+/// Conversion from value-level errors to `EvalError`.
+pub mod convert {
+    use oneil_shared::span::Span;
+
+    use crate::{BinaryEvalError, EvalError, ExpectedType, UnaryEvalError};
+
+    /// Converts a binary eval error from the output crate into an evaluator error.
+    #[must_use]
+    pub fn binary_eval_error_to_eval_error(
+        error: BinaryEvalError,
+        lhs_span: Span,
+        rhs_span: Span,
+    ) -> EvalError {
+        match error {
+            BinaryEvalError::UnitMismatch { lhs_unit, rhs_unit } => EvalError::UnitMismatch {
+                expected_unit: lhs_unit,
+                expected_source_span: lhs_span,
+                found_unit: rhs_unit,
+                found_span: rhs_span,
+            },
+            BinaryEvalError::TypeMismatch {
+                expected_type_from_lhs,
+                rhs_type,
+            } => EvalError::TypeMismatch {
+                expected_type: expected_type_from_lhs,
+                expected_source_span: lhs_span,
+                found_type: *rhs_type,
+                found_span: rhs_span,
+            },
+            BinaryEvalError::InvalidLhsType {
+                expected_type,
+                lhs_type,
+            } => EvalError::InvalidType {
+                expected_type,
+                found_type: *lhs_type,
+                found_span: lhs_span,
+            },
+            BinaryEvalError::InvalidRhsType {
+                expected_type,
+                rhs_type,
+            } => EvalError::InvalidType {
+                expected_type,
+                found_type: *rhs_type,
+                found_span: rhs_span,
+            },
+            BinaryEvalError::ExponentHasUnits { exponent_unit } => EvalError::ExponentHasUnits {
+                exponent_span: rhs_span,
+                exponent_unit,
+            },
+            BinaryEvalError::ExponentIsInterval { exponent_interval } => {
+                EvalError::ExponentIsInterval {
+                    exponent_interval,
+                    exponent_value_span: rhs_span,
+                }
+            }
+        }
+    }
+
+    /// Converts a binary eval error that only applies to the left-hand side into an evaluator error.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the error is not `InvalidLhsType`.
+    #[must_use]
+    pub fn binary_eval_error_expect_only_lhs(error: BinaryEvalError, lhs_span: Span) -> EvalError {
+        match error {
+            BinaryEvalError::InvalidLhsType {
+                expected_type,
+                lhs_type,
+            } => EvalError::InvalidType {
+                expected_type,
+                found_type: *lhs_type,
+                found_span: lhs_span,
+            },
+            BinaryEvalError::UnitMismatch { .. }
+            | BinaryEvalError::TypeMismatch { .. }
+            | BinaryEvalError::InvalidRhsType { .. }
+            | BinaryEvalError::ExponentHasUnits { .. }
+            | BinaryEvalError::ExponentIsInterval { .. } => {
+                panic!("expected only lhs errors, but got {error:?}")
+            }
+        }
+    }
+
+    /// Converts a binary eval error that only applies to the right-hand side into an evaluator error.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the error is not `InvalidRhsType`, `ExponentHasUnits`, or `ExponentIsInterval`.
+    #[must_use]
+    pub fn binary_eval_error_expect_only_rhs(error: BinaryEvalError, rhs_span: Span) -> EvalError {
+        match error {
+            BinaryEvalError::InvalidRhsType {
+                expected_type,
+                rhs_type,
+            } => EvalError::InvalidType {
+                expected_type,
+                found_type: *rhs_type,
+                found_span: rhs_span,
+            },
+            BinaryEvalError::ExponentHasUnits { exponent_unit } => EvalError::ExponentHasUnits {
+                exponent_span: rhs_span,
+                exponent_unit,
+            },
+            BinaryEvalError::ExponentIsInterval { exponent_interval } => {
+                EvalError::ExponentIsInterval {
+                    exponent_interval,
+                    exponent_value_span: rhs_span,
+                }
+            }
+            BinaryEvalError::UnitMismatch { .. }
+            | BinaryEvalError::TypeMismatch { .. }
+            | BinaryEvalError::InvalidLhsType { .. } => {
+                panic!("expected only rhs errors, but got {error:?}")
+            }
+        }
+    }
+
+    /// Converts a unary eval error from the output crate into an evaluator error.
+    #[must_use]
+    pub fn unary_eval_error_to_eval_error(error: UnaryEvalError, value_span: Span) -> EvalError {
+        match error {
+            UnaryEvalError::InvalidNegType { value_type } => EvalError::InvalidType {
+                expected_type: ExpectedType::Number { number_type: None },
+                found_type: *value_type,
+                found_span: value_span,
+            },
+            UnaryEvalError::InvalidNotType { value_type } => EvalError::InvalidType {
+                expected_type: ExpectedType::Boolean,
+                found_type: *value_type,
+                found_span: value_span,
+            },
+        }
     }
 }
