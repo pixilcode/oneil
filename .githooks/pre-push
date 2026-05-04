@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve the repo root regardless of where git invokes this hook from.
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+echo "» Running fmt..."
+
+cd "$REPO_ROOT"
+cargo fmt
+
+echo "» Running clippy..."
+
+cd "$REPO_ROOT"
+RUSTFLAGS="--deny warnings" cargo clippy --all-targets --all-features
+
+echo "» Running tests..."
+
+cd "$REPO_ROOT"
+RUSTFLAGS="--deny warnings" cargo test --all-features --verbose

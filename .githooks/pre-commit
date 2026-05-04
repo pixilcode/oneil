@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve the repo root regardless of where git invokes this hook from.
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+echo "» Running fmt..."
+
+cd "$REPO_ROOT"
+cargo fmt

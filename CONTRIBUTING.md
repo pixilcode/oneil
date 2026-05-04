@@ -89,27 +89,7 @@ Code should follow the principles laid out in
 
 ## Git hooks
 
-On Github, certain tests are run on each push that ensure that code is
-working on a basic level. If you would like to run these checks yourself
-before the code gets pushed, add the following to `.git/hooks/pre-push`
-and make it executable:
-
-```bash
-#!/bin/bash
-cargo build --all-targets --all-features
-cargo test --all-features
-cargo clippy --all-targets --all-features
-cargo fmt --check
-```
-
-In addition, you can ensure that all Rust code is correctly formatted by
-adding the following to `.git/hooks/pre-commit` and making it executable:
-
-```bash
-#!/bin/bash
-cargo fmt
-```
-
+Run `git config core.hooksPath .githooks` to set up some automated checks to run before committing and pushing.
 
 ## Resources
 
