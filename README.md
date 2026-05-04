@@ -500,7 +500,7 @@ Temperature: T = temperature(D) :K
 
 ##### Fallback Calculations
 
-Python functions may have dependencies that aren't always available, or may take a long time to run. You can specify a fallback calculation using the `?` operator. If the Python function fails (e.g., missing dependencies, runtime errors), Oneil will use the fallback and warn the user:
+Python functions may have dependencies that aren't always available. You can specify a fallback calculation using the `?` operator. If the Python function fails (e.g., missing dependencies, runtime errors), Oneil will use the fallback and warn the user:
 
 ```oneil
 Temperature: T = expensive_simulation(D) ? D * 0.5 + 273 :K
