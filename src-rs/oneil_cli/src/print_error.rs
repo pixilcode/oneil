@@ -17,13 +17,49 @@
 //         |           ^
 //
 
-use std::path::Path;
+use std::{borrow::Borrow, path::Path};
 
 use anstream::eprintln;
 use oneil_shared::error::{Context, DiagnosticKind, ErrorLocation, OneilDiagnostic};
 use owo_colors::{OwoColorize, Style};
 
 use crate::stylesheet;
+
+/// Result of printing errors.
+pub enum ErrorPrintResult {
+    /// The errors printed contained at least one error diagnostic.
+    SawErrorDiagnostic,
+    /// The errors printed did not contain any error diagnostics.
+    NoErrorDiagnostics,
+}
+
+impl ErrorPrintResult {
+    #[must_use]
+    pub const fn saw_error_diagnostic(&self) -> bool {
+        matches!(self, Self::SawErrorDiagnostic)
+    }
+}
+
+pub fn print_all<E>(
+    errors: impl IntoIterator<Item = E>,
+    show_internal_errors: bool,
+) -> ErrorPrintResult
+where
+    E: Borrow<OneilDiagnostic>,
+{
+    let mut model_saw_error_diagnostic = false;
+
+    for error in errors {
+        model_saw_error_diagnostic |= error.borrow().kind() == DiagnosticKind::Error;
+        print(error.borrow(), show_internal_errors);
+    }
+
+    if model_saw_error_diagnostic {
+        ErrorPrintResult::SawErrorDiagnostic
+    } else {
+        ErrorPrintResult::NoErrorDiagnostics
+    }
+}
 
 /// Prints a formatted error message to the specified writer
 pub fn print(error: &OneilDiagnostic, show_internal_errors: bool) {

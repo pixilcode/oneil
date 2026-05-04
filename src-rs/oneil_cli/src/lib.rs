@@ -22,7 +22,6 @@ use oneil_runtime::{
 #[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
 use oneil_shared::{
-    error::DiagnosticKind,
     paths::{DesignPath, ModelPath, SourcePath},
     symbols::ParameterName,
 };
@@ -169,8 +168,9 @@ fn handle_print_python_imports(files: &[PythonPath], show_internal_errors: bool)
         }
     }
 
-    for error in errors {
-        print_error::print(&error, show_internal_errors);
+    let print_result = print_error::print_all(errors, show_internal_errors);
+    if print_result.saw_error_diagnostic() {
+        return;
     }
 
     let is_multiple_files = imports.len() > 1;
@@ -211,13 +211,8 @@ fn handle_print_ast(files: &[ModelPath], display_partial: bool, show_internal_er
         errors.extend(runtime_errors);
     }
 
-    let mut saw_error_diagnostic = false;
-    for error in errors.to_vec() {
-        saw_error_diagnostic |= error.kind() == DiagnosticKind::Error;
-        print_error::print(error, show_internal_errors);
-    }
-
-    if saw_error_diagnostic && !display_partial {
+    let print_result = print_error::print_all(errors.to_vec(), show_internal_errors);
+    if print_result.saw_error_diagnostic() && !display_partial {
         return;
     }
 
@@ -288,13 +283,8 @@ fn handle_print_ir(
 
     let (ir_result, errors) = runtime.load_and_lower(file);
 
-    let mut saw_error_diagnostic = false;
-    for error in errors.to_vec() {
-        saw_error_diagnostic |= error.kind() == DiagnosticKind::Error;
-        print_error::print(error, show_internal_errors);
-    }
-
-    if saw_error_diagnostic && !display_partial {
+    let print_result = print_error::print_all(errors.to_vec(), show_internal_errors);
+    if print_result.saw_error_diagnostic() && !display_partial {
         return;
     }
 
@@ -357,13 +347,8 @@ fn handle_print_model_result(
     let mut runtime = Runtime::new();
     let (model_opt, errors) = runtime.eval_model(file, None);
 
-    let mut saw_error_diagnostic = false;
-    for error in errors.to_vec() {
-        saw_error_diagnostic |= error.kind() == DiagnosticKind::Error;
-        print_error::print(error, show_internal_errors);
-    }
-
-    if saw_error_diagnostic && !display_partial_results {
+    let print_result = print_error::print_all(errors.to_vec(), show_internal_errors);
+    if print_result.saw_error_diagnostic() && !display_partial_results {
         return;
     }
 
@@ -461,23 +446,13 @@ fn eval_and_print_model(
     let (result, model_errors, expr_errors) =
         runtime.eval_model_and_expressions(file, design, eval_expressions);
 
-    let mut model_saw_error_diagnostic = false;
-    for error in model_errors.to_vec() {
-        model_saw_error_diagnostic |= error.kind() == DiagnosticKind::Error;
-        print_error::print(error, show_internal_errors);
-    }
-
-    if model_saw_error_diagnostic && !display_partial_results {
+    let model_print_result = print_error::print_all(model_errors.to_vec(), show_internal_errors);
+    if model_print_result.saw_error_diagnostic() && !display_partial_results {
         return;
     }
 
-    let mut expr_saw_error_diagnostic = false;
-    for error in &expr_errors {
-        expr_saw_error_diagnostic |= error.kind() == DiagnosticKind::Error;
-        print_error::print(error, show_internal_errors);
-    }
-
-    if expr_saw_error_diagnostic && !display_partial_results {
+    let expr_print_result = print_error::print_all(expr_errors, show_internal_errors);
+    if expr_print_result.saw_error_diagnostic() && !display_partial_results {
         return;
     }
 
@@ -654,13 +629,8 @@ fn handle_test_command(args: TestArgs) {
     let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
     let (model_opt, errors) = runtime.eval_model(&file, design.as_ref());
 
-    let mut saw_error_diagnostic = false;
-    for error in errors.to_vec() {
-        saw_error_diagnostic |= error.kind() == DiagnosticKind::Error;
-        print_error::print(error, common.dev_show_internal_errors);
-    }
-
-    if saw_error_diagnostic && !display_partial_results {
+    let print_result = print_error::print_all(errors.to_vec(), common.dev_show_internal_errors);
+    if print_result.saw_error_diagnostic() && !display_partial_results {
         return;
     }
 
@@ -727,14 +697,8 @@ fn handle_tree_command(args: TreeArgs) {
 
     let errors_vec = errors.to_vec();
 
-    let mut saw_error_diagnostic = false;
-    for error in &errors_vec {
-        saw_error_diagnostic |= error.kind() == DiagnosticKind::Error;
-        print_error::print(error, common.dev_show_internal_errors);
-        eprintln!();
-    }
-
-    if saw_error_diagnostic && !display_partial_results {
+    let print_result = print_error::print_all(errors_vec, common.dev_show_internal_errors);
+    if print_result.saw_error_diagnostic() && !display_partial_results {
         return;
     }
 
@@ -892,13 +856,8 @@ fn handle_independent_command(args: IndependentArgs) {
     let mut runtime = Runtime::new();
     let (independents, errors) = runtime.get_independents(&file);
 
-    let mut saw_error_diagnostic = false;
-    for error in errors.to_vec() {
-        saw_error_diagnostic |= error.kind() == DiagnosticKind::Error;
-        print_error::print(error, common.dev_show_internal_errors);
-    }
-
-    if saw_error_diagnostic && !display_partial_results {
+    let print_result = print_error::print_all(errors.to_vec(), common.dev_show_internal_errors);
+    if print_result.saw_error_diagnostic() && !display_partial_results {
         return;
     }
 
