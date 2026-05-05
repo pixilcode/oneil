@@ -1,10 +1,9 @@
 # Designs
 
-A **design file** (extension `.one`) parameterizes a model: it overrides parameter
-values, adds new parameters, and can be applied to specific submodel instances.
-This lets you explore "what if" scenarios — alternative materials, components, configurations, different
-planetary environments — without touching the model
-itself.
+A **design file** (extension `.one`) lets you override parameter values, add new
+ones, and target specific submodel instances — all without touching the model
+itself. Use it to explore "what if" scenarios: alternative materials, different
+components, different planetary environments.
 
 <!-- outline:
   1. Design files — syntax and running directly
@@ -17,10 +16,10 @@ itself.
 
 ## Design files
 
-A design file starts with a `design <target>` declaration that names the target model
-it refines. The rest of the file can optionally use shorthand syntax for parameter definitions: just
-`identifier = expression` (and an optional `:unit`), without the full
-`Label: id = expr` preamble used in model files. 
+Start your design file with a `design <target>` declaration naming the model
+you're refining. For the parameters themselves, you can use shorthand — just
+`identifier = expression` with an optional `:unit`, skipping the `Label: id =
+expr` preamble that model files require.
 
 ```oneil
 # mars_gravity.one
@@ -37,9 +36,9 @@ Radius: R = 6371 :km
 Mass: M = 5.97e24 :kg
 ```
 
-Parameters in the design that already exist on the target model are
-**overrides**. Parameters that do not exist on the target are
-**additions** — useful for adding performance parameters or tests for the specific configuration (see [Adding performance and other parameters](#adding-performance-and-other-parameters)).
+If a parameter already exists on the target model, your entry **overrides** it.
+If it doesn't exist yet, it's an **addition** — handy for performance parameters
+or configuration-specific checks (see [Adding performance and other parameters](#adding-performance-and-other-parameters)).
 
 ### Running a design file directly
 
@@ -65,9 +64,9 @@ oneil eval planet.on --design mars_gravity.one -P all
 
 ## Applying a design from within a model
 
-Use `apply <design> to <model_reference>` to wire a design file to a specific submodel
-instance inside a model. The design must target the same model that `<ref>`
-resolves to or an error will be reported.
+Use `apply <design> to <model_reference>` inside a model to attach a design to
+a specific submodel. The design must target the same model that `<ref>` resolves
+to — if it doesn't, you'll get an error.
 
 ```oneil
 # mission.on
@@ -88,7 +87,7 @@ W = 1860 : N  # Surface weight
 
 ### Applying at the command line
 
-A design can also be applied to the *root* model at the command line — no
+You can also apply a design to the *root* model at the command line — no
 `apply` line needed in the model file:
 
 ```sh
@@ -97,16 +96,17 @@ oneil eval planet.on --design mars_gravity.one -P all
 
 ## `reference` vs `submodel` — design isolation
 
-How a model is imported determines whether an applied design affects one
-instance or all readers.
+Whether you use `reference` or `submodel` determines how broadly an applied
+design takes effect.
 
-**`reference`** creates a **shared model**. 
-Use this kind of import for a model file that parameterizes the system as a whole, and not an individual model.
+**`reference`** creates a **shared model** — use it for parameters that belong
+to the whole system, not to one specific part.
 
 <!-- TODO: This seems like it is a property of the file defining the constants and not the import, though I guess what could be a constant for one person could be a parameter for another. -->
 
-**`submodel`** creates a **unique model instance**. 
-Two `submodel` imports of the same file are completely independent — a design applied to one does not affect the other.
+**`submodel`** creates its own independent model. Two `submodel` imports of the
+same file are completely independent — a design applied to one does not affect
+the other.
 
 ```oneil
 # constants.on
@@ -129,10 +129,10 @@ Weight on Earth: W_e = m * g.earth :N   # 4905 N
 Weight on Mars:  W_m = m * g.mars  :N   # 1860 N
 ```
 
-Since `constants` is imported as a `reference` if a design changed `G`, both
-`earth` and `mars` (which may use `G` internally as a reference import) would see the updated value.
-If `constants` were imported as a `submodel` each copy would be
-independent.
+Since `constants` is a `reference`, if you changed `G` with a design, both
+`earth` and `mars` would see the update — which is exactly what you want for
+shared environmental data. For the planets themselves, `submodel` isolation
+means you can give each one a different design independently.
 
 > **Rule of thumb:** import shared environmental data (constants, celestial body catalogs, etc) as `reference`. 
 > Import components and system elements as `submodel`.
@@ -168,8 +168,8 @@ W_moon = 810 : N  # Weight on Moon
 
 ## Modifying submodel parameters directly
 
-A design file can override a parameter on a **nested** submodel instance using
-dotted syntax: `parameter.ref = value`.
+You can override a parameter on a submodel directly from a design using dotted
+syntax: `parameter.submodel = value`.
 
 ```oneil
 # thruster.on
@@ -202,7 +202,6 @@ design spacecraft
 
 # Override the main engine without touching RCS.
 thrust.main_engine = 2000 :N
-isp.main_engine    = 450  :s
 ```
 
 ```sh
@@ -225,15 +224,35 @@ design spacecraft
 thrust.main_engine = thrust_scale * thrust.rcs
 ```
 
-Trying to override a parameter that does not exist on the submodel will result in an error.
-If you want to add a parameter to a submodel create a design for the submodel and apply it.
+This works across multiple levels too. If `mission.on` imports `spacecraft` as
+`vehicle`, a mission design can reach into `vehicle`'s thruster directly:
 
-Overriding a parameter with an equation or constant with different dimensions will result in an error.
+```oneil
+# mission.on
+submodel spacecraft as vehicle
+
+Mission duration: t_mission = 365 :days
+```
+
+```oneil
+# boosted_mission.one
+design mission
+
+thrust.vehicle.main_engine = 2000 :N
+```
+
+If you find yourself overriding several parameters on the same submodel,
+consider creating a dedicated design for that submodel and applying it instead
+— it keeps each design focused on one model.
+
+If you attempt to assign a value with different units or override a parameter that doesn't exist on the submodel you'll get an
+error. To add a new parameter to a submodel, create a design for the submodel and apply it. 
 
 ## Adding performance and other parameters
 
-A design can add parameters that do not exist on the target model. These
-new parameters are accessible from an enclosing model as `new_param.ref`.
+You can also add parameters that don't exist on the target model yet — useful
+for performance outputs or configuration-specific calculations that only make
+sense for a particular design.
 
 ```oneil
 # planet.on
@@ -273,17 +292,16 @@ t_day = 24.6 : hr  # Day length
 A = 1.444e8 : km^2  # Surface area
 ```
 
-Augmented parameters can cross-reference other parameters in the design file as
-well as parameters already on the target model, and are evaluated alongside all
-other parameters.
+New parameters can reference other parameters in the design file as well
+as parameters already on the target model, and are evaluated alongside
+everything else.
 
 ## Submodel aliases
 
 When you declare a local alias for a nested submodel
 (described in [Importing models](./09-importing-models.md)), the local alias
-and the one inside the intermediate model refer to the **same instance**.
-A design applied through the local alias is therefore visible through the
-intermediate model's own reads of that submodel too.
+and the one inside the intermediate model are two names for the **same model**.
+A design applied through either name takes effect on both.
 
 ```oneil
 # solar_system.on
@@ -329,6 +347,6 @@ W = 2976 : N  # Landing weight
 g_sol = 3.72 : m/s^2  # Sol gravity reading
 ```
 
-Because `galaxy.earth` and `galaxy.sol.earth` are the same instance, both
-`W` (which reads `g.earth` directly) and `g_sol` (which reads through `sol`)
-see the updated value.
+Because `galaxy.earth` and `galaxy.sol.earth` are the same model, both reads
+pick up the change — `W` going directly through `g.earth`, and `g_sol` going
+through `sol`.
