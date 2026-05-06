@@ -167,6 +167,9 @@ fn split_model_ast(
             ast::Decl::Submodel(submodel) => {
                 submodels.push(submodel);
             }
+            ast::Decl::SubmodelWithApply(n) => {
+                submodels.push(n.submodel());
+            }
             ast::Decl::Parameter(parameter) => parameters.push(ParameterWithSection {
                 parameter,
                 section_label,

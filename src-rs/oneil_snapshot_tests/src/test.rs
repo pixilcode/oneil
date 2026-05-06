@@ -81,6 +81,15 @@ fn overlay_two_instances() {
 }
 
 #[test]
+fn overlay_submodel_with_apply_sugar() {
+    // `apply D to submodel M as A` is equivalent to `submodel M as A` +
+    // `apply D to A`.  This test confirms the sugar produces the same output
+    // as the explicit two-line form (planet_a gets Mars gravity; planet_b
+    // keeps Earth gravity).
+    insta::assert_snapshot!(run_fixture("design_overlay/submodel_with_apply.on"));
+}
+
+#[test]
 fn overlay_wrong_target_for_ref() {
     // A design whose declared target model doesn't match the model that `r`
     // resolves to should produce a clear error instead of silently doing nothing.

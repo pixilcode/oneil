@@ -108,17 +108,9 @@ fn print_decl(decl: &ast::DeclNode, indent: usize, prefix: &str) {
             print_apply_design(ad, indent, prefix);
         }
         ast::Decl::DesignParameter(p) => {
-            let instance_part = if p.instance_path().is_empty() {
-                String::new()
-            } else {
-                let segs = p
-                    .instance_path()
-                    .iter()
-                    .map(|i| i.as_str())
-                    .collect::<Vec<_>>()
-                    .join(".");
-                format!(".{segs}")
-            };
+            let instance_part = p
+                .instance_path()
+                .map_or_else(String::new, |seg| format!(".{}", seg.as_str()));
             println!(
                 "{}{} {} {}{} = …",
                 "    ".repeat(indent),
@@ -156,6 +148,20 @@ fn print_decl(decl: &ast::DeclNode, indent: usize, prefix: &str) {
                     dbg_style::IDENTIFIER.style(subcomps.join(", "))
                 );
             }
+        }
+        ast::Decl::SubmodelWithApply(n) => {
+            let submodel = n.submodel();
+            let apply = n.apply();
+            let alias = submodel.model_info().get_alias();
+            println!(
+                "{}{} {} \"{}\" as {} + apply {}",
+                "    ".repeat(indent),
+                dbg_style::TREE.style(prefix),
+                dbg_style::LABEL.style("SubmodelWithApply:"),
+                dbg_style::IDENTIFIER.style(submodel.model_info().top_component().as_str()),
+                dbg_style::IDENTIFIER.style(alias.as_str()),
+                dbg_style::IDENTIFIER.style(apply.design_file().as_str()),
+            );
         }
         ast::Decl::Parameter(param) => {
             println!(

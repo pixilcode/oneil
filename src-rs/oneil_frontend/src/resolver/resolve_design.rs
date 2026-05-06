@@ -1,6 +1,6 @@
 //! Resolution of design surface declarations: `design <model>`,
 //! `apply <file> to <ref>(.<ref>)*`, and design parameter assignments
-//! (`id(.<ref>)* = expr`).
+//! (`id[.<ref>] = expr`).
 //!
 //! `apply` resolves sibling **`.one`** files; `design <model>` resolves the
 //! target as a sibling **`.on`** model.
@@ -113,6 +113,7 @@ pub fn collect_design_surface(model_ast: &ast::Model) -> Vec<DesignSurfaceItem<'
         match &**decl {
             ast::Decl::DesignTarget(n) => items.push(DesignSurfaceItem::Target(n)),
             ast::Decl::ApplyDesign(n) => items.push(DesignSurfaceItem::Apply(n)),
+            ast::Decl::SubmodelWithApply(n) => items.push(DesignSurfaceItem::Apply(n.apply())),
             ast::Decl::DesignParameter(n) => items.push(DesignSurfaceItem::Parameter(n)),
             ast::Decl::Import(_)
             | ast::Decl::Submodel(_)
@@ -257,7 +258,7 @@ fn scan_design_locals<E: ExternalResolutionContext>(
                 let relative_path = node.get_target_relative_path();
                 explicit_target = Some(model_path.get_sibling_model_path(relative_path));
             }
-            DesignSurfaceItem::Parameter(p) if p.instance_path().is_empty() => {
+            DesignSurfaceItem::Parameter(p) if p.instance_path().is_none() => {
                 design_param_names.insert(ParameterName::from(p.ident().as_str()));
             }
             DesignSurfaceItem::Parameter(_) | DesignSurfaceItem::Apply(_) => {}
@@ -314,15 +315,9 @@ fn handle_design_parameter<E: ExternalResolutionContext>(
     };
     let name = ParameterName::from(p.ident().as_str());
 
-    let instance_path = if p.instance_path().is_empty() {
-        None
-    } else {
-        let mut path = InstancePath::root();
-        for seg in p.instance_path() {
-            path = path.child(ReferenceName::new(seg.as_str().to_string()));
-        }
-        Some(path)
-    };
+    let instance_path = p
+        .instance_path()
+        .map(|seg| InstancePath::root().child(ReferenceName::new(seg.as_str().to_string())));
 
     // Resolve the RHS in the design target's scope.
     let active = resolution_context
