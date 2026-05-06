@@ -1,0 +1,5 @@
+reference constants as c
+
+Distance: d = 384400 :km
+Signal frequency: f = 2.4e9 :Hz
+Path loss: L_fs = (4 * pi * d * f / c.c)^2

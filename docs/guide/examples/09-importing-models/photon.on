@@ -1,0 +1,4 @@
+reference constants as c
+
+Photon frequency: f = 5.09e14 :Hz
+Photon energy: E = h.c * f :J

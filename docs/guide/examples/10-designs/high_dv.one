@@ -1,0 +1,5 @@
+~ High-Δv launch window: costly trajectory. Budget does not close.
+
+design mission_budget
+
+dv.c = 4000 :m/s

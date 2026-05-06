@@ -1,0 +1,5 @@
+~ Heavy-duty rover A: too massive for the propellant budget.
+
+design mission_budget
+
+m.rover_a = 8000 :kg

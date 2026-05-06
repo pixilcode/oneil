@@ -1,0 +1,9 @@
+design planet
+
+g = 3.72 :m/s^2
+R = 3390 :km
+M = 6.417e23 :kg
+
+Number of active rovers: rovers = 2
+Mars solar day: t_sol = 24.6 :hr
+Surface area: A = 4 * pi * R^2 :km^2
