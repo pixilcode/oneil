@@ -60,11 +60,11 @@ Python function results are automatically cached to avoid re-running expensive c
   remain
 - **Is version-controllable** - Stored as one cache file per model under
   `__oncache__/`
-- **Is shareable** - Other users can use cached results even without Python
-  dependencies
 - **Is human-readable** - Each model cache stores the simulation function,
   simulation file, and parameter input/output snapshots (`min`, `max`, `units`)
   as JSON for cleaner git diffs
+- **Is shareable** - Other users can use cached results even without Python
+  dependencies as long as function arguments match the cached arguments
 - **Only rewrites changed entries** - Re-running Oneil leaves the cache file
   untouched unless a simulation's latest cached inputs or output changed
 - **Auto-invalidates** when imported Python source files, their local Python
