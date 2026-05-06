@@ -23,6 +23,12 @@ pub enum Decl {
     /// Submodel declaration for importing other models
     Submodel(SubmodelDeclNode),
 
+    /// Combined `apply <file> to (submodel|reference) <model> [as <alias>]` shorthand.
+    ///
+    /// Desugars to a [`SubmodelDecl`] followed by an [`ApplyDesign`] targeting the
+    /// submodel's alias. Both `submodel` and `reference` keywords are accepted.
+    SubmodelWithApply(SubmodelWithApplyNode),
+
     /// Declares that this file is a design file for another model (`design <name>`).
     DesignTarget(DesignTargetNode),
 
@@ -54,6 +60,12 @@ impl Decl {
     #[must_use]
     pub const fn submodel(submodel: SubmodelDeclNode) -> Self {
         Self::Submodel(submodel)
+    }
+
+    /// Creates a combined submodel-with-apply declaration
+    #[must_use]
+    pub const fn submodel_with_apply(node: SubmodelWithApplyNode) -> Self {
+        Self::SubmodelWithApply(node)
     }
 
     /// Creates a design target declaration
@@ -462,12 +474,11 @@ impl ApplyDesign {
     }
 }
 
-/// `<id>(.<segment>)* = value` line allowed after `design` in design files.
+/// `<id>(.<segment>)? = value` line allowed after `design` in design files.
 ///
-/// When `instance_path` is non-empty, the parameter override applies to a
-/// descendant instance reached by walking the dotted path of reference names.
-/// For example, `mass.sat = 5 kg` overrides `mass` on the `sat` instance and
-/// `h.sc.o = 25 km` overrides `h` on the `o` instance reached from `sc`.
+/// When `instance_path` is `Some`, the parameter override applies to a
+/// descendant instance reached by that single reference name.
+/// For example, `mass.sat = 5 kg` overrides `mass` on the `sat` instance.
 ///
 /// `performance_marker` and `trace_level` only take effect when this line
 /// introduces a brand-new parameter (i.e. it is not present on the design
@@ -475,9 +486,9 @@ impl ApplyDesign {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DesignParameter {
     ident: IdentifierNode,
-    /// Reference-name path scoping the override (empty for a flat override on the
+    /// Single reference-name scoping the override (`None` for a flat override on the
     /// design target).
-    instance_path: Vec<IdentifierNode>,
+    instance_path: Option<IdentifierNode>,
     value: ParameterValueNode,
     performance_marker: Option<PerformanceMarkerNode>,
     trace_level: Option<TraceLevelNode>,
@@ -488,11 +499,11 @@ pub struct DesignParameter {
 pub type DesignParameterNode = Node<DesignParameter>;
 
 impl DesignParameter {
-    /// Creates a design parameter line with the given (possibly empty) instance path.
+    /// Creates a design parameter line with the given (possibly absent) instance reference.
     #[must_use]
     pub const fn new(
         ident: IdentifierNode,
-        instance_path: Vec<IdentifierNode>,
+        instance_path: Option<IdentifierNode>,
         value: ParameterValueNode,
         performance_marker: Option<PerformanceMarkerNode>,
         trace_level: Option<TraceLevelNode>,
@@ -514,10 +525,10 @@ impl DesignParameter {
         &self.ident
     }
 
-    /// Reference-name path scoping the override (empty for a flat override).
+    /// Single reference name scoping the override (`None` for a flat override).
     #[must_use]
-    pub const fn instance_path(&self) -> &[IdentifierNode] {
-        self.instance_path.as_slice()
+    pub const fn instance_path(&self) -> Option<&IdentifierNode> {
+        self.instance_path.as_ref()
     }
 
     /// Assigned value (expression or piecewise).
@@ -542,5 +553,46 @@ impl DesignParameter {
     #[must_use]
     pub const fn note(&self) -> Option<&NoteNode> {
         self.note.as_ref()
+    }
+}
+
+/// Combined `apply <file> to (submodel|reference) <model> [as <alias>]` declaration.
+///
+/// This is syntactic sugar for writing:
+/// ```oneil
+/// submodel <model> as <alias>
+/// apply <file> to <alias>
+/// ```
+///
+/// The `apply` node inside always has `target = [alias]` set at parse time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubmodelWithApply {
+    submodel: SubmodelDeclNode,
+    apply: ApplyDesignNode,
+}
+
+/// AST node for a [`SubmodelWithApply`] declaration.
+pub type SubmodelWithApplyNode = Node<SubmodelWithApply>;
+
+impl SubmodelWithApply {
+    /// Creates a new combined submodel-with-apply node.
+    ///
+    /// `submodel` is the parsed submodel/reference declaration; `apply` is an
+    /// [`ApplyDesign`] whose `target` has already been set to the submodel's alias.
+    #[must_use]
+    pub const fn new(submodel: SubmodelDeclNode, apply: ApplyDesignNode) -> Self {
+        Self { submodel, apply }
+    }
+
+    /// The submodel/reference half of the declaration.
+    #[must_use]
+    pub const fn submodel(&self) -> &SubmodelDeclNode {
+        &self.submodel
+    }
+
+    /// The apply half of the declaration (target is the submodel alias).
+    #[must_use]
+    pub const fn apply(&self) -> &ApplyDesignNode {
+        &self.apply
     }
 }

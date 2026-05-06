@@ -45,7 +45,7 @@ composition. Evaluation runs lazily over the validated composed graph.
 
 `Design` (in `oneil_ir::design_overlay`) is the resolved form of a `.one`
 design file. It holds the optional target model path, parameter overrides and
-additions at the top level, and scoped overrides for nested reference paths
+additions at the top level, and scoped overrides for a single nested reference
 declared directly in the design (e.g. `x.ref = value`). Nested `apply X to ref`
 declarations within a design file are recorded as `ApplyDesign` records on the
 model IR (not in `Design`) and are processed recursively by the graph builder.

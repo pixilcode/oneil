@@ -44,8 +44,8 @@ pub struct OverlayParameterValue {
 /// A `Design` holds two kinds of contributions to a target model: overrides of
 /// parameters that already exist on the target and additions of new parameters
 /// that augment the target. Each kind has both a flat form (landing on the
-/// design's own target) and a scoped form (landing on a descendant instance
-/// reachable via an [`InstancePath`], e.g. `x.ref = value` in the design file).
+/// design's own target) and a scoped form (landing on a single named descendant
+/// instance, e.g. `x.ref = value` in the design file).
 ///
 /// Designs are composed and instantiated by the instancing pass. Nested
 /// `apply X to ref` declarations within a design file are recorded separately
@@ -56,7 +56,7 @@ pub struct Design {
     pub target_model: Option<ModelPath>,
     /// Overrides of parameters that already exist on the target model.
     pub parameter_overrides: IndexMap<ParameterName, OverlayParameterValue>,
-    /// Overrides scoped under one or more reference segments from the target model
+    /// Overrides scoped under a single reference name from the target model
     /// (e.g. `x.ref = value`).
     pub scoped_overrides: IndexMap<InstancePath, IndexMap<ParameterName, OverlayParameterValue>>,
     /// Parameters defined in the design that don't exist on the target model.

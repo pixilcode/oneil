@@ -10,7 +10,7 @@ use nom::{
 use oneil_ast::{
     ApplyDesign, ApplyDesignNode, Decl, DeclNode, DesignParameter, DesignTarget, Directory,
     DirectoryNode, IdentifierNode, Import, ModelInfo, ModelInfoNode, ModelKind, Node, SubmodelDecl,
-    SubmodelList, SubmodelListNode,
+    SubmodelList, SubmodelListNode, SubmodelWithApply,
 };
 use oneil_shared::span::Span;
 
@@ -42,12 +42,13 @@ pub fn parse_design_target_complete(input: InputSpan<'_>) -> Result<'_, DeclNode
 ///
 /// Tries each declaration parser in sequence:
 /// 1. Import declaration (`import path`)
-/// 2. Apply declaration (`apply <file> to <target>(.<target>)* [\[ … \]]`)
-/// 3. Design target probe (returns error if `design` appears in wrong context)
-/// 4. Submodel declaration (`submodel/reference <path> [as alias] [\[ submodels \]]`)
-/// 5. Test declaration (`test: condition`)
-/// 6. Design parameter shorthand (only when shorthand is enabled)
-/// 7. Parameter declaration (parameter definitions)
+/// 2. Submodel-with-apply declaration (`apply <file> to (submodel|reference) <model> [as <alias>]`)
+/// 3. Apply declaration (`apply <file> to <target>(.<target>)* [\[ … \]]`)
+/// 4. Design target probe (returns error if `design` appears in wrong context)
+/// 5. Submodel declaration (`submodel/reference <path> [as alias] [\[ submodels \]]`)
+/// 6. Test declaration (`test: condition`)
+/// 7. Design parameter shorthand (only when shorthand is enabled)
+/// 8. Parameter declaration (parameter definitions)
 ///
 /// The first parser that succeeds determines the declaration type. If a keyword
 /// matches but the rest of the declaration is malformed, an error is returned
@@ -65,6 +66,7 @@ pub fn parse(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
     if input.extra.allow_design_shorthand {
         alt((
             import_decl,
+            submodel_with_apply_decl,
             apply_decl,
             submodel_decl,
             test_decl,
@@ -75,6 +77,7 @@ pub fn parse(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
     } else {
         alt((
             import_decl,
+            submodel_with_apply_decl,
             apply_decl,
             submodel_decl,
             test_decl,
@@ -148,6 +151,80 @@ pub fn parse_design_target_line(input: InputSpan<'_>) -> Result<'_, DeclNode, Pa
         )
     };
     let decl_node = Node::new(Decl::DesignTarget(inner), node_span, whitespace_span);
+
+    Ok((rest, decl_node))
+}
+
+/// Parses `apply [dir/]<file> to (submodel|reference) [dir/]<model> [as <alias>]`.
+///
+/// This is the combined submodel-with-apply shorthand. It is tried before `apply_decl`
+/// in the `alt` so that the `submodel`/`reference` lookahead after `to` decides the
+/// branch. If the token after `to` is neither keyword, this parser fails and `alt` falls
+/// through to `apply_decl`.
+fn submodel_with_apply_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
+    let (rest, apply_token) = apply.convert_errors().parse(input)?;
+
+    let (rest, design_dir) = opt_directory_path.parse(rest)?;
+
+    let (rest, file_token) = identifier
+        .or_fail_with(ParserError::apply_missing_file(apply_token.lexeme_span))
+        .parse(rest)?;
+    let file_node = IdentifierNode::from(file_token);
+
+    let (rest, _to_token) = to
+        .or_fail_with(ParserError::apply_missing_target(file_node.span()))
+        .parse(rest)?;
+
+    // Attempt to parse `submodel` or `reference` keyword. If neither is present
+    // this parser returns a recoverable error so `alt` can try `apply_decl` next.
+    let reference_kw = |input| {
+        let (rest, tok) = reference.convert_errors().parse(input)?;
+        Ok((
+            rest,
+            (ModelKind::Reference, SubmodelKeyword::Reference, tok),
+        ))
+    };
+    let submodel_kw = |input| {
+        let (rest, tok) = submodel.convert_errors().parse(input)?;
+        Ok((rest, (ModelKind::Submodel, SubmodelKeyword::Submodel, tok)))
+    };
+    let (rest, (model_kind, keyword, keyword_token)) =
+        alt((reference_kw, submodel_kw)).parse(rest)?;
+
+    let (rest, model_dir) = opt_directory_path.parse(rest)?;
+
+    let (rest, model_info) = model_info_simple
+        .or_fail_with(ParserError::submodel_missing_model_info(
+            keyword_token.lexeme_span,
+            keyword,
+        ))
+        .parse(rest)?;
+
+    let (rest, end_of_line_token) = end_of_line
+        .or_fail_with(ParserError::submodel_missing_end_of_line(model_info.span()))
+        .parse(rest)?;
+
+    let alias_node = model_info.get_alias().clone();
+
+    let node_span =
+        Span::from_start_and_end(&apply_token.lexeme_span, &end_of_line_token.lexeme_span);
+    let whitespace_span = end_of_line_token.whitespace_span;
+
+    // Build the SubmodelDeclNode (no extraction list for this sugar form).
+    let submodel_inner = SubmodelDecl::new(model_dir, model_info, None, model_kind);
+    let submodel_node = Node::new(submodel_inner, node_span, whitespace_span);
+
+    // Build the ApplyDesignNode targeting only the submodel alias.
+    let apply_inner = ApplyDesign::new(design_dir, file_node, vec![alias_node], vec![]);
+    let apply_node = Node::new(apply_inner, node_span, whitespace_span);
+
+    let combined = SubmodelWithApply::new(submodel_node, apply_node);
+    let combined_node = Node::new(combined, node_span, whitespace_span);
+    let decl_node = Node::new(
+        Decl::SubmodelWithApply(combined_node),
+        node_span,
+        whitespace_span,
+    );
 
     Ok((rest, decl_node))
 }
@@ -281,9 +358,9 @@ fn design_parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserErr
     let (rest, ident_token) = identifier.convert_errors().parse(rest)?;
     let ident_node = IdentifierNode::from(ident_token);
 
-    // Optionally parse `.segment` chain for scoped parameter overrides
-    // (`mass.sat = …`, `h.sc.o = …`, etc.).
-    let (rest, instance_path) = many0(|input| {
+    // Optionally parse a single `.segment` for a scoped parameter override
+    // (`mass.sat = …`, etc.).
+    let (rest, instance_path) = opt(|input| {
         let (rest, dot_token) = dot.convert_errors().parse(input)?;
         let (rest, segment_token) = identifier
             .or_fail_with(ParserError::parameter_missing_instance_path_segment(
@@ -1202,21 +1279,57 @@ mod tests {
         }
 
         #[test]
+        fn submodel_with_apply_decl_simple() {
+            let input = InputSpan::new_extra(
+                "apply mars_design to submodel planet as mars\n",
+                Config::default(),
+            );
+            let (rest, decl) = parse(input).expect("parsing should succeed");
+
+            let Decl::SubmodelWithApply(ref n) = *decl else {
+                panic!("Expected SubmodelWithApply, got {decl:?}");
+            };
+            assert_eq!(n.submodel().model_info().top_component().as_str(), "planet");
+            assert_eq!(n.submodel().model_info().get_alias().as_str(), "mars");
+            assert_eq!(n.apply().design_file().as_str(), "mars_design");
+            assert_eq!(n.apply().target().len(), 1);
+            assert_eq!(n.apply().target()[0].as_str(), "mars");
+            assert_eq!(rest.fragment(), &"");
+        }
+
+        #[test]
+        fn submodel_with_apply_decl_reference_keyword() {
+            let input = InputSpan::new_extra("apply uhf to reference sat\n", Config::default());
+            let (rest, decl) = parse(input).expect("parsing should succeed");
+
+            let Decl::SubmodelWithApply(ref n) = *decl else {
+                panic!("Expected SubmodelWithApply, got {decl:?}");
+            };
+            assert_eq!(n.submodel().model_info().top_component().as_str(), "sat");
+            assert_eq!(n.submodel().model_info().get_alias().as_str(), "sat");
+            assert_eq!(n.apply().design_file().as_str(), "uhf");
+            assert_eq!(n.apply().target()[0].as_str(), "sat");
+            assert_eq!(n.submodel().model_kind(), ModelKind::Reference);
+            assert_eq!(rest.fragment(), &"");
+        }
+
+        #[test]
         fn design_parameter_dotted_path() {
             let config = Config {
                 allow_design_shorthand: true,
                 ..Config::default()
             };
-            let input = InputSpan::new_extra("h.sc.o = 25\n", config);
+            let input = InputSpan::new_extra("thrust.main_engine = 2000\n", config);
             let (rest, decl) = parse(input).expect("parsing should succeed");
 
             let Decl::DesignParameter(ref param_node) = *decl else {
                 panic!("Expected design parameter");
             };
-            assert_eq!(param_node.ident().as_str(), "h");
-            assert_eq!(param_node.instance_path().len(), 2);
-            assert_eq!(param_node.instance_path()[0].as_str(), "sc");
-            assert_eq!(param_node.instance_path()[1].as_str(), "o");
+            assert_eq!(param_node.ident().as_str(), "thrust");
+            let seg = param_node
+                .instance_path()
+                .expect("should have one instance segment");
+            assert_eq!(seg.as_str(), "main_engine");
             assert_eq!(rest.fragment(), &"");
         }
     }
