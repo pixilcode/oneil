@@ -49,8 +49,7 @@ Photon energy: E = h.constants * f :J
 
 ## Submodels
 
-A **submodel** imports a model's parameters and declares it as a part of the
-current system. Unlike a reference, each `submodel` statement creates an
+A **submodel** incorporates another model as part of the current model and imports the other model's parameters. Unlike a reference, each `submodel` statement creates an
 independent instance — import the same model twice under different aliases and
 each one has its own parameters.
 
@@ -78,8 +77,8 @@ Weight on Mars:  W_m = m * g.mars  :N
 
 > [!NOTE]
 > The two `submodel planet` lines each create their own planet instance.
-> Changing a parameter on `earth` (via a [design](./10-designs.md)) does
-> not affect `mars` — so you can configure each planet independently without worrying about interference.
+> Changing parameters on `mars` (via a [design](./10-designs.md)) does
+> not affect `Earth` — so you can configure each planet independently without worrying about interference.
 
 If no alias is given, you access parameters using the model name:
 
