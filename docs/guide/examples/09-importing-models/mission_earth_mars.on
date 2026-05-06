@@ -1,0 +1,7 @@
+submodel planet as earth
+submodel mars as m
+
+Spacecraft mass: m = 500 :kg
+
+Weight on Earth: W_e = m * g.earth :N
+Weight on Mars:  W_m = m * g.m  :N

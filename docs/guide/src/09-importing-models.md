@@ -11,109 +11,52 @@ it for shared parameters and models — physical constants, material properties,
 standard environments — that belong to the world your system lives in, not to
 the system itself.
 
+For example with the following constants:
 ```oneil
 # constants.on
 Speed of light: c = 299792458 :m/s
 Planck constant: h = 6.626e-34 :J*s
 Boltzmann constant: k_B = 1.38e-23 :J/K
+Gravitational constant: G = 6.674e-11 :N*m^2/kg^2
 ```
+
+We can model both a photon's energy
 
 ```oneil
 # photon.on
-reference constants as phys
+reference constants as c
 
 Photon frequency: f = 5.09e14 :Hz
-Photon energy: E = h.phys * f :J
+Photon energy: E = h.c * f :J
 ```
+
+As well as an radio link
 
 ```oneil
 # link_budget.on
-reference constants as phys
+reference constants as c
 
 Distance: d = 384400 :km
 Signal frequency: f = 2.4e9 :Hz
-Path loss: L_fs = (4 * pi * d * f / c.phys)^2
+Path loss: L_fs = (4 * pi * d * f / c.c)^2
 ```
 
-Both `photon.on` and `link_budget.on` read from the same `constants.on` file.
-If a [design](./10-designs.md) overrides a value on `constants`, both models see
-the change — that's what it means to share a reference.
-
-The `as` alias is optional — without it, you access parameters using the model name:
+Creating a short alias using `as alias_name` is optional. Without the alias you access parameters using the model's name:
 
 ```oneil
-# without alias — use the filename
-reference constants
+# photon_ref_constants.on
+reference constants # no alias 
+Photon frequency: f = 5.09e14 :Hz
 Photon energy: E = h.constants * f :J
 ```
 
 ## Submodels
 
-A **submodel** incorporates another model as part of the current model and imports the other model's parameters. Unlike a reference, each `submodel` statement creates an
-independent instance — import the same model twice under different aliases and
-each one has its own parameters.
+A **submodel** adds a model as part of the current model and gives access to the other model's parameters.
+Unlike a reference, each `submodel` statement creates an independent model — if you import the same model twice
+under different aliases each one has its own parameters, which you can change independently by **applying** a **design file** to that instance (see [Designs](./10-designs.md)).
 
 Planets are a natural fit — a mission might visit multiple planets, and each needs its own independent parameters.
-
-```oneil
-# planet.on
-Surface gravity: g = 9.81 :m/s^2
-Radius: R = 6371 :km
-```
-
-The planet model defaults to Earth's values — you can override them with a design.
-
-```oneil
-# mission.on
-submodel planet as earth
-submodel planet as mars
-apply mars_design to mars
-
-Spacecraft mass: m = 500 :kg
-
-Weight on Earth: W_e = m * g.earth :N
-Weight on Mars:  W_m = m * g.mars  :N
-```
-
-> [!NOTE]
-> The two `submodel planet` lines each create their own planet instance.
-> Changing parameters on `mars` (via a [design](./10-designs.md)) does
-> not affect `Earth` — so you can configure each planet independently without worrying about interference.
-
-If no alias is given, you access parameters using the model name:
-
-```oneil
-submodel planet
-Surface gravity seen: g_local = g.planet :m/s^2
-```
-
-## Accessing submodel parameters
-
-To access a parameter inside a reference or submodel, write `parameter_id.alias`
-— the **parameter comes first**, the model second.
-
-```oneil
-# satellite.on
-reference constants as phys
-submodel planet as target
-
-Orbital speed: v = sqrt(G.phys * M.target / R.target) :m/s
-```
-
-A submodel is also *exported* as part of the current model's structure, so a
-parent of `satellite.on` can reach nested parameters via the chain
-`param.satellite`, `param.target`, etc.
-
-> [!NOTE]
-> This is the reverse of the `object.property` convention in most programming
-> languages, and it's intentional. In engineering equations, parameters are
-> primary — the system or body is a subscript qualifier.
-
-## Referring to a nested submodel
-
-When a submodel itself contains submodels, you can declare a **local alias**
-for one of those inner models using `[alias]` at the end of the `submodel`
-line — giving you direct access to a nested model.
 
 ```oneil
 # planet.on
@@ -122,44 +65,93 @@ Radius: R = 6371 :km
 Mass: M = 5.97e24 :kg
 ```
 
+The planet model defaults to Earth's values on `earth`, but **`submodel mars`** imports the `mars` design file which applies a mars design to the `planet` instance (`m`): its bindings **override** `g`, `R`, and `M`, and **add** Mars-specific parameters. The two instances stay independent.
+
+```oneil
+# mission_earth_mars.on
+submodel planet as earth
+submodel mars as m
+
+Spacecraft mass: m = 500 :kg
+
+Weight on Earth: W_e = m * g.earth :N
+Weight on Mars:  W_m = m * g.m  :N
+```
+
+Like **reference** imports, the name after `as` is an *alias*. If no alias is given, the default alias is the model name:
+
+```oneil
+# submodel_planet_default_alias.on
+submodel planet
+
+Surface gravity seen: g_local = g.planet :m/s^2
+```
+
+It is an error for two submodels to have the same alias.
+
+## Accessing submodel parameters
+
+To access a parameter inside a reference or submodel, write `parameter_id.alias`
+— the **parameter comes first**, the model's alias second.
+
+```oneil
+# satellite.on
+reference constants as c
+submodel planet as p
+
+Orbital speed: v = sqrt(G.c * M.p / R.p) :m/s
+```
+
+> [!NOTE]
+> This is the reverse of the `object.property` convention in most programming languages, and it is intentional. 
+> In engineering equations parameters are primary, whereas subscripts often qualify which subsystem or model the parameter is part of.
+
+## Referring to a nested submodel
+
+A submodel is also *exported* as part of the current model's structure. 
+A parent of `satellite.on` can reach nested parameters by importing a reference to a nested submodel using a local alias.
+
+For example with solar system defined as follows:
 ```oneil
 # solar_system.on
 submodel planet as earth
-submodel planet as mars
+submodel mars
 
 Star mass: M_star = 1.989e30 :kg
 Earth orbital period: T_earth = 365.25 :days
+Earth surface gravity: g_surface = g.earth :m/s^2
 ```
 
+The syntax `[alias]` or `[alias as local_alias]` at the end of the `submodel` line exposes the nested submodels to use locally. In this example we use the solar system in a mission and access earth parameters through a local alias.
+
 ```oneil
-# galaxy.on
-# Import the solar system and declare `earth` as a local alias here,
-# so it can be read and overlaid directly at the galaxy level.
-submodel solar_system as sol [earth]
+# mission_sol.on
+# Import the solar system and declare `e` as a local alias for `earth`,
+# so it can be used directly at the mission level.
+submodel solar_system as sol [earth as e]
 
 Probe mass: m_probe = 800 :kg
 
-# earth is a local alias here — access its parameters directly
-Landing weight: W = m_probe * g.earth :N
+# Access the parameters of e here
+Landing weight: W = m_probe * g.e :N
 
-# solar-system parameters still go through sol
+# Access solar-system parameters as normal
 Star mass: M_star = M_star.sol :kg
 Earth orbit: T = T_earth.sol :days
 ```
 
-The `[earth]` declaration pulls the `earth` alias from inside `solar_system.on`
-up to the `galaxy` level. The local alias and the one inside `sol` are two names
-for the **same model** — a [design](./10-designs.md) applied to `earth` here
-also affects any parameter in `sol` that reads from `earth`.
-
-You can pull in multiple aliases by separating them with commas, and rename any
-of them — useful when the original name is too generic or when you want to
-signal intent:
+You can pull in multiple aliases by separating them with commas:
 
 ```oneil
-submodel solar_system as sol [earth, mars as target]
+# mission_two_targets.on
+submodel solar_system as sol [
+    earth as e, 
+    mars as t # landing target
+]
 
 Probe mass: m_probe = 800 :kg
-Weight on Earth: W_earth = m_probe * g.earth :N
-Landing weight on target: W_target = m_probe * g.target :N
+Weight on Earth: W_e = m_probe * g.e :N
+Landing weight on target: W_t = m_probe * g.t :N
 ```
+
+[Designs](./10-designs.md) explains **design files** (`design <target>` in a `.one` file): you **apply** a design to specific `reference` / `submodel` instances. A design **overrides** existing parameters (same name as on the target model) and can **add** new ones.

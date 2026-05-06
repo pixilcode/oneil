@@ -1,0 +1,12 @@
+# Import the solar system and declare `e` as a local alias for `earth`,
+# so it can be used directly at the mission level.
+submodel solar_system as sol [earth as e]
+
+Probe mass: m_probe = 800 :kg
+
+# Access the parameters of e here
+Landing weight: W = m_probe * g.e :N
+
+# Access solar-system parameters as normal
+Star mass: M_star = M_star.sol :kg
+Earth orbit: T = T_earth.sol :days

@@ -305,11 +305,10 @@ Earth radius: R_E = 6356752 :km
 
 A *design* allows you to change or augment parameters of a model to represent
 an alternative configuration. Designs are written in `.one` files and can be
-applied to a model at the command line or from within another model using
-`apply <design> to <ref>`.
+applied to a model at the command line, to a model from a design using `apply <design> to <alias>`, or imported like a regular model `submodel <design> as <alias>`.
 
 ```oneil
-# mars_gravity.one
+# mars.one
 design planet
 
 g = 3.72 :m/s^2
@@ -317,8 +316,7 @@ g = 3.72 :m/s^2
 
 ```oneil
 # mission.on
-submodel planet as p
-apply mars_gravity to p
+submodel mars as p
 
 Spacecraft mass: m = 500 :kg
 Surface weight: W = m * g.p :N

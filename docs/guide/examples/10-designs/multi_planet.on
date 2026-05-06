@@ -2,7 +2,7 @@ submodel planet as earth
 submodel planet as mars
 submodel planet as moon
 
-apply mars_gravity to mars
+apply mars to mars
 apply moon_gravity to moon
 
 Spacecraft mass: m = 500 :kg

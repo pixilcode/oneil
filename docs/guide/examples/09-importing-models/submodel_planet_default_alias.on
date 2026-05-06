@@ -1,0 +1,3 @@
+submodel planet
+
+Surface gravity seen: g_local = g.planet :m/s^2

@@ -1,0 +1,8 @@
+submodel solar_system as sol [
+    earth as e,
+    mars as t
+]
+
+Probe mass: m_probe = 800 :kg
+Weight on Earth: W_e = m_probe * g.e :N
+Landing weight on target: W_t = m_probe * g.t :N
