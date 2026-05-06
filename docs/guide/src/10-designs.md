@@ -16,7 +16,7 @@ components, different planetary environments.
 
 ## Design files
 
-Start your design file with a `design <target>` declaration naming the model
+Start your design file with a `design <target>` declaring the model
 you're refining. For the parameters themselves, you can use shorthand — just
 `identifier = expression` with an optional `:unit`, skipping the `Label: id =
 expr` preamble that model files require.
@@ -64,7 +64,7 @@ oneil eval planet.on --design mars_gravity.one -P all
 
 ## Applying a design from within a model
 
-Use `apply <design> to <model_reference>` inside a model to attach a design to
+In some models, you want to import a submodel with a design that differs from the default for that submodel. Use `apply <design> to <model_reference>` inside a model to attach a design to
 a specific submodel. The design must target the same model that `<ref>` resolves
 to — if it doesn't, you'll get an error.
 
@@ -96,7 +96,7 @@ oneil eval planet.on --design mars_gravity.one -P all
 
 ## `reference` vs `submodel` — design isolation
 
-Whether you use `reference` or `submodel` determines how broadly an applied
+In some cases you may want to reference a body of parameters that are shared across the model, not limited to a specific component of the system. Whether you use `reference` or `submodel` determines how broadly an applied
 design takes effect.
 
 **`reference`** creates a **shared model** — use it for parameters that belong
