@@ -113,7 +113,6 @@ pub fn collect_design_surface(model_ast: &ast::Model) -> Vec<DesignSurfaceItem<'
         match &**decl {
             ast::Decl::DesignTarget(n) => items.push(DesignSurfaceItem::Target(n)),
             ast::Decl::ApplyDesign(n) => items.push(DesignSurfaceItem::Apply(n)),
-            ast::Decl::SubmodelWithApply(n) => items.push(DesignSurfaceItem::Apply(n.apply())),
             ast::Decl::DesignParameter(n) => items.push(DesignSurfaceItem::Parameter(n)),
             ast::Decl::Import(_)
             | ast::Decl::Submodel(_)

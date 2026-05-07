@@ -15,6 +15,10 @@ use crate::{
 };
 
 /// Resolves submodels and their associated tests from submodel declarations.
+#[expect(
+    clippy::too_many_lines,
+    reason = "cohesive per-import resolution logic: duplicate checks, design-file fallback, path resolution, and submodel/reference registration; splitting would obscure the flow"
+)]
 pub fn resolve_model_imports<E>(
     model_path: &ModelPath,
     model_imports: Vec<&ast::SubmodelDeclNode>,
@@ -23,7 +27,7 @@ pub fn resolve_model_imports<E>(
     E: ExternalResolutionContext,
 {
     for model_import in model_imports {
-        let import_path = calc_import_path(model_path, model_import);
+        let on_path = calc_import_path(model_path, model_import);
 
         let (reference_name, reference_name_span) =
             get_reference_name_and_span(model_import.model_info());
@@ -86,6 +90,31 @@ pub fn resolve_model_imports<E>(
         if had_duplicate {
             continue;
         }
+
+        // Resolve the effective path, falling back to a .one design file when
+        // the .on model file doesn't exist.  If neither file was found, emit a
+        // specific error and skip this import entirely.
+        let import_path =
+            match effective_import_path(on_path, model_path, model_import, resolution_context) {
+                Ok(path) => path,
+                Err((tried_on, tried_one)) => {
+                    let err = ModelImportResolutionError::model_or_design_not_found(
+                        tried_on,
+                        tried_one,
+                        reference_name_span,
+                    );
+                    handle_resolution_error(
+                        err,
+                        model_import,
+                        reference_name.clone(),
+                        SubmodelName::from(reference_name.as_str()),
+                        reference_name_span,
+                        is_submodel,
+                        resolution_context,
+                    );
+                    continue;
+                }
+            };
 
         // resolve the path for the imported model
         let subcomponents = model_import.model_info().subcomponents();
@@ -253,6 +282,48 @@ fn get_reference_name_and_span(model_info: &ast::ModelInfo) -> (ReferenceName, S
 fn calc_import_path(model_path: &ModelPath, model_import: &ast::SubmodelDeclNode) -> ModelPath {
     let model_import_relative_path = model_import.get_model_relative_path();
     model_path.get_sibling_model_path(model_import_relative_path)
+}
+
+/// Resolves the effective import path for a submodel declaration.
+///
+/// When the import has no subcomponents and the `.on` model file failed to
+/// load, this function checks for a sibling `.one` design file:
+///
+/// - `Ok(one_path)` — the `.one` file loaded; the caller should register a
+///   design-backed submodel and let the graph builder route it through
+///   [`CompilationUnit::Design`].
+/// - `Err((on_path, one_path))` — neither file exists; the caller should emit
+///   a `ModelOrDesignNotFound` diagnostic with both attempted paths.
+///
+/// When subcomponents are present or the `.on` file loads normally,
+/// `Ok(on_path)` is returned.
+fn effective_import_path<E>(
+    on_path: ModelPath,
+    model_path: &ModelPath,
+    model_import: &ast::SubmodelDeclNode,
+    resolution_context: &ResolutionContext<'_, E>,
+) -> Result<ModelPath, (ModelPath, ModelPath)>
+where
+    E: ExternalResolutionContext,
+{
+    // The design-file fallback only applies when `load_model_imports` ran first
+    // and recorded an explicit AST-load failure for the `.on` path.  Models
+    // injected directly (e.g. in unit tests) never go through `load_model`, so
+    // `ast_load_failed` returns false for them and the fallback is skipped.
+    if model_import.model_info().subcomponents().is_empty()
+        && resolution_context.ast_load_failed(&on_path)
+    {
+        let design_relative = model_import.get_design_relative_path();
+        let one_path = model_path
+            .get_sibling_design_path(design_relative)
+            .to_model_path();
+        return if resolution_context.ast_load_failed(&one_path) {
+            Err((on_path, one_path))
+        } else {
+            Ok(one_path)
+        };
+    }
+    Ok(on_path)
 }
 
 /// Recursively resolves a model path by traversing subcomponents.

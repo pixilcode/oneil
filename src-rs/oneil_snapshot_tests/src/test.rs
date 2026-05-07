@@ -81,12 +81,18 @@ fn overlay_two_instances() {
 }
 
 #[test]
-fn overlay_submodel_with_apply_sugar() {
-    // `apply D to submodel M as A` is equivalent to `submodel M as A` +
-    // `apply D to A`.  This test confirms the sugar produces the same output
-    // as the explicit two-line form (planet_a gets Mars gravity; planet_b
-    // keeps Earth gravity).
+fn overlay_submodel_with_apply_explicit() {
+    // Explicit two-line form: `submodel M as A` + `apply D to A`.
+    // Planet A gets Mars gravity override; planet B keeps Earth gravity.
     insta::assert_snapshot!(run_fixture("design_overlay/submodel_with_apply.on"));
+}
+
+#[test]
+fn submodel_neither_on_nor_one_found() {
+    // When neither `nonexistent.on` nor `nonexistent.one` exists, the resolver
+    // should emit a clear "no model or design file found" error pointing at
+    // both paths that were tried.
+    insta::assert_snapshot!(run_fixture("design_overlay/missing_model/parent.on"));
 }
 
 #[test]
@@ -103,6 +109,18 @@ fn overlay_nested_parameter() {
     insta::assert_snapshot!(run_fixture_with_design(
         "design_overlay/nested_param/nested_param_parent.on",
         "design_overlay/nested_param/nested_param_design.one",
+    ));
+}
+
+#[test]
+fn overlay_scoped_reference_override() {
+    // `param.ref_alias = value` in a design overrides `param` inside the
+    // shared reference instance (not just a submodel hop). This verifies
+    // that scoped overrides work across reference boundaries, not only
+    // submodel ones.
+    insta::assert_snapshot!(run_fixture_with_design(
+        "design_overlay/scoped_ref_override/budget.on",
+        "design_overlay/scoped_ref_override/far_distance.one",
     ));
 }
 

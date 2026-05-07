@@ -23,12 +23,6 @@ pub enum Decl {
     /// Submodel declaration for importing other models
     Submodel(SubmodelDeclNode),
 
-    /// Combined `apply <file> to (submodel|reference) <model> [as <alias>]` shorthand.
-    ///
-    /// Desugars to a [`SubmodelDecl`] followed by an [`ApplyDesign`] targeting the
-    /// submodel's alias. Both `submodel` and `reference` keywords are accepted.
-    SubmodelWithApply(SubmodelWithApplyNode),
-
     /// Declares that this file is a design file for another model (`design <name>`).
     DesignTarget(DesignTargetNode),
 
@@ -60,12 +54,6 @@ impl Decl {
     #[must_use]
     pub const fn submodel(submodel: SubmodelDeclNode) -> Self {
         Self::Submodel(submodel)
-    }
-
-    /// Creates a combined submodel-with-apply declaration
-    #[must_use]
-    pub const fn submodel_with_apply(node: SubmodelWithApplyNode) -> Self {
-        Self::SubmodelWithApply(node)
     }
 
     /// Creates a design target declaration
@@ -188,6 +176,26 @@ impl SubmodelDecl {
         let path = PathBuf::from(path.join("/"));
 
         ModelPath::from_path_no_ext(&path)
+    }
+
+    /// Returns the corresponding `.one` design file path for this submodel declaration.
+    ///
+    /// This mirrors [`get_model_relative_path`](Self::get_model_relative_path) but emits
+    /// a [`DesignPath`] with a `.one` extension instead of a `.on` model path.  Used when
+    /// the resolver needs to fall back to a design file when no `.on` model exists for
+    /// this name.
+    #[must_use]
+    pub fn get_design_relative_path(&self) -> DesignPath {
+        let mut path = self
+            .directory_path
+            .iter()
+            .map(|d| d.as_str())
+            .collect::<Vec<_>>();
+        path.push(self.model.top_component().as_str());
+
+        let path = PathBuf::from(path.join("/"));
+
+        DesignPath::from_path_no_ext(&path)
     }
 }
 
@@ -553,46 +561,5 @@ impl DesignParameter {
     #[must_use]
     pub const fn note(&self) -> Option<&NoteNode> {
         self.note.as_ref()
-    }
-}
-
-/// Combined `apply <file> to (submodel|reference) <model> [as <alias>]` declaration.
-///
-/// This is syntactic sugar for writing:
-/// ```oneil
-/// submodel <model> as <alias>
-/// apply <file> to <alias>
-/// ```
-///
-/// The `apply` node inside always has `target = [alias]` set at parse time.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SubmodelWithApply {
-    submodel: SubmodelDeclNode,
-    apply: ApplyDesignNode,
-}
-
-/// AST node for a [`SubmodelWithApply`] declaration.
-pub type SubmodelWithApplyNode = Node<SubmodelWithApply>;
-
-impl SubmodelWithApply {
-    /// Creates a new combined submodel-with-apply node.
-    ///
-    /// `submodel` is the parsed submodel/reference declaration; `apply` is an
-    /// [`ApplyDesign`] whose `target` has already been set to the submodel's alias.
-    #[must_use]
-    pub const fn new(submodel: SubmodelDeclNode, apply: ApplyDesignNode) -> Self {
-        Self { submodel, apply }
-    }
-
-    /// The submodel/reference half of the declaration.
-    #[must_use]
-    pub const fn submodel(&self) -> &SubmodelDeclNode {
-        &self.submodel
-    }
-
-    /// The apply half of the declaration (target is the submodel alias).
-    #[must_use]
-    pub const fn apply(&self) -> &ApplyDesignNode {
-        &self.apply
     }
 }

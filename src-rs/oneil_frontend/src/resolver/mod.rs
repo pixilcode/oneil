@@ -78,6 +78,7 @@ where
     //
     // note that this succeeds even if the model ast is only partially loaded
     let Some(model_ast) = load_ast_result.value() else {
+        resolution_context.record_failed_ast_load(model_path.clone());
         resolution_context.pop_active_model(model_path);
         return;
     };
@@ -167,9 +168,6 @@ fn split_model_ast(
             ast::Decl::Submodel(submodel) => {
                 submodels.push(submodel);
             }
-            ast::Decl::SubmodelWithApply(n) => {
-                submodels.push(n.submodel());
-            }
             ast::Decl::Parameter(parameter) => parameters.push(ParameterWithSection {
                 parameter,
                 section_label,
@@ -230,6 +228,17 @@ fn load_model_imports<E>(
 
         // load the imported model (and its submodels)
         load_model(&model_import_path, resolution_context);
+
+        // If the .on file didn't exist, check for a sibling .one design file.
+        // Design files carry their own target model declaration (`design <name>`),
+        // so loading the .one triggers loading of that target model as well.
+        if model_import.model_info().subcomponents().is_empty()
+            && resolution_context.ast_load_failed(&model_import_path)
+        {
+            let design_relative = model_import.get_design_relative_path();
+            let design_path = model_path.get_sibling_design_path(design_relative);
+            load_model(&design_path.to_model_path(), resolution_context);
+        }
     }
 }
 

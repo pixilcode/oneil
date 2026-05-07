@@ -16,8 +16,7 @@ pub use debug_info::{TraceLevel, TraceLevelNode};
 pub use declaration::{
     ApplyDesign, ApplyDesignNode, Decl, DeclNode, DesignParameter, DesignParameterNode,
     DesignTarget, DesignTargetNode, Import, ImportNode, ModelInfo, ModelInfoNode, ModelKind,
-    SubmodelDecl, SubmodelDeclNode, SubmodelList, SubmodelListNode, SubmodelWithApply,
-    SubmodelWithApplyNode,
+    SubmodelDecl, SubmodelDeclNode, SubmodelList, SubmodelListNode,
 };
 pub use expression::{
     BinaryOp, BinaryOpNode, ComparisonOp, ComparisonOpNode, Expr, ExprNode, ExprVisitor, Literal,

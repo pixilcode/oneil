@@ -149,20 +149,6 @@ fn print_decl(decl: &ast::DeclNode, indent: usize, prefix: &str) {
                 );
             }
         }
-        ast::Decl::SubmodelWithApply(n) => {
-            let submodel = n.submodel();
-            let apply = n.apply();
-            let alias = submodel.model_info().get_alias();
-            println!(
-                "{}{} {} \"{}\" as {} + apply {}",
-                "    ".repeat(indent),
-                dbg_style::TREE.style(prefix),
-                dbg_style::LABEL.style("SubmodelWithApply:"),
-                dbg_style::IDENTIFIER.style(submodel.model_info().top_component().as_str()),
-                dbg_style::IDENTIFIER.style(alias.as_str()),
-                dbg_style::IDENTIFIER.style(apply.design_file().as_str()),
-            );
-        }
         ast::Decl::Parameter(param) => {
             println!(
                 "{}{} {} {}",

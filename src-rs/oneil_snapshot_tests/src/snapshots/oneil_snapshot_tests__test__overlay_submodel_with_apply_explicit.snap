@@ -1,6 +1,6 @@
 ---
 source: src-rs/oneil_snapshot_tests/src/test.rs
-assertion_line: 89
+assertion_line: 84
 expression: "run_fixture(\"design_overlay/submodel_with_apply.on\")"
 ---
 Model: fixtures/design_overlay/submodel_with_apply.on

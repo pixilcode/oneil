@@ -1,0 +1,5 @@
+# Neither nonexistent.on nor nonexistent.one exist — should produce a clear
+# "no model or design file found" error rather than a silent bad state.
+submodel nonexistent as foo
+
+Mass: m = 5 :kg

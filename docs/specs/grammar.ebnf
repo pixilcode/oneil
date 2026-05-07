@@ -25,13 +25,11 @@ Declaration = DesignTargetDecl | ImportDecl | ApplyDecl | SubmodelDecl | DesignB
 (* Declares that this file parameterizes another model; path may include directory prefixes *)
 DesignTargetDecl = "design", [ DirectoryPath ], Identifier, EndOfLine ;
 
-(* Applies a design to a reference path, or to a freshly declared submodel/reference. *)
+(* Applies a design file to a reference path in the current model. *)
 (* Nested applies (inside `[ … ]`) omit the `apply` keyword. *)
 ApplyDecl = "apply", [ DirectoryPath ], Identifier, "to",
-            ( SubmodelOrRefTarget | Identifier, { ".", Identifier },
-              [ "[", { ApplyBody, EndOfLine }, "]" ] ), EndOfLine ;
-(* `apply D to submodel M [as A]` — desugars to `submodel M [as A]` + `apply D to A` *)
-SubmodelOrRefTarget = ( "submodel" | "reference" ), [ DirectoryPath ], Identifier, [ AsAlias ] ;
+            Identifier, { ".", Identifier },
+            [ "[", { ApplyBody, EndOfLine }, "]" ], EndOfLine ;
 ApplyBody = [ DirectoryPath ], Identifier, "to", Identifier, { ".", Identifier },
             [ "[", { ApplyBody, EndOfLine }, "]" ] ;
 

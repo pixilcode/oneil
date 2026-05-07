@@ -944,7 +944,8 @@ fn get_model_path_from_model_import_error(err: &ModelImportResolutionError) -> O
 
         ModelImportResolutionError::ParentModelHasError { .. }
         | ModelImportResolutionError::DuplicateSubmodel { .. }
-        | ModelImportResolutionError::DuplicateReference { .. } => None,
+        | ModelImportResolutionError::DuplicateReference { .. }
+        | ModelImportResolutionError::ModelOrDesignNotFound { .. } => None,
     }
 }
 

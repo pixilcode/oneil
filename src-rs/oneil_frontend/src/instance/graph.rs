@@ -52,6 +52,20 @@ use oneil_shared::{
     symbols::{ParameterName, ReferenceName},
 };
 
+/// Returns the appropriate [`CompilationUnit`] for a submodel child path.
+///
+/// Submodels backed by a `.one` design file are routed through
+/// [`CompilationUnit::Design`] so that the graph builder invokes
+/// [`build_design_unit_graph`], which loads the target model declared inside
+/// the design file and applies the design's contributions.  Plain `.on` model
+/// files use [`CompilationUnit::Model`] as before.
+fn child_compilation_unit(path: ModelPath) -> CompilationUnit {
+    match DesignPath::try_from(path.clone()) {
+        Ok(dp) => CompilationUnit::Design(dp),
+        Err(()) => CompilationUnit::Model(path),
+    }
+}
+
 use crate::context::MAX_BEST_MATCH_DISTANCE;
 use crate::error::{DesignResolutionError, ResolutionErrorCollection};
 use crate::instance::cycle_error::CompilationCycleError;
@@ -429,7 +443,10 @@ fn build_instance_subtree(
                 .expect("alias just enumerated from submodels");
             (sub.instance.path().clone(), sub.name_span)
         };
-        let child_unit = CompilationUnit::Model(child_path);
+        // Design-file submodels (path ends in .one) are routed through
+        // CompilationUnit::Design so build_design_unit_graph applies the
+        // design's overrides on top of the target model.
+        let child_unit = child_compilation_unit(child_path);
         if let Some(error) = cycle_error_for_revisit(&child_unit, name_span, stack) {
             graph.cycle_errors.push(error);
             continue;
@@ -719,11 +736,11 @@ fn apply_scoped_overlay(
     // The scope_path is relative to the anchor (the apply target).
     let scope_segments: Vec<ReferenceName> = scope_path.segments().to_vec();
 
-    // Resolve from anchor host into the deeper host, computing the actual
-    // tree depth (which may differ from `scope_segments.len()` when an alias
-    // maps through multiple submodel levels).
-    let anchor_node = host_at(root, pool, anchor_loc).expect("anchor host must exist");
-    let Some(resolved_depth) = resolve_scope_depth(anchor_node, &scope_segments) else {
+    // Resolve from the anchor into the deeper host, following submodels,
+    // aliases, and references (cross-pool jumps).
+    let Some((host_loc, anchor_relative)) =
+        resolve_scoped_host_location(root, pool, anchor_loc, &scope_segments)
+    else {
         // Scoped path didn't resolve. Surface a diagnostic.
         let span = applied_via
             .filter(|a| a.apply_span.start() != a.apply_span.end())
@@ -764,21 +781,7 @@ fn apply_scoped_overlay(
         return;
     };
 
-    // Build the absolute tree path to the host instance. Aliases expand to
-    // their underlying submodel path.
-    let resolved_segs = resolve_scope_segments(anchor_node, &scope_segments);
-    let host_abs = match &anchor_loc.absolute_path {
-        AbsolutePath::Root(p) => AbsolutePath::Root(extend_path(p, &resolved_segs)),
-        AbsolutePath::Pool(pp, p) => AbsolutePath::Pool(pp.clone(), extend_path(p, &resolved_segs)),
-    };
-    let host_loc = HostLocation {
-        absolute_path: host_abs,
-    };
     let host = host_at_mut(root, pool, &host_loc).expect("scoped host must exist");
-    let anchor_relative = RelativePath {
-        up: resolved_depth,
-        down: Vec::new(),
-    };
     apply_overlay_at_host(
         host,
         overrides,
@@ -938,14 +941,6 @@ fn host_at_in_view<'a>(
     }
 }
 
-fn host_at<'a>(
-    root: &'a InstancedModel,
-    pool: &'a IndexMap<ModelPath, Box<InstancedModel>>,
-    loc: &HostLocation,
-) -> Option<&'a InstancedModel> {
-    host_at_in_view(root, pool, &loc.absolute_path)
-}
-
 fn host_at_mut<'a>(
     root: &'a mut InstancedModel,
     pool: &'a mut IndexMap<ModelPath, Box<InstancedModel>>,
@@ -960,51 +955,63 @@ fn host_at_mut<'a>(
     }
 }
 
-/// Resolves `segments` from `node`, computing the actual tree depth
-/// (number of submodel hops) after expanding any aliases. Returns `None`
-/// if any segment cannot be resolved.
-fn resolve_scope_depth(node: &InstancedModel, segments: &[ReferenceName]) -> Option<usize> {
-    let mut current = node;
-    let mut depth = 0_usize;
-    for seg in segments {
-        if let Some(sub) = current.submodels().get(seg) {
-            depth += 1;
-            current = sub.instance.as_ref();
-        } else if let Some(alias) = current.aliases().get(seg) {
-            let alias_segs = alias.alias_path.segments().to_vec();
-            depth += alias_segs.len();
-            for alias_seg in &alias_segs {
-                let sub = current.submodels().get(alias_seg)?;
-                current = sub.instance.as_ref();
-            }
-        } else {
-            return None;
-        }
-    }
-    Some(depth)
-}
+/// Resolves `scope_segments` relative to `anchor_loc`, following submodels,
+/// aliases, and references (cross-pool jumps). Returns the resolved
+/// [`HostLocation`] and a [`RelativePath`] for design provenance.
+///
+/// The provenance `RelativePath` counts submodel hops descended within the
+/// final tree segment; it resets to zero whenever a reference boundary is
+/// crossed (since the new pool entry has its own independent coordinate
+/// system).
+///
+/// Returns `None` if any segment cannot be resolved.
+fn resolve_scoped_host_location(
+    root: &InstancedModel,
+    pool: &IndexMap<ModelPath, Box<InstancedModel>>,
+    anchor_loc: &HostLocation,
+    scope_segments: &[ReferenceName],
+) -> Option<(HostLocation, RelativePath)> {
+    let mut absolute = anchor_loc.absolute_path.clone();
+    // Number of submodel hops since the last reference cross (or from start).
+    let mut submodel_depth: usize = 0;
+    let mut remaining: Vec<ReferenceName> = scope_segments.to_vec();
+    remaining.reverse(); // use as a stack: pop() yields segments left-to-right
 
-/// Returns the fully-expanded submodel path corresponding to `segments`
-/// (alias names expanded to their `alias_path` segments). Caller must
-/// ensure the path is resolvable (call `resolve_scope_depth` first).
-fn resolve_scope_segments(node: &InstancedModel, segments: &[ReferenceName]) -> Vec<ReferenceName> {
-    let mut current = node;
-    let mut out = Vec::new();
-    for seg in segments {
-        if let Some(sub) = current.submodels().get(seg) {
-            out.push(seg.clone());
-            current = sub.instance.as_ref();
-        } else if let Some(alias) = current.aliases().get(seg) {
-            let alias_segs = alias.alias_path.segments().to_vec();
-            for alias_seg in &alias_segs {
-                out.push(alias_seg.clone());
-                if let Some(sub) = current.submodels().get(alias_seg) {
-                    current = sub.instance.as_ref();
-                }
-            }
+    while let Some(seg) = remaining.pop() {
+        let host = host_at_in_view(root, pool, &absolute)?;
+        if host.get_submodel(&seg).is_some() {
+            absolute = absolute.append(seg);
+            submodel_depth += 1;
+            continue;
         }
+        if let Some(alias) = host.get_alias(&seg) {
+            // Expand the alias into its path segments and push them back so
+            // each hop is processed individually (and counted separately).
+            let mut expansion: Vec<ReferenceName> = alias.alias_path.segments().to_vec();
+            expansion.reverse();
+            remaining.extend(expansion);
+            continue;
+        }
+        if let Some(reference) = host.get_reference(&seg) {
+            // Jump into the reference pool. The new pool-root is a separate
+            // coordinate system, so the submodel depth resets.
+            absolute = AbsolutePath::Pool(reference.path.clone(), InstancePath::root());
+            submodel_depth = 0;
+            continue;
+        }
+        return None;
     }
-    out
+
+    let anchor_relative = RelativePath {
+        up: submodel_depth,
+        down: Vec::new(),
+    };
+    Some((
+        HostLocation {
+            absolute_path: absolute,
+        },
+        anchor_relative,
+    ))
 }
 
 fn navigate_in_subtree<'a>(

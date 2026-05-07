@@ -1,8 +1,9 @@
-# Test: `apply mars_override to submodel M as A` sugar desugars to
-# `submodel M as A` + `apply mars_override to A`.
-# The two planets are independent instances (submodel semantics).
+# Test: `submodel mars_override as planet_a` where mars_override.one is a design
+# file.  The loader detects the .one file and desugars this into loading
+# gravity_earth as planet_a with mars_override applied.
+# Planet B is a plain submodel of gravity_earth with no override.
 
-apply mars_override to submodel ../gravity_earth as planet_a
+submodel mars_override as planet_a
 submodel ../gravity_earth as planet_b
 
 # Calculate 100kg weight on each planet.

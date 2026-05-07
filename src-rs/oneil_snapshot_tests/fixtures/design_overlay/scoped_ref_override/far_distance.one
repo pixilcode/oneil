@@ -1,0 +1,4 @@
+design budget
+
+# Override `d` inside the shared `constants` reference.
+d.c = 4.0e8 :km

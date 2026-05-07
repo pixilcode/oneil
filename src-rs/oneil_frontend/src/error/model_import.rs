@@ -57,6 +57,17 @@ pub enum ModelImportResolutionError {
         /// The span of where the duplicate reference is referenced
         duplicate_span: Span,
     },
+    /// Neither a model file (`.on`) nor a design file (`.one`) was found for
+    /// the given name.  This is surfaced when `submodel <name>` is written
+    /// but neither `<name>.on` nor `<name>.one` exists on disk.
+    ModelOrDesignNotFound {
+        /// Path of the `.on` model file that was looked for
+        model_path: ModelPath,
+        /// Path of the `.one` design file that was looked for
+        design_path: ModelPath,
+        /// Span of the name in the source
+        reference_span: Span,
+    },
 }
 
 impl ModelImportResolutionError {
@@ -128,6 +139,21 @@ impl ModelImportResolutionError {
             duplicate_span,
         }
     }
+
+    /// Creates a new error indicating that neither a `.on` model file nor a
+    /// `.one` design file was found for the given name.
+    #[must_use]
+    pub const fn model_or_design_not_found(
+        model_path: ModelPath,
+        design_path: ModelPath,
+        reference_span: Span,
+    ) -> Self {
+        Self::ModelOrDesignNotFound {
+            model_path,
+            design_path,
+            reference_span,
+        }
+    }
 }
 
 impl fmt::Display for ModelImportResolutionError {
@@ -173,6 +199,18 @@ impl fmt::Display for ModelImportResolutionError {
                 let reference_str = reference.as_str();
                 write!(f, "reference `{reference_str}` is defined multiple times")
             }
+            Self::ModelOrDesignNotFound {
+                model_path,
+                design_path,
+                ..
+            } => {
+                let on = model_path.as_path().display();
+                let one = design_path.as_path().display();
+                write!(
+                    f,
+                    "no model or design file found (looked for `{on}` and `{one}`)"
+                )
+            }
         }
     }
 }
@@ -205,6 +243,10 @@ impl AsOneilError for ModelImportResolutionError {
             | Self::DuplicateReference {
                 duplicate_span: location_span,
                 ..
+            }
+            | Self::ModelOrDesignNotFound {
+                reference_span: location_span,
+                ..
             } => {
                 let location = ErrorLocation::from_source_and_span(source, *location_span);
                 Some(location)
@@ -224,7 +266,8 @@ impl AsOneilError for ModelImportResolutionError {
             | Self::ParentModelHasError { .. }
             | Self::UndefinedSubmodel { .. }
             | Self::DuplicateSubmodel { .. }
-            | Self::DuplicateReference { .. } => vec![],
+            | Self::DuplicateReference { .. }
+            | Self::ModelOrDesignNotFound { .. } => vec![],
         }
     }
 
@@ -256,7 +299,9 @@ impl AsOneilError for ModelImportResolutionError {
                     Some(location),
                 )]
             }
-            Self::ModelHasError { .. } | Self::UndefinedSubmodel { .. } => vec![],
+            Self::ModelHasError { .. }
+            | Self::UndefinedSubmodel { .. }
+            | Self::ModelOrDesignNotFound { .. } => vec![],
         }
     }
 

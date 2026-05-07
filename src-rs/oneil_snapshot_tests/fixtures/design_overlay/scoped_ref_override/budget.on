@@ -1,0 +1,10 @@
+# Scoped override on a reference parameter.
+# `d.c` reads `d` from the shared `constants` reference.
+# Applying a design with `d.c = value` overrides `d` in the shared reference.
+reference constants as c
+
+Budget coefficient: k = 5e-5 :kg/km
+Base propellant: m0 = 15000 :kg
+
+Required propellant: m_req = k * d.c :kg
+Propellant margin(-1e30, 1e30): m_margin = m0 - m_req :kg

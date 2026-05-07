@@ -158,6 +158,12 @@ pub struct ResolutionContext<'external, E: ExternalResolutionContext> {
     active_models: Vec<ModelPath>,
     /// Set of models that have been visited.
     visited_models: IndexSet<ModelPath>,
+    /// Paths for which `load_ast` was called by `load_model` and returned
+    /// failure (file not found / parse error).  Distinct from `visited_models`
+    /// because the test helper pre-registers models without ever calling
+    /// `load_ast`, so `visited_models` alone cannot differentiate "tried and
+    /// failed" from "injected directly in a test".
+    failed_ast_loads: IndexSet<ModelPath>,
     /// Per-model resolution results.
     model_results: IndexMap<ModelPath, ModelResolutionResult>,
     /// Design-local parameters visible during resolution but not persisted in
@@ -178,6 +184,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
             external_context,
             active_models: Vec::new(),
             visited_models: IndexSet::new(),
+            failed_ast_loads: IndexSet::new(),
             model_results: IndexMap::new(),
             design_local_scratch: IndexMap::new(),
         }
@@ -200,6 +207,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
             external_context,
             active_models: Vec::new(),
             visited_models: IndexSet::new(),
+            failed_ast_loads: IndexSet::new(),
             model_results,
             design_local_scratch: IndexMap::new(),
         }
@@ -253,6 +261,25 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     #[must_use]
     pub fn has_visited_model(&self, model_path: &ModelPath) -> bool {
         self.visited_models.contains(model_path)
+    }
+
+    /// Records that `load_ast` was called for `path` and returned a failure.
+    ///
+    /// Called by [`load_model`](crate::resolver::load_model) when the
+    /// underlying file cannot be read or parsed.  Use
+    /// [`ast_load_failed`](Self::ast_load_failed) to query the flag later.
+    pub fn record_failed_ast_load(&mut self, path: ModelPath) {
+        self.failed_ast_loads.insert(path);
+    }
+
+    /// Returns `true` when [`record_failed_ast_load`](Self::record_failed_ast_load)
+    /// was previously called for `path`.
+    ///
+    /// Returns `false` for models that were pre-registered directly (e.g. via
+    /// the test helper) without ever going through the file-loading path.
+    #[must_use]
+    pub fn ast_load_failed(&self, path: &ModelPath) -> bool {
+        self.failed_ast_loads.contains(path)
     }
 
     fn active_model(&self) -> &InstancedModel {
