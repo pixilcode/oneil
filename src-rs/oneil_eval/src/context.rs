@@ -491,30 +491,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
             .expect("current model should be set when looking up a parameter")
             .clone();
 
-        self.force_parameter(&current_key, parameter_name, variable_span, true)
-    }
-
-    /// Looks up a parameter on a known [`EvalInstanceKey`], forcing evaluation
-    /// on demand if necessary.
-    ///
-    /// Post-classification entry point used by [`crate::eval_expr::eval_expr`]
-    /// for both `Variable::Parameter` and `Variable::External` whenever
-    /// the variable already carries the resolved instance key — no
-    /// scope-walking required. Errors only include the model path when
-    /// `key` differs from the active scope, so the diagnostic reads
-    /// naturally for both same-model and cross-model lookups.
-    #[expect(
-        dead_code,
-        reason = "part of the public eval API; used in architecture docs"
-    )]
-    pub fn lookup_parameter_value_at(
-        &mut self,
-        key: &EvalInstanceKey,
-        parameter_name: &ParameterName,
-        variable_span: Span,
-    ) -> Result<output::Value, Vec<EvalError>> {
-        let is_current_model = self.eval_scope.last() == Some(key);
-        self.force_parameter(key, parameter_name, variable_span, is_current_model)
+        self.force_parameter(&current_key, parameter_name, variable_span, &current_key)
     }
 
     /// Returns the model path of the instance reached via `reference_name` from the active model.
@@ -544,17 +521,18 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
         let current = self
             .eval_scope
             .last()
-            .expect("current model should be set for external lookup");
+            .expect("current model should be set for external lookup")
+            .clone();
         let model = self
             .models
-            .get(current)
+            .get(&current)
             .expect("current model should be created when set");
         let key = model
             .references
             .get(reference_name)
             .expect("reference should be added before lookup")
             .clone();
-        self.force_parameter(&key, parameter_name, variable_span, false)
+        self.force_parameter(&key, parameter_name, variable_span, &current)
     }
 
     /// Forces lazy evaluation of a parameter, returning its value.
@@ -566,22 +544,16 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     /// [`EvalError::CircularParameterEvaluation`].
     fn force_parameter(
         &mut self,
-        key: &EvalInstanceKey,
+        parameter_instance_key: &EvalInstanceKey,
         parameter_name: &ParameterName,
-        variable_span: Span,
-        is_current_model: bool,
+        looked_up_from_span: Span,
+        looked_up_from_instance_key: &EvalInstanceKey,
     ) -> Result<output::Value, Vec<EvalError>> {
-        let eval_instance_key_for_err = if is_current_model {
-            None
-        } else {
-            Some(key.clone())
-        };
-
         // Inspect and potentially take ownership of the pending IR from the memo slot.
         let peek = {
             let Some(slot) = self
                 .models
-                .get_mut(key)
+                .get_mut(parameter_instance_key)
                 .expect("model should be created when set")
                 .parameters
                 .get_mut(parameter_name)
@@ -590,9 +562,10 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 // `UndefinedReferenceParameter`.  Return a graceful error instead of
                 // panicking so the composed graph error bucket surfaces it cleanly.
                 return Err(vec![EvalError::ParameterHasError {
-                    eval_instance_key: eval_instance_key_for_err,
+                    parameter_instance_key: parameter_instance_key.clone(),
                     parameter_name: parameter_name.clone(),
-                    variable_span,
+                    looked_up_from_instance_key: looked_up_from_instance_key.clone(),
+                    looked_up_from_span,
                 }]);
             };
 
@@ -600,9 +573,10 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 ParamSlot::Done(Ok(param)) => SlotPeek::Done(Ok(param.value.clone())),
                 ParamSlot::Done(Err(_)) => {
                     SlotPeek::Done(Err(vec![EvalError::ParameterHasError {
-                        eval_instance_key: eval_instance_key_for_err.clone(),
+                        parameter_instance_key: parameter_instance_key.clone(),
                         parameter_name: parameter_name.clone(),
-                        variable_span,
+                        looked_up_from_instance_key: looked_up_from_instance_key.clone(),
+                        looked_up_from_span,
                     }]))
                 }
                 ParamSlot::InProgress => SlotPeek::Cycle,
@@ -619,14 +593,15 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
         match peek {
             SlotPeek::Done(r) => r,
             SlotPeek::Cycle => Err(vec![EvalError::CircularParameterEvaluation {
-                eval_instance_key: eval_instance_key_for_err,
+                parameter_instance_key: parameter_instance_key.clone(),
                 parameter_name: parameter_name.clone(),
-                variable_span,
+                looked_up_from_instance_key: looked_up_from_instance_key.clone(),
+                looked_up_from_span,
             }]),
             SlotPeek::TakenForEval(param) => {
                 // Evaluate in `key`'s scope so overlay anchor-detection and external lookups use
                 // this model as the innermost active scope.
-                self.push_active_model(key.clone());
+                self.push_active_model(parameter_instance_key.clone());
 
                 // If this parameter carries a design provenance, push the anchor scope so that
                 // `Variable::Parameter` references in the overlay RHS resolve against the design
@@ -635,7 +610,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                     if prov.anchor_path.is_self() {
                         None
                     } else {
-                        self.resolve_anchor_key(key, &prov.anchor_path)
+                        self.resolve_anchor_key(parameter_instance_key, &prov.anchor_path)
                     }
                 });
                 if let Some(ref ak) = anchor_key {
@@ -647,7 +622,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 if let Some(ref ak) = anchor_key {
                     self.pop_active_model(ak);
                 }
-                self.pop_active_model(key);
+                self.pop_active_model(parameter_instance_key);
 
                 let done_slot: Result<output::Parameter, Vec<EvalError>> = match eval_result {
                     Ok(epr) => Ok(eval_parameter::build_output_parameter(
@@ -662,7 +637,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
 
                 // Memoize the result.
                 self.models
-                    .get_mut(key)
+                    .get_mut(parameter_instance_key)
                     .expect("model still exists")
                     .parameters
                     .insert(parameter_name.clone(), ParamSlot::Done(done_slot.clone()));
@@ -670,9 +645,10 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                 match done_slot {
                     Ok(p) => Ok(p.value),
                     Err(_) => Err(vec![EvalError::ParameterHasError {
-                        eval_instance_key: eval_instance_key_for_err,
+                        parameter_instance_key: parameter_instance_key.clone(),
                         parameter_name: parameter_name.clone(),
-                        variable_span,
+                        looked_up_from_instance_key: looked_up_from_instance_key.clone(),
+                        looked_up_from_span,
                     }]),
                 }
             }
@@ -700,7 +676,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
 
         for (name, span) in pending_names {
             // Errors are already memoized by force_parameter; we ignore the return value.
-            let _ = self.force_parameter(key, &name, span, true);
+            let _ = self.force_parameter(key, &name, span, key);
         }
     }
 

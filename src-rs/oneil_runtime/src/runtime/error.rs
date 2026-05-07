@@ -840,10 +840,11 @@ fn collect_eval_errors(
             .iter()
             .filter_map(|error| {
                 if let EvalError::ParameterHasError {
-                    eval_instance_key, ..
+                    parameter_instance_key,
+                    ..
                 } = error
                 {
-                    eval_instance_key.clone()
+                    Some(parameter_instance_key.clone())
                 } else {
                     None
                 }
@@ -870,11 +871,11 @@ fn collect_eval_errors(
 
         for test_err in test_errs {
             if let EvalError::ParameterHasError {
-                eval_instance_key, ..
+                parameter_instance_key,
+                ..
             } = test_err
-                && let Some(eval_instance_key) = eval_instance_key
             {
-                models_with_errors.insert(eval_instance_key.clone());
+                models_with_errors.insert(parameter_instance_key.clone());
             }
 
             let error = OneilDiagnostic::from_error_with_source(test_err, path_buf.clone(), source);
