@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use oneil_runtime::Runtime as OneilRuntime;
-use oneil_shared::paths::ModelPath;
+use oneil_shared::paths::{ModelPath, SourcePath};
 use tower_lsp_server::ls_types::OneOf;
 use tower_lsp_server::{
     Client, LanguageServer, LspService, Server,
@@ -194,6 +194,14 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri.clone();
 
         if let Ok(model_path) = ModelPath::try_from(uri.path().as_str()) {
+            // Invalidate derived caches (unit graph, eval) for the saved file
+            // before re-evaluating. Without this, `build_unit_graph_inner`
+            // returns the stale cached graph even though the source changed.
+            {
+                let source_path = SourcePath::from(&model_path);
+                let mut runtime = self.runtime.lock().expect("runtime mutex poisoned");
+                let _ = runtime.load_source(&source_path);
+            }
             self.publish_diagnostics_for_model_path(&model_path, None)
                 .await;
         }
