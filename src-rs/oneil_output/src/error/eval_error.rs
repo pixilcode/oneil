@@ -128,12 +128,14 @@ pub enum EvalError {
     /// For error reporting, this error can typically be ignored. The main purpose of this error
     /// is error propagation, not error reporting.
     ParameterHasError {
-        /// The instance key of the model that contains the parameter.
-        eval_instance_key: Option<EvalInstanceKey>,
+        /// The instance key of the parameter
+        parameter_instance_key: EvalInstanceKey,
         /// The name of the parameter that has errors.
         parameter_name: ParameterName,
-        /// The source span of the parameter name.
-        variable_span: Span,
+        /// The instance key of the model that the parameter was looked up from.
+        looked_up_from_instance_key: EvalInstanceKey,
+        /// The span indicating where the parameter was looked up from.
+        looked_up_from_span: Span,
     },
     /// An error produced while applying a design contribution to a parameter.
     ///
@@ -151,12 +153,14 @@ pub enum EvalError {
     /// Detected by the lazy evaluator when it re-enters evaluation of a parameter already
     /// marked as in-progress in the memo table.
     CircularParameterEvaluation {
-        /// The instance key of the model whose parameter is being evaluated circularly.
-        eval_instance_key: Option<EvalInstanceKey>,
+        /// The instance key of the parameter that was re-entered.
+        parameter_instance_key: EvalInstanceKey,
         /// The name of the parameter that was re-entered.
         parameter_name: ParameterName,
-        /// The source span of the variable reference that triggered the cycle.
-        variable_span: Span,
+        /// The instance key of the model that the parameter was looked up from.
+        looked_up_from_instance_key: EvalInstanceKey,
+        /// The span indicating where the parameter was looked up from.
+        looked_up_from_span: Span,
     },
     /// An error indicating that a function was called with an invalid number of arguments.
     InvalidArgumentCount {
@@ -526,35 +530,31 @@ impl fmt::Display for EvalError {
                 exponent_value_span: _,
             } => write!(f, "exponent cannot be an interval"),
             Self::ParameterHasError {
-                eval_instance_key,
+                parameter_instance_key,
                 parameter_name,
-                variable_span: _,
+                looked_up_from_instance_key: _,
+                looked_up_from_span: _,
             } => {
-                let eval_instance_key = eval_instance_key.as_ref().map_or_else(
-                    || "current model".to_string(),
-                    |key| format!("model `{}`", key.model_path.as_path().display()),
-                );
                 let parameter_name = parameter_name.as_str();
 
                 write!(
                     f,
-                    "parameter `{parameter_name}` in {eval_instance_key} has errors"
+                    "parameter `{parameter_name}` in model `{}` has errors",
+                    parameter_instance_key.model_path.as_path().display()
                 )
             }
             Self::CircularParameterEvaluation {
-                eval_instance_key,
+                parameter_instance_key,
                 parameter_name,
-                variable_span: _,
+                looked_up_from_instance_key: _,
+                looked_up_from_span: _,
             } => {
-                let eval_instance_key = eval_instance_key.as_ref().map_or_else(
-                    || "current model".to_string(),
-                    |key| format!("model `{}`", key.model_path.as_path().display()),
-                );
                 let parameter_name = parameter_name.as_str();
 
                 write!(
                     f,
-                    "parameter `{parameter_name}` in {eval_instance_key} depends on itself"
+                    "parameter `{parameter_name}` in model `{}` depends on itself",
+                    parameter_instance_key.model_path.as_path().display()
                 )
             }
             Self::DesignApplicationError { message, span: _ } => write!(f, "{message}"),
@@ -835,14 +835,16 @@ impl AsOneilDiagnostic for EvalError {
                 exponent_value_span: location_span,
             }
             | Self::ParameterHasError {
-                eval_instance_key: _,
+                parameter_instance_key: _,
                 parameter_name: _,
-                variable_span: location_span,
+                looked_up_from_instance_key: _,
+                looked_up_from_span: location_span,
             }
             | Self::CircularParameterEvaluation {
-                eval_instance_key: _,
+                parameter_instance_key: _,
                 parameter_name: _,
-                variable_span: location_span,
+                looked_up_from_instance_key: _,
+                looked_up_from_span: location_span,
             }
             | Self::DesignApplicationError {
                 message: _,
@@ -1052,26 +1054,27 @@ impl AsOneilDiagnostic for EvalError {
                 exponent_interval.max(),
             ))],
             Self::ParameterHasError {
-                eval_instance_key,
+                parameter_instance_key: _,
                 parameter_name: _,
-                variable_span: _,
+                looked_up_from_instance_key,
+                looked_up_from_span: _,
             }
             | Self::CircularParameterEvaluation {
-                eval_instance_key,
+                parameter_instance_key: _,
                 parameter_name: _,
-                variable_span: _,
-            } => eval_instance_key
-                .as_ref()
-                .map(|key| {
-                    let segments = key.instance_path.segments();
-                    let segments_str = segments
-                        .iter()
-                        .map(ReferenceName::as_str)
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    vec![ErrorContext::Note(format!("in instance `{segments_str}`"))]
-                })
-                .unwrap_or_default(),
+                looked_up_from_instance_key,
+                looked_up_from_span: _,
+            } => {
+                let segments = looked_up_from_instance_key.instance_path.segments();
+                let segments_str = segments
+                    .iter()
+                    .map(ReferenceName::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                vec![ErrorContext::Note(format!(
+                    "looked up in instance `{segments_str}`"
+                ))]
+            }
             Self::DesignApplicationError {
                 message: _,
                 span: _,
@@ -1369,14 +1372,16 @@ impl AsOneilDiagnostic for EvalError {
                 exponent_value_span: _,
             } => Vec::new(),
             Self::ParameterHasError {
-                eval_instance_key: _,
+                parameter_instance_key: _,
                 parameter_name: _,
-                variable_span: _,
+                looked_up_from_instance_key: _,
+                looked_up_from_span: _,
             }
             | Self::CircularParameterEvaluation {
-                eval_instance_key: _,
+                parameter_instance_key: _,
                 parameter_name: _,
-                variable_span: _,
+                looked_up_from_instance_key: _,
+                looked_up_from_span: _,
             }
             | Self::DesignApplicationError {
                 message: _,
