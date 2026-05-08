@@ -18,6 +18,7 @@ arbitrary = ["dep:arbitrary"]
 oneil_shared = { path = "../oneil_shared" }
 indexmap = { workspace = true }
 arbitrary = { version = "1.4.2", optional = true }
+serde = { workspace = true }
 
 [lints]
 workspace = true

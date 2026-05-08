@@ -9,7 +9,7 @@ use crate::{paths::ModelPath, symbols::ReferenceName};
 /// Used by [`oneil_ir::DesignProvenance`] to record the host→anchor
 /// relationship without baking absolute keys into the IR. Eval resolves
 /// the relative path against the host's absolute key at force time.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
 pub struct RelativePath {
     /// Number of parent walks before descending.
     pub up: usize,
@@ -39,7 +39,8 @@ impl RelativePath {
 /// Two imports of the same on-disk model under different aliases correspond to
 /// different instance paths, so evaluated parameter stores are keyed by
 /// [`EvalInstanceKey`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
 pub struct InstancePath(Vec<ReferenceName>);
 
 impl InstancePath {
@@ -104,7 +105,7 @@ impl InstancePath {
 }
 
 /// Uniquely identifies one evaluated occurrence of a model file.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct EvalInstanceKey {
     /// On-disk model path.
     pub model_path: ModelPath,

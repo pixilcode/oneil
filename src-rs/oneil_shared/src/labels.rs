@@ -1,7 +1,8 @@
 //! Label types (human-readable display names).
 
 /// A label for a parameter (human-readable display name).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
 pub struct ParameterLabel(String);
 
 impl ParameterLabel {
@@ -43,7 +44,8 @@ impl From<&str> for ParameterLabel {
 }
 
 /// A label for a section header.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
 pub struct SectionLabel(String);
 
 impl SectionLabel {

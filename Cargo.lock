@@ -736,6 +736,7 @@ dependencies = [
  "indexmap",
  "oneil_output",
  "oneil_shared",
+ "serde",
 ]
 
 [[package]]
@@ -743,8 +744,13 @@ name = "oneil_lsp"
 version = "0.16.0"
 dependencies = [
  "indexmap",
+ "oneil_frontend",
+ "oneil_ir",
+ "oneil_output",
  "oneil_runtime",
  "oneil_shared",
+ "serde",
+ "serde_json",
  "tokio",
  "tower-lsp-server",
 ]
@@ -756,6 +762,7 @@ dependencies = [
  "arbitrary",
  "indexmap",
  "oneil_shared",
+ "serde",
 ]
 
 [[package]]
@@ -809,6 +816,7 @@ name = "oneil_shared"
 version = "0.16.0"
 dependencies = [
  "rand",
+ "serde",
 ]
 
 [[package]]

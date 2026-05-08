@@ -14,7 +14,7 @@ use crate::{
 /// - a string
 /// - a number
 /// - a measured number
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub enum Value {
     /// A boolean value
     Boolean(bool),

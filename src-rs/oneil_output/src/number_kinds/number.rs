@@ -10,7 +10,7 @@ use crate::{
 /// A number value in Oneil.
 ///
 /// A number value is either a scalar or an interval.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Number {
     /// A scalar number value.
     Scalar(f64),

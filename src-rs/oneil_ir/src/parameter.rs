@@ -52,6 +52,10 @@ pub struct DesignProvenance {
     /// CLI (e.g. `oneil eval design.one`) rather than via an `apply`
     /// declaration, in which case [`applied_via`](Self::applied_via) is `None`.
     pub design_path: ModelPath,
+    /// `true` when the design *added* this parameter to the host model
+    /// (it did not exist on the base model); `false` when the design
+    /// *overrode* a value that already existed on the host.
+    pub is_addition: bool,
     /// Span of the `param = value` assignment line in the design file
     /// that wrote this value.
     pub assignment_span: Span,
@@ -344,7 +348,7 @@ impl Default for Dependencies {
 }
 
 /// The value of a parameter, which can be either a simple expression or a piecewise function.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub enum ParameterValue {
     /// A simple expression with an optional unit.
     Simple(Box<Expr>, Option<CompositeUnit>),
@@ -371,6 +375,17 @@ impl ParameterValue {
 pub struct PiecewiseExpr {
     expr: Expr,
     if_expr: Expr,
+}
+
+impl serde::Serialize for PiecewiseExpr {
+    /// Serializes a piecewise expression as `{"expr": Expr, "if_expr": Expr}`.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("PiecewiseExpr", 2)?;
+        state.serialize_field("expr", &self.expr)?;
+        state.serialize_field("if_expr", &self.if_expr)?;
+        state.end()
+    }
 }
 
 impl PiecewiseExpr {

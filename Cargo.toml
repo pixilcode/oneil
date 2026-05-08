@@ -23,8 +23,9 @@ keywords = [
 categories = ["compilers", "science", "simulation"]
 
 [workspace.dependencies]
-indexmap = "2.1"
+indexmap = { version = "2.1", features = ["serde"] }
 pyo3 = { version = "0.28.2", features = ["auto-initialize", "abi3-py310"] }
+serde = { version = "1", features = ["derive"] }
 
 # Lints originally derived from https://medium.com/@carlmkadie/92bb899d47ef
 # 

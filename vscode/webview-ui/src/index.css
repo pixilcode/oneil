@@ -1,0 +1,555 @@
+/* ── Design tokens ───────────────────────────────────────────────────────── */
+/*
+ * All raw values live here as CSS custom properties. The rest of the
+ * stylesheet references only these variables so themes can be applied by
+ * overriding this block (e.g. a .vscode-light override at the bottom).
+ *
+ * Where a VS Code token exists we use it directly; otherwise we define a
+ * sensible dark-theme default that can be overridden per theme.
+ */
+
+:root {
+    /* Typography */
+    --font-family:        var(--vscode-font-family, sans-serif);
+    --font-size:          var(--vscode-font-size, 13px);
+    --font-size-sm:       0.88em;
+    --font-size-xs:       0.82em;
+    --font-weight-bold:   600;
+
+    /* Foreground */
+    --color-fg:           var(--vscode-foreground);
+    --color-fg-muted:     color-mix(in srgb, var(--vscode-foreground) 75%, transparent);
+    --color-fg-subtle:    color-mix(in srgb, var(--vscode-foreground) 60%, transparent);
+    --color-fg-faint:     color-mix(in srgb, var(--vscode-foreground) 55%, transparent);
+
+    /* Surfaces */
+    --color-bg:           var(--vscode-editor-background);
+    --color-bg-sidebar:   var(--vscode-sideBar-background, var(--vscode-editor-background));
+    --color-bg-group:     color-mix(in srgb, var(--vscode-foreground) 4%, var(--vscode-editor-background));
+
+    /* Borders */
+    --color-border:       var(--vscode-panel-border, var(--vscode-widget-border, color-mix(in srgb, var(--vscode-foreground) 20%, transparent)));
+
+    /* Interactive */
+    --color-hover-bg:     var(--vscode-toolbar-hoverBackground, color-mix(in srgb, var(--vscode-foreground) 8%, transparent));
+    --color-focus-border: var(--vscode-focusBorder, #007fd4);
+
+    /* Semantic */
+    --color-error:        var(--vscode-errorForeground, #f48771);
+
+    /* Spacing */
+    --space-xs:  4px;
+    --space-sm:  8px;
+    --space-md:  12px;
+    --space-lg:  16px;
+    --space-xl:  24px;
+
+    /* Radii */
+    --radius-sm: 3px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+
+    /* Design overlay — deterministic color palette (0-based).
+     * Colors are chosen to be readable on both light and dark VS Code themes.
+     * The frontend picks --design-color-N by using a node's color_index % 8. */
+    --design-color-0: #4ec9b0;   /* teal        */
+    --design-color-1: #ce9178;   /* terra-cotta */
+    --design-color-2: #9cdcfe;   /* sky blue    */
+    --design-color-3: #dcdcaa;   /* warm yellow */
+    --design-color-4: #c586c0;   /* lavender    */
+    --design-color-5: #6a9955;   /* muted green */
+    --design-color-6: #d16969;   /* muted red   */
+    --design-color-7: #569cd6;   /* cobalt blue */
+
+    /* Alpha variants derived from the design colors */
+    --design-color-tint-alpha: 10%;
+    --design-border-width: 3px;
+}
+
+/* ── Reset / base ────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+body {
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    color: var(--color-fg);
+    background: var(--color-bg);
+}
+
+/* ── App shell ───────────────────────────────────────────────────────────── */
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+
+.toolbar {
+    display: flex;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.toolbar-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--color-fg);
+    cursor: pointer;
+    font-size: inherit;
+    padding: 2px 10px;
+}
+
+.toolbar-btn:hover {
+    background: var(--color-hover-bg);
+}
+
+.toolbar-btn.active {
+    border-color: var(--color-focus-border);
+}
+
+.toolbar-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: inherit;
+    cursor: pointer;
+    padding: 2px 6px;
+    user-select: none;
+    color: var(--color-fg-muted);
+}
+
+.toolbar-toggle input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--color-focus-border);
+}
+
+.toolbar-font-size {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+}
+
+.toolbar-font-size .toolbar-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.toolbar-font-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-fg-muted);
+    min-width: 3em;
+    text-align: center;
+    user-select: none;
+}
+
+/* ── Status messages ─────────────────────────────────────────────────────── */
+
+.status {
+    padding: var(--space-lg);
+    color: var(--color-fg-muted);
+}
+
+.status.error {
+    color: var(--color-error);
+}
+
+/* ── Instance tree ───────────────────────────────────────────────────────── */
+
+.instance-tree {
+    padding: var(--space-md) var(--space-lg);
+    overflow: auto;
+    flex: 1;
+}
+
+/* Reference pool section header */
+.reference-pool-header {
+    font-size: 1.1em;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-fg-muted);
+    margin: var(--space-lg) 0 var(--space-md) 0;
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--color-border);
+}
+
+/* Individual reference pool entry */
+.reference-pool-entry {
+    margin-bottom: var(--space-md);
+}
+
+.reference-alias {
+    display: inline-block;
+    font-size: var(--font-size-xs);
+    color: var(--color-fg-muted);
+    background: var(--color-bg-subtle);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.model-heading-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-xs);
+}
+
+.model-heading {
+    font-size: 1em;
+    font-weight: var(--font-weight-bold);
+    margin-bottom: 0;
+}
+
+/* Design badge: shown in the heading row, colored by the design's palette entry */
+.design-badge {
+    font-size: var(--font-size-xs);
+    font-weight: normal;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid currentColor;
+    opacity: 0.85;
+    white-space: nowrap;
+}
+
+.model-note {
+    color: var(--color-fg-muted);
+    margin-bottom: var(--space-sm);
+}
+
+/*
+ * Grid layout for parameter list in tree view.
+ * Uses fixed proportions to keep columns aligned across rows while
+ * preventing one long label from squishing the equation column.
+ *
+ * Columns: Label (capped) | Equation (flexible) | : | param_name = Value
+ */
+.parameter-list {
+    list-style: none;
+    margin-bottom: var(--space-sm);
+    display: grid;
+    grid-template-columns: minmax(8em, 60%) minmax(0, 1fr) auto auto;
+    column-gap: var(--space-sm);
+    row-gap: 0.15em;
+    font-size: var(--font-size-sm);
+    align-items: baseline;
+}
+
+/* Row becomes invisible to grid; children participate directly */
+.parameter-row {
+    display: contents;
+}
+
+.param-label {
+    color: var(--color-fg-muted);
+    padding: 0.1em 0;
+    /* Allow long labels to wrap rather than push other columns */
+    overflow-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
+}
+
+/* Equation expression — right-aligned so colons line up */
+.param-expr {
+    text-align: right;
+    color: var(--color-fg-muted);
+    line-height: 1.4;
+    min-width: 0;
+    /* Prevent equations from overflowing into value column */
+    overflow: hidden;
+}
+
+/* The ":" separator between equation and value */
+.param-sep {
+    color: var(--color-fg-muted);
+}
+
+/* param_name = value — keep on one line */
+.param-value {
+    white-space: nowrap;
+}
+
+/* Note spans all columns on a new "row" */
+.param-note-line {
+    grid-column: 1 / -1;
+    padding-left: 2em;
+    text-align: left;
+}
+
+.param-name {
+    font-weight: var(--font-weight-bold);
+    color: var(--color-fg);
+}
+
+/* Param names that have dependencies show a subtle underline on hover */
+.param-name.has-deps {
+    cursor: pointer;
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: var(--color-fg-muted);
+    text-underline-offset: 2px;
+    /* Override ReactFlow's pointer-events blocking */
+    pointer-events: auto !important;
+}
+
+.param-name.has-deps:hover {
+    text-decoration-style: solid;
+    text-decoration-color: var(--vscode-charts-blue, #4fc1ff);
+}
+
+/* Highlighted parameter row (dependency of hovered param) */
+.param-highlighted > .param-label,
+.param-highlighted > .param-name,
+.param-highlighted > .param-value {
+    background-color: color-mix(in srgb, var(--vscode-charts-blue, #4fc1ff) 20%, transparent);
+    border-radius: var(--radius-sm);
+}
+
+/* Performance parameters — highlighted with star and yellow color */
+.param-performance > .param-label::before,
+.param-performance > .graph-param-label::before {
+    content: "★ ";
+    color: var(--vscode-charts-yellow, #dcdcaa);
+}
+
+.param-performance > .param-name,
+.param-performance > .param-value,
+.param-performance > .param-value .param-name,
+.param-performance > .graph-param-value,
+.param-performance > .graph-param-value .param-name {
+    color: var(--vscode-charts-yellow, #dcdcaa);
+}
+
+.note-content {
+    color: var(--color-fg-subtle);
+    font-style: italic;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+
+.note-math-block {
+    display: block;
+    text-align: center;
+    margin: 4px 0;
+    font-style: normal;
+}
+
+/* Citation badge inside notes */
+.note-cite {
+    font-style: normal;
+    font-size: 0.85em;
+    color: var(--color-fg-subtle);
+    background: var(--color-bg-overlay);
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    padding: 0 3px;
+    cursor: default;
+}
+
+.child-node {
+    margin-top: var(--space-sm);
+}
+
+.child-alias {
+    font-size: var(--font-size-sm);
+    color: var(--color-fg-subtle);
+    display: block;
+    margin-bottom: 2px;
+}
+
+/* ── Graph view ──────────────────────────────────────────────────────────── */
+
+.graph-container {
+    flex: 1;
+    min-height: 0; /* required for flex children with overflow */
+}
+
+/* Reactflow overrides — nodes manage their own background */
+.react-flow__node {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+}
+
+.graph-node-card {
+    position: relative;
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--font-size-sm);
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.graph-node-leaf {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+}
+
+.graph-node-group {
+    background: var(--color-bg-group);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+}
+
+.graph-node-header {
+    margin-bottom: var(--space-xs);
+}
+
+/* Alias tab: positioned to overlap the top border, indicating the connection
+ * from the parent model. Uses absolute positioning relative to the card. */
+.graph-node-alias-tab {
+    position: absolute;
+    top: -0.7em;
+    left: 0.75em;
+    padding: 0 0.4em;
+    font-size: var(--font-size-xs);
+    color: var(--color-fg-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    line-height: 1.3;
+}
+
+/* Add top padding when alias tab is present to prevent overlap */
+.graph-node-alias-tab + .graph-node-header-top {
+    margin-top: 0.5em;
+}
+
+/* Row that holds the name (left) and design badges (right) */
+.graph-node-header-top {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.graph-node-badges {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+.graph-node-name {
+    font-weight: var(--font-weight-bold);
+}
+
+.graph-node-note {
+    color: var(--color-fg-subtle);
+    font-size: var(--font-size-sm);
+    margin-top: 2px;
+}
+
+/*
+ * Grid layout for parameter list in graph nodes.
+ * Similar to tree view: rows use `display: contents` for alignment.
+ *
+ * Columns: Label (capped) | Equation (flex, right-aligned) | : | param_name = Value
+ */
+.graph-node-params {
+    margin-top: var(--space-xs);
+    font-size: var(--font-size-xs);
+    color: var(--color-fg-muted);
+    display: grid;
+    grid-template-columns: minmax(5em, 60%) minmax(0, 1fr) auto auto;
+    column-gap: 0.4em;
+    row-gap: 0.15em;
+    align-items: baseline;
+}
+
+.graph-node-param-row {
+    display: contents;
+}
+
+/* Equation expression — right-aligned so colons line up */
+.graph-param-expr {
+    text-align: right;
+    min-width: 0;
+    color: var(--color-fg-subtle);
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    overflow: hidden;
+}
+
+/* KaTeX: render equations at a comfortable reading size */
+.katex {
+    font-size: 1.25em !important;
+}
+
+.graph-param-label {
+    color: var(--color-fg-muted);
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.graph-param-sep {
+    color: var(--color-fg-muted);
+}
+
+/* Highlighted parameter row in graph view (dependency of hovered param) */
+.param-highlighted > .graph-param-label,
+.param-highlighted > .graph-param-value {
+    background-color: color-mix(in srgb, var(--vscode-charts-blue, #4fc1ff) 20%, transparent);
+    border-radius: var(--radius-sm);
+}
+
+/* ── Tooltip popup (React portal-based) ─────────────────────────────────────── */
+
+.has-tooltip {
+    cursor: help !important;
+    pointer-events: auto !important;
+}
+
+.tooltip-popup {
+    z-index: 10000;
+    padding: var(--space-sm) var(--space-md);
+    max-width: 500px;
+    font-style: normal;
+    font-weight: normal;
+    line-height: 1.5;
+    color: var(--color-fg);
+    background: var(--vscode-editorHoverWidget-background, var(--color-bg));
+    border: 1px solid var(--vscode-editorHoverWidget-border, var(--color-border));
+    border-radius: var(--radius-md);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
+.tooltip-popup .note-content {
+    font-style: normal;
+}
+
+/* Value + unit — never wraps */
+.graph-param-value {
+    font-weight: var(--font-weight-bold);
+    white-space: nowrap;
+}
+
+/* Parameter note in graph view — spans all columns */
+.graph-param-note {
+    grid-column: 1 / -1;
+    padding-left: 1em;
+    color: var(--color-fg-subtle);
+    font-style: italic;
+    font-size: var(--font-size-xs);
+    line-height: 1.5;
+}

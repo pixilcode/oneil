@@ -23,3 +23,10 @@ impl Note {
         self.content.as_str()
     }
 }
+
+impl serde::Serialize for Note {
+    /// Serializes a note as its content string.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.content())
+    }
+}

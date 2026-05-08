@@ -177,7 +177,7 @@ impl Span {
 //       or
 //       [`LocatedSpan::naive_get_utf8_column`](https://docs.rs/nom_locate/5.0.0/nom_locate/struct.LocatedSpan.html#method.naive_get_utf8_column)
 //       is faster.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SourceLocation {
     /// The offset (in bytes) from the beginning of the source code (0-indexed)
     pub offset: usize,
@@ -185,6 +185,17 @@ pub struct SourceLocation {
     pub line: usize,
     /// The column number (in bytes) (1-indexed)
     pub column: usize,
+}
+
+impl serde::Serialize for Span {
+    /// Serializes a span as `{"start": SourceLocation, "end": SourceLocation}`.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Span", 2)?;
+        state.serialize_field("start", &self.start)?;
+        state.serialize_field("end", &self.end)?;
+        state.end()
+    }
 }
 
 impl PartialOrd for SourceLocation {

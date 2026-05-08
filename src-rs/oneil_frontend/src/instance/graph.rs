@@ -698,6 +698,7 @@ fn apply_design_at_host(
             // Attach design provenance so validation errors are attributed to the design file.
             let provenance = ir::DesignProvenance {
                 design_path: design_file.clone(),
+                is_addition: true,
                 assignment_span: test.span().clone(),
                 anchor_path: RelativePath::self_path(),
                 applied_via: applied_via.cloned(),
@@ -801,6 +802,7 @@ fn apply_overlay_at_host(
     for (name, parameter) in additions {
         let provenance = ir::DesignProvenance {
             design_path: design_file.clone(),
+            is_addition: true,
             assignment_span: parameter.span().clone(),
             anchor_path: anchor_path.clone(),
             applied_via: applied_via.cloned(),
@@ -842,6 +844,7 @@ fn apply_overlay_at_host(
         }
         let provenance = ir::DesignProvenance {
             design_path: design_file.clone(),
+            is_addition: false,
             assignment_span: overlay.design_span.clone(),
             anchor_path: anchor_path.clone(),
             applied_via: applied_via.cloned(),

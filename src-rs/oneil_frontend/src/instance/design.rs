@@ -58,7 +58,6 @@ pub struct Design {
         IndexMap<InstancePath, IndexMap<ParameterName, OverlayParameterValue>>,
     /// Parameters defined in the design that don't exist on the target model.
     pub(crate) parameter_additions: IndexMap<ParameterName, ir::Parameter>,
-    /// Tests defined in the design that are added to the target model.
     /// Test expressions are evaluated in the target's scope.
     pub(crate) test_additions: IndexMap<TestIndex, ir::Test>,
 }

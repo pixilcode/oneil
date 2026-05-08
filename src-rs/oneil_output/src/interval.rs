@@ -1180,3 +1180,26 @@ fn classify(interval: &Interval) -> IntervalClass {
         panic!("invalid interval: ({}, {})", interval.min, interval.max)
     }
 }
+
+impl serde::Serialize for Interval {
+    /// Serializes an interval as `{"min": f64, "max": f64}`.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Interval", 2)?;
+        state.serialize_field("min", &self.min)?;
+        state.serialize_field("max", &self.max)?;
+        state.end()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Interval {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        struct IntervalHelper {
+            min: f64,
+            max: f64,
+        }
+        let helper = IntervalHelper::deserialize(deserializer)?;
+        Ok(Self::new(helper.min, helper.max))
+    }
+}

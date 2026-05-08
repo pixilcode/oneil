@@ -12,7 +12,7 @@ use crate::util::is_close;
 /// for equality, you probably actually want to check if the dimension maps
 /// are equal. If you would like to check if two units are exactly the same,
 /// check the individual components for equality.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Unit {
     /// The dimensions of the unit
     pub dimension_map: DimensionMap,
@@ -155,7 +155,8 @@ impl fmt::Display for Unit {
     }
 }
 /// The dimension of a base unit
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Dimension {
     /// Base unit is 'kilogram'
     Mass,
@@ -217,6 +218,13 @@ impl DimensionMap {
                 .map(|(key, value)| (key, value * exponent))
                 .collect(),
         )
+    }
+}
+
+impl serde::Serialize for DimensionMap {
+    /// Serializes a dimension map as its inner map of dimension to exponent.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
     }
 }
 
@@ -299,7 +307,8 @@ impl ops::Div for DimensionMap {
 /// It is used to represent the unit in a human-readable format.
 ///
 /// It uses an AST-like structure.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DisplayUnit {
     /// `1` unit
     One,

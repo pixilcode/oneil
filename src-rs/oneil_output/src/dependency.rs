@@ -11,7 +11,7 @@ use oneil_shared::{
 /// This structure groups all types of dependencies that a parameter may have:
 /// builtin functions, other parameters in the same model, and parameters from
 /// external models.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct DependencySet {
     /// Dependencies on builtin values.
     pub builtin_dependencies: IndexSet<BuiltinDependency>,
@@ -40,14 +40,14 @@ impl Default for DependencySet {
 }
 
 /// A dependency on a builtin value.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct BuiltinDependency {
     /// The identifier (name) of the builtin value.
     pub name: BuiltinValueName,
 }
 
 /// A dependency on another parameter within the same model.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct ParameterDependency {
     /// The name of the parameter that this depends on.
     pub parameter_name: ParameterName,
@@ -57,7 +57,7 @@ pub struct ParameterDependency {
 ///
 /// External dependencies represent references to parameters in other model files,
 /// accessed through model references. These create cross-model dependency relationships.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct ExternalDependency {
     /// The path to the external model containing the parameter.
     pub model_path: ModelPath,

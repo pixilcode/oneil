@@ -26,9 +26,39 @@
     "commands": [
       {
         "command": "oneil.restartLanguageServer",
-        "title": "Oneil: Restart Language Server"
+        "title": "Oneil: Restart Language Server",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "oneil.openRenderedView",
+        "title": "Oneil: Open Rendered View",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "oneil.reloadRenderedView",
+        "title": "Oneil: Reload Rendered View",
+        "icon": "$(refresh)"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "oneil.openRenderedView",
+          "when": "resourceLangId == oneil",
+          "group": "navigation"
+        },
+        {
+          "command": "oneil.restartLanguageServer",
+          "when": "resourceLangId == oneil",
+          "group": "navigation"
+        },
+        {
+          "command": "oneil.reloadRenderedView",
+          "when": "activeWebviewPanelId == oneilRenderedView",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Oneil",
       "properties": {
@@ -71,9 +101,11 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run compile && npm run build:webview",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "build:webview": "npm --prefix webview-ui run build",
+    "watch:webview": "npm --prefix webview-ui run watch",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"

@@ -484,3 +484,15 @@ impl ops::Div<MeasuredNumber> for Number {
         }
     }
 }
+
+impl serde::Serialize for MeasuredNumber {
+    /// Serializes a measured number as `{"value": Number, "unit": "display string"}`.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let (number, unit) = self.clone().into_number_and_unit();
+        let mut state = serializer.serialize_struct("MeasuredNumber", 2)?;
+        state.serialize_field("value", &number)?;
+        state.serialize_field("unit", &format!("{unit}"))?;
+        state.end()
+    }
+}

@@ -1,0 +1,35 @@
+---
+description: Conventions for the Oneil VSCode extension and webview-ui (TypeScript, React, Jotai)
+globs: vscode/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# VSCode Extension & Webview UI
+
+## Extension (`vscode/src/`)
+
+- Use `vscode-languageclient` for all LSP communication; send custom requests via `client.sendRequest("workspace/executeCommand", { command, arguments })`.
+- Keep `extension.ts` thin: just activate, register commands, and call into helpers.
+- `webview/panel.ts` owns the `WebviewPanel` lifecycle. Refresh is triggered by three paths: `onDidChangeViewState` (visible), `onDidReceiveMessage` "ready", and `onDidSaveTextDocument`.
+
+## Webview UI (`vscode/webview-ui/src/`)
+
+**State management — Jotai**
+- Atoms are the single source of truth. Define them in `store/atoms.ts`.
+- The store is created once at module load in `App.tsx` (survives StrictMode remounts).
+- Write to atoms from outside React via `store.set()` — used in `services/messageService.ts`.
+- Prefer `useAtomValue` (read-only) over `useAtom` unless you need the setter.
+
+**Message service**
+- `initMessageService(store)` is called before React renders so the listener and "ready" signal are in place before any message can arrive.
+- Message types live in `types/messages.ts`; Rust mirror types in `types/model.ts`.
+
+**Component organisation**
+- Keep related small components together in one file (≤ ~250 lines). Split only when a single concern clearly outgrows the file.
+- App-shell UI (state router, loading/error states) lives in `App.tsx`.
+- Each major view has one file in `views/` that owns all its sub-components (e.g. `InstanceTree.tsx` contains `InstanceTreeView`, `ModelNode`, `ParameterRow`, `ValueDisplay`).
+
+**Build**
+- `npm run build:webview` from `vscode/` (or `npm run build` from `vscode/webview-ui/`) outputs to `out/webview-ui/assets/index.js`.
+- After editing the webview, rebuild before reloading the extension host.
+- The outer `vscode/tsconfig.json` excludes `webview-ui/` — the webview has its own `tsconfig.app.json`.

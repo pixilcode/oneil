@@ -6,7 +6,9 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(dead_code)]
 
+pub mod custom_requests;
 mod definition;
+
 mod diagnostics;
 mod doc_store;
 mod hover;
@@ -22,14 +24,14 @@ use oneil_shared::paths::{ModelPath, SourcePath};
 use tower_lsp_server::ls_types::OneOf;
 use tower_lsp_server::{
     Client, LanguageServer, LspService, Server,
-    jsonrpc::Result,
+    jsonrpc::{self, Result},
     ls_types::{
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-        DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, Hover,
-        HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, MessageType, PositionEncodingKind, ServerCapabilities, ServerInfo,
-        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-        TextDocumentSyncSaveOptions, Uri,
+        DidSaveTextDocumentParams, ExecuteCommandOptions, ExecuteCommandParams,
+        GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability,
+        InitializeParams, InitializeResult, InitializedParams, LSPAny, MessageType,
+        PositionEncodingKind, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
+        TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Uri,
     },
 };
 
@@ -121,6 +123,10 @@ impl LanguageServer for Backend {
                 position_encoding: Some(PositionEncodingKind::UTF16),
                 definition_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                execute_command_provider: Some(ExecuteCommandOptions {
+                    commands: vec!["oneil/instanceTree".to_string()],
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
             server_info: Some(ServerInfo {
@@ -283,6 +289,52 @@ impl LanguageServer for Backend {
         }
 
         result
+    }
+
+    async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<LSPAny>> {
+        if params.command != "oneil/instanceTree" {
+            return Ok(None);
+        }
+
+        let uri_str = params
+            .arguments
+            .first()
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| jsonrpc::Error {
+                code: jsonrpc::ErrorCode::InvalidParams,
+                message: "oneil/instanceTree requires a file URI argument".into(),
+                data: None,
+            })?;
+
+        // Strip the `file://` scheme to get a bare filesystem path.
+        let file_path = uri_str.strip_prefix("file://").unwrap_or(uri_str);
+
+        let model_path = ModelPath::try_from(file_path).map_err(|()| jsonrpc::Error {
+            code: jsonrpc::ErrorCode::InvalidParams,
+            message: format!("invalid model path: {file_path:?}").into(),
+            data: None,
+        })?;
+
+        let result = {
+            let mut runtime = self.runtime.lock().expect("runtime mutex poisoned");
+            custom_requests::build_instance_tree(&mut runtime, &model_path)
+        };
+
+        match result {
+            Ok(tree) => {
+                let json = serde_json::to_value(tree).map_err(|e| jsonrpc::Error {
+                    code: jsonrpc::ErrorCode::InternalError,
+                    message: format!("serialization error: {e}").into(),
+                    data: None,
+                })?;
+                Ok(Some(json))
+            }
+            Err(msg) => Err(jsonrpc::Error {
+                code: jsonrpc::ErrorCode::InternalError,
+                message: msg.into(),
+                data: None,
+            }),
+        }
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {

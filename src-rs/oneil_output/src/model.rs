@@ -19,7 +19,7 @@ use crate::{EvalWarning, Value, dependency::DependencySet};
 /// parameters, tests, and recursively evaluated submodels. It is produced by
 /// the evaluation process and can be used for output, further processing, or
 /// analysis.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Model {
     /// The file path of the model that was evaluated.
     pub path: ModelPath,
@@ -55,7 +55,7 @@ pub struct Model {
 /// Tests are boolean expressions that verify expected behavior in a model.
 /// This structure contains the evaluated value (which should be a boolean)
 /// and the source location of the test expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Test {
     /// Source span of the test expression.
     pub expr_span: Span,
@@ -74,7 +74,8 @@ impl Test {
 }
 
 /// The result of evaluating a test.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TestResult {
     /// The test passed.
     Passed,
@@ -91,7 +92,7 @@ pub enum TestResult {
 /// contains the evaluated value, associated unit (if any), and metadata about
 /// the parameter such as whether it's a performance parameter and its
 /// dependencies.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Parameter {
     /// The identifier (name) of the parameter.
     pub ident: ParameterName,
@@ -124,7 +125,7 @@ impl Parameter {
 }
 
 /// Debug information for a parameter.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct DebugInfo {
     /// The values of the builtin dependencies at the time the parameter was evaluated.
     pub builtin_dependency_values: IndexMap<BuiltinValueName, Value>,
@@ -138,7 +139,10 @@ pub struct DebugInfo {
 ///
 /// Trace levels control the verbosity of debugging information during model
 /// evaluation. Higher levels provide more detailed information.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum PrintLevel {
     /// No output.
     None,
