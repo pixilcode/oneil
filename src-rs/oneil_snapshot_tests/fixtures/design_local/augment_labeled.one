@@ -1,0 +1,10 @@
+design target
+
+# Override with explicit label
+Radius: radius = 10
+
+# New parameter with explicit label
+Diameter: diameter = 2 * radius
+
+# New parameter with multi-word label
+Cross-sectional Area: area = pi * radius^2

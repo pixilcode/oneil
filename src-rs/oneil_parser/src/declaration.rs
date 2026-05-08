@@ -9,8 +9,8 @@ use nom::{
 
 use oneil_ast::{
     ApplyDesign, ApplyDesignNode, Decl, DeclNode, DesignParameter, DesignTarget, Directory,
-    DirectoryNode, IdentifierNode, Import, ModelInfo, ModelInfoNode, ModelKind, Node, SubmodelDecl,
-    SubmodelList, SubmodelListNode,
+    DirectoryNode, IdentifierNode, Import, ModelInfo, ModelInfoNode, ModelKind, Node,
+    ParameterLabelNode, SubmodelDecl, SubmodelList, SubmodelListNode,
 };
 use oneil_shared::span::Span;
 
@@ -21,9 +21,9 @@ use crate::{
     test::parse as parse_test,
     token::{
         keyword::{apply, as_, design, import, reference, submodel, to},
-        naming::identifier,
+        naming::{identifier, label},
         structure::end_of_line,
-        symbol::{bracket_left, bracket_right, comma, dot, dot_dot, equals, slash},
+        symbol::{bracket_left, bracket_right, colon, comma, dot, dot_dot, equals, slash},
     },
     util::{InputSpan, Result},
 };
@@ -68,8 +68,7 @@ pub fn parse(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
             apply_decl,
             submodel_decl,
             test_decl,
-            design_parameter_decl,
-            parameter_decl.convert_error_to(ParserError::expect_decl),
+            design_parameter_decl.convert_error_to(ParserError::expect_decl),
         ))
         .parse(input)
     } else {
@@ -269,7 +268,14 @@ fn nested_apply_item(input: InputSpan<'_>) -> Result<'_, ApplyDesignNode, Parser
     Ok((rest, body))
 }
 
-/// Parses `id(.<segment>)* = value` in a design file (after `design`).
+/// Parses a parameter line in a design file (after `design`).
+///
+/// Handles two forms:
+/// - Shorthand: `[$] [*[*]] id[.segment] = value` — no label, `instance_path` allowed.
+/// - Full:      `[$] [*[*]] Label text: id = value` — explicit label, no instance path.
+///
+/// The `$` performance marker and trace-level prefix only take effect when the
+/// parameter is a new addition (not an override of an existing parameter).
 fn design_parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
     // Optional output-parameter marker (`$`) and trace level (`*` / `**`),
     // reusing the same parsers as regular ParameterDecl. These only have an
@@ -278,21 +284,37 @@ fn design_parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserErr
     let (rest, performance_marker_node) = opt(performance_marker).parse(input)?;
     let (rest, trace_level_node) = opt(trace_level).parse(rest)?;
 
+    // Try to parse an optional `Label text:` prefix. This distinguishes the full
+    // parameter form (`Label: id = value`) from the shorthand form (`id = value`).
+    // The label parser is greedy but backtracking is safe: if `label` matches but
+    // the following `:` is absent (e.g. input is `id = expr`), `opt` resets.
+    let (rest, label_node) = opt(|input| {
+        let (rest, label_token) = label.convert_errors().parse(input)?;
+        let label_node = ParameterLabelNode::from(label_token);
+        let (rest, _) = colon.convert_errors().parse(rest)?;
+        Ok((rest, label_node))
+    })
+    .parse(rest)?;
+
     let (rest, ident_token) = identifier.convert_errors().parse(rest)?;
     let ident_node = IdentifierNode::from(ident_token);
 
-    // Optionally parse a single `.segment` for a scoped parameter override
-    // (`mass.sat = …`, etc.).
-    let (rest, instance_path) = opt(|input| {
-        let (rest, dot_token) = dot.convert_errors().parse(input)?;
-        let (rest, segment_token) = identifier
-            .or_fail_with(ParserError::parameter_missing_instance_path_segment(
-                dot_token.lexeme_span,
-            ))
-            .parse(rest)?;
-        Ok((rest, IdentifierNode::from(segment_token)))
-    })
-    .parse(rest)?;
+    // Instance-path scoping (`mass.sat = …`) is only meaningful for shorthand
+    // overrides; labeled additions target the design directly.
+    let (rest, instance_path) = if label_node.is_none() {
+        opt(|input| {
+            let (rest, dot_token) = dot.convert_errors().parse(input)?;
+            let (rest, segment_token) = identifier
+                .or_fail_with(ParserError::parameter_missing_instance_path_segment(
+                    dot_token.lexeme_span,
+                ))
+                .parse(rest)?;
+            Ok((rest, IdentifierNode::from(segment_token)))
+        })
+        .parse(rest)?
+    } else {
+        (rest, None)
+    };
 
     let (rest, equals_token) = equals.convert_errors().parse(rest)?;
 
@@ -313,7 +335,9 @@ fn design_parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserErr
     let param_start_span = match (&performance_marker_node, &trace_level_node) {
         (Some(m), _) => m.span(),
         (None, Some(t)) => t.span(),
-        (None, None) => ident_node.span(),
+        (None, None) => label_node
+            .as_ref()
+            .map_or_else(|| ident_node.span(), Node::span),
     };
     let (param_end_span, param_whitespace_span) = note_node.as_ref().map_or(
         (linebreak_token.lexeme_span, linebreak_token.whitespace_span),
@@ -328,6 +352,7 @@ fn design_parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserErr
         performance_marker_node,
         trace_level_node,
         note_node,
+        label_node,
     );
     let inner_node = Node::new(inner, param_span, param_whitespace_span);
     let decl_node = Node::new(

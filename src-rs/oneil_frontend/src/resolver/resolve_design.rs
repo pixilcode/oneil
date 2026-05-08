@@ -349,7 +349,10 @@ fn handle_design_parameter<E: ExternalResolutionContext>(
     if is_local_param {
         let dependencies =
             resolve_parameter::get_parameter_dependencies(&value, &ir::Limits::default());
-        let label = ParameterLabel::from(p.ident().as_str());
+        let label = p.label().map_or_else(
+            || ParameterLabel::from(p.ident().as_str()),
+            |l| ParameterLabel::from(l.as_str()),
+        );
         let is_performance = p.performance_marker().is_some();
         let trace_level = resolve_trace_level(p.trace_level());
         let local_param = ir::Parameter::new(

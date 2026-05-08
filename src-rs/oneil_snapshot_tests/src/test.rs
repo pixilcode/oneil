@@ -182,6 +182,17 @@ fn design_local_augmentation_flagged() {
 }
 
 #[test]
+fn design_local_augmentation_labeled() {
+    // A design file uses the full `Label: id = value` syntax for both overrides
+    // and new parameter additions.  Labels are preserved through the resolver and
+    // the evaluated values must match the shorthand-equivalent.
+    insta::assert_snapshot!(run_fixture_with_design(
+        "design_local/target.on",
+        "design_local/augment_labeled.one",
+    ));
+}
+
+#[test]
 fn design_augmented_reference_params() {
     // A model applies a design to one of its own references (`apply augment to
     // c`).  Parameters added by the design become accessible on the parent via

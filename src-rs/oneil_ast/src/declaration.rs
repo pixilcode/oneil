@@ -7,7 +7,7 @@ use oneil_shared::paths::{DesignPath, ModelPath};
 
 use crate::{
     debug_info::TraceLevelNode,
-    naming::{DirectoryNode, IdentifierNode},
+    naming::{DirectoryNode, IdentifierNode, ParameterLabelNode},
     node::Node,
     note::NoteNode,
     parameter::{ParameterNode, ParameterValueNode, PerformanceMarkerNode},
@@ -501,6 +501,8 @@ pub struct DesignParameter {
     performance_marker: Option<PerformanceMarkerNode>,
     trace_level: Option<TraceLevelNode>,
     note: Option<NoteNode>,
+    /// Optional human-readable label (`None` for shorthand additions without a label prefix).
+    label: Option<ParameterLabelNode>,
 }
 
 /// AST node for a [`DesignParameter`].
@@ -516,6 +518,7 @@ impl DesignParameter {
         performance_marker: Option<PerformanceMarkerNode>,
         trace_level: Option<TraceLevelNode>,
         note: Option<NoteNode>,
+        label: Option<ParameterLabelNode>,
     ) -> Self {
         Self {
             ident,
@@ -524,6 +527,7 @@ impl DesignParameter {
             performance_marker,
             trace_level,
             note,
+            label,
         }
     }
 
@@ -561,5 +565,11 @@ impl DesignParameter {
     #[must_use]
     pub const fn note(&self) -> Option<&NoteNode> {
         self.note.as_ref()
+    }
+
+    /// Optional human-readable label (`None` for shorthand additions without a label prefix).
+    #[must_use]
+    pub const fn label(&self) -> Option<&ParameterLabelNode> {
+        self.label.as_ref()
     }
 }
