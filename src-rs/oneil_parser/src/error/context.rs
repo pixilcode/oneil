@@ -137,17 +137,17 @@ fn string_literal_uses_double_quotes(
     }
 }
 
-fn unclosed(reason: &ParserErrorReason, source: &str) -> Vec<(Context, Option<ErrorLocation>)> {
+fn unclosed(reason: &ParserErrorReason, _source: &str) -> Vec<(Context, Option<ErrorLocation>)> {
     match reason {
         ParserErrorReason::Incomplete { cause, kind } => match kind {
             IncompleteKind::UnclosedBracket => {
                 let message = "unclosed bracket found here";
-                let location = ErrorLocation::from_source_and_span(source, *cause);
+                let location = ErrorLocation::from_span(cause);
                 vec![(Context::Note(message.to_string()), Some(location))]
             }
             IncompleteKind::UnclosedParen => {
                 let message = "unclosed parenthesis found here";
-                let location = ErrorLocation::from_source_and_span(source, *cause);
+                let location = ErrorLocation::from_span(cause);
                 vec![(Context::Note(message.to_string()), Some(location))]
             }
             _ => vec![],
@@ -156,12 +156,12 @@ fn unclosed(reason: &ParserErrorReason, source: &str) -> Vec<(Context, Option<Er
         ParserErrorReason::TokenError(TokenErrorKind::Incomplete(kind)) => match kind {
             TokenIncompleteKind::UnclosedNote { delimeter_span } => {
                 let message = "unclosed note found here";
-                let location = ErrorLocation::from_source_and_span(source, *delimeter_span);
+                let location = ErrorLocation::from_span(delimeter_span);
                 vec![(Context::Note(message.to_string()), Some(location))]
             }
             TokenIncompleteKind::UnclosedString { open_quote_span } => {
                 let message = "unclosed string found here";
-                let location = ErrorLocation::from_source_and_span(source, *open_quote_span);
+                let location = ErrorLocation::from_span(open_quote_span);
                 vec![(Context::Note(message.to_string()), Some(location))]
             }
             _ => vec![],
@@ -173,18 +173,18 @@ fn unclosed(reason: &ParserErrorReason, source: &str) -> Vec<(Context, Option<Er
 
 fn invalid_number_literal(
     reason: &ParserErrorReason,
-    source: &str,
+    _source: &str,
 ) -> Vec<(Context, Option<ErrorLocation>)> {
     match reason {
         ParserErrorReason::TokenError(TokenErrorKind::Incomplete(kind)) => match kind {
             TokenIncompleteKind::InvalidDecimalPart { decimal_point_span } => {
                 let message = "because of `.` here";
-                let location = ErrorLocation::from_source_and_span(source, *decimal_point_span);
+                let location = ErrorLocation::from_span(decimal_point_span);
                 vec![(Context::Note(message.to_string()), Some(location))]
             }
             TokenIncompleteKind::InvalidExponentPart { e_span } => {
                 let message = "because of `e` here";
-                let location = ErrorLocation::from_source_and_span(source, *e_span);
+                let location = ErrorLocation::from_span(e_span);
                 vec![(Context::Note(message.to_string()), Some(location))]
             }
             _ => vec![],

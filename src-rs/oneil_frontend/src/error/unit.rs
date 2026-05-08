@@ -33,8 +33,8 @@ impl UnitResolutionError {
 
     /// Returns the span of the unit name in the source.
     #[must_use]
-    pub const fn unit_name_span(&self) -> Span {
-        self.unit_name_span
+    pub fn unit_name_span(&self) -> Span {
+        self.unit_name_span.clone()
     }
 }
 
@@ -55,8 +55,8 @@ impl AsOneilDiagnostic for UnitResolutionError {
         self.to_string()
     }
 
-    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
-        let location = ErrorLocation::from_source_and_span(source, self.unit_name_span);
+    fn diagnostic_location(&self, _source: &str) -> Option<ErrorLocation> {
+        let location = ErrorLocation::from_span(&self.unit_name_span);
         Some(location)
     }
 }

@@ -44,7 +44,7 @@ pub fn number(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     let decimal_part = |input| {
         let (rest, decimal_point_input_span) = tag(".").parse(input)?;
 
-        let decimal_point_span = span_from(decimal_point_input_span, rest);
+        let decimal_point_span = span_from(&decimal_point_input_span, &rest);
 
         let (rest, _) = digit1
             .or_fail_with(TokenError::invalid_decimal_part(decimal_point_span))
@@ -69,7 +69,7 @@ pub fn number(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     // Optional exponent part (e.g., "e10", "E-3")
     let opt_exponent = opt(|input| {
         let (rest, e_input_span) = tag("e").or(tag("E")).parse(input)?;
-        let e_span = span_from(e_input_span, rest);
+        let e_span = span_from(&e_input_span, &rest);
 
         let (rest, _) = opt(one_of("+-")).parse(rest)?;
         let (rest, _) = digit1
@@ -113,7 +113,7 @@ pub fn string(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     token(
         |input| {
             let (rest, open_quote_input_span) = tag("\'").parse(input)?;
-            let open_quote_span = span_from(open_quote_input_span, rest);
+            let open_quote_span = span_from(&open_quote_input_span, &rest);
 
             let (rest, _) = take_while(|c: char| c != '\'' && c != '\n').parse(rest)?;
             let (rest, _) = tag("'")

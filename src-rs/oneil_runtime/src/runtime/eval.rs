@@ -206,11 +206,7 @@ impl Runtime {
         vec![ApplyDesign {
             design_path: design_path.clone(),
             target: oneil_shared::InstancePath::root(),
-            span: oneil_shared::span::Span::empty(oneil_shared::span::SourceLocation {
-                offset: 0,
-                line: 1,
-                column: 1,
-            }),
+            span: oneil_shared::span::Span::synthetic(),
         }]
     }
 

@@ -46,7 +46,7 @@ pub fn resolve_model_imports<E>(
                 ModelImportResolutionError::duplicate_reference(
                     reference_name.clone(),
                     original_span,
-                    reference_name_span,
+                    reference_name_span.clone(),
                 )
             });
 
@@ -57,8 +57,8 @@ pub fn resolve_model_imports<E>(
                     .map(|original_submodel| {
                         ModelImportResolutionError::duplicate_submodel(
                             SubmodelName::from(reference_name.as_str()),
-                            original_submodel.name_span,
-                            reference_name_span,
+                            original_submodel.name_span.clone(),
+                            reference_name_span.clone(),
                         )
                     })
             })
@@ -101,14 +101,14 @@ pub fn resolve_model_imports<E>(
                     let err = ModelImportResolutionError::model_or_design_not_found(
                         tried_on,
                         tried_one,
-                        reference_name_span,
+                        reference_name_span.clone(),
                     );
                     handle_resolution_error(
                         err,
                         model_import,
                         reference_name.clone(),
                         SubmodelName::from(reference_name.as_str()),
-                        reference_name_span,
+                        reference_name_span.clone(),
                         is_submodel,
                         resolution_context,
                     );
@@ -120,7 +120,7 @@ pub fn resolve_model_imports<E>(
         let subcomponents = model_import.model_info().subcomponents();
         let resolved_path = resolve_model_path(
             import_path,
-            reference_name_span,
+            reference_name_span.clone(),
             subcomponents,
             resolution_context,
         );
@@ -138,7 +138,7 @@ pub fn resolve_model_imports<E>(
                     model_import,
                     reference_name.clone(),
                     SubmodelName::from(reference_name.as_str()),
-                    reference_name_span,
+                    reference_name_span.clone(),
                     is_submodel,
                     resolution_context,
                 );
@@ -268,14 +268,14 @@ fn resolve_extracted_submodels<E>(
 fn get_source_name_and_span(model_info: &ast::ModelInfo) -> (SubmodelName, Span) {
     let model_name = model_info.get_model_name();
     let name = SubmodelName::from(model_name.as_str());
-    let span = model_name.span();
+    let span = model_name.span().clone();
     (name, span)
 }
 
 fn get_reference_name_and_span(model_info: &ast::ModelInfo) -> (ReferenceName, Span) {
     let model_name = model_info.get_alias();
     let name = ReferenceName::from(model_name.as_str());
-    let span = model_name.span();
+    let span = model_name.span().clone();
     (name, span)
 }
 
@@ -377,7 +377,7 @@ where
     // stub `instance` whose `path()` records the child model's on-disk
     // location (the build pass later replaces the stub with the built subtree).
     let alias = ReferenceName::from(model_subcomponents[0].as_str());
-    let alias_span = model_subcomponents[0].span();
+    let alias_span = model_subcomponents[0].span().clone();
     let Some(submodel) = model.get_submodel(&alias) else {
         let best_match = get_best_match_submodel_alias_in_model(model, &alias);
         return Err(Box::new(
@@ -455,7 +455,7 @@ fn handle_resolution_error<E>(
 
         let error = ModelImportResolutionError::parent_model_has_error(
             parent_model_name.clone(),
-            parent_model_name_span,
+            parent_model_name_span.clone(),
             reference_name.clone(),
             reference_name_span,
         );

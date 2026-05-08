@@ -63,7 +63,7 @@ pub fn eval_parameter_from_resolved_value<E: ExternalEvaluationContext>(
         }
         ir::ParameterValue::Piecewise(piecewise, unit) => {
             let param_ident = parameter.name().clone();
-            let param_ident_span = parameter.name_span();
+            let param_ident_span = parameter.name_span().clone();
             let (value, expr_span) =
                 get_piecewise_result(piecewise, param_ident, param_ident_span, context)?;
             (value, expr_span, unit)
@@ -80,13 +80,13 @@ pub fn eval_parameter_from_resolved_value<E: ExternalEvaluationContext>(
         (Value::String(value), None) => Value::String(value),
         (Value::Boolean(_), Some((_, unit_span))) => {
             return Err(vec![EvalError::BooleanCannotHaveUnit {
-                expr_span: *expr_span,
+                expr_span: expr_span.clone(),
                 unit_span,
             }]);
         }
         (Value::String(_), Some((_, unit_span))) => {
             return Err(vec![EvalError::StringCannotHaveUnit {
-                expr_span: *expr_span,
+                expr_span: expr_span.clone(),
                 unit_span,
             }]);
         }
@@ -100,7 +100,7 @@ pub fn eval_parameter_from_resolved_value<E: ExternalEvaluationContext>(
         }
         (Value::MeasuredNumber(number), None) => {
             return Err(vec![EvalError::ParameterMissingUnitAnnotation {
-                param_expr_span: *expr_span,
+                param_expr_span: expr_span.clone(),
                 param_value_unit: number.unit().display_unit.clone(),
                 is_dimensionless: number.unit().is_dimensionless(),
             }]);
@@ -109,7 +109,7 @@ pub fn eval_parameter_from_resolved_value<E: ExternalEvaluationContext>(
             if !number.unit().dimensionally_eq(&unit) =>
         {
             return Err(vec![EvalError::ParameterUnitMismatch {
-                param_expr_span: *expr_span,
+                param_expr_span: expr_span.clone(),
                 param_value_unit: number.unit().display_unit.clone(),
                 param_unit_span: unit_span,
                 param_unit: unit.display_unit,
@@ -128,7 +128,7 @@ pub fn eval_parameter_from_resolved_value<E: ExternalEvaluationContext>(
 
     Ok(EvalParameterResult {
         value,
-        expr_span: *expr_span,
+        expr_span: expr_span.clone(),
         warnings,
     })
 }
@@ -150,7 +150,7 @@ fn get_piecewise_result<'a, E: ExternalEvaluationContext>(
             Value::Boolean(false) => Ok(None),
             Value::String(_) | Value::Number(_) | Value::MeasuredNumber(_) => {
                 Err(vec![EvalError::InvalidIfExpressionType {
-                    expr_span: *if_expr_span,
+                    expr_span: if_expr_span.clone(),
                     found_value: if_result,
                 }])
             }
@@ -185,7 +185,7 @@ fn get_piecewise_result<'a, E: ExternalEvaluationContext>(
     if matching_branches.len() > 1 {
         let matching_branche_spans = matching_branches
             .into_iter()
-            .map(|(_, _, if_expr_span)| *if_expr_span)
+            .map(|(_, _, if_expr_span)| if_expr_span.clone())
             .collect();
 
         return Err(vec![EvalError::MultiplePiecewiseBranchesMatch {
@@ -258,12 +258,12 @@ fn eval_continuous_limits<E: ExternalEvaluationContext>(
     let min = eval_expr::eval_expr(min, context).and_then(|(value, expr_span)| match value {
         Value::MeasuredNumber(number) => {
             let (number, unit) = number.into_number_and_unit();
-            Ok((number, *expr_span, Some(unit)))
+            Ok((number, expr_span.clone(), Some(unit)))
         }
-        Value::Number(number) => Ok((number, *expr_span, None)),
+        Value::Number(number) => Ok((number, expr_span.clone(), None)),
         Value::Boolean(_) | Value::String(_) => {
             Err(vec![EvalError::InvalidContinuousLimitMinType {
-                expr_span: *expr_span,
+                expr_span: expr_span.clone(),
                 found_value: value,
             }])
         }
@@ -272,12 +272,12 @@ fn eval_continuous_limits<E: ExternalEvaluationContext>(
     let max = eval_expr::eval_expr(max, context).and_then(|(value, expr_span)| match value {
         Value::MeasuredNumber(number) => {
             let (number, unit) = number.into_number_and_unit();
-            Ok((number, *expr_span, Some(unit)))
+            Ok((number, expr_span.clone(), Some(unit)))
         }
-        Value::Number(number) => Ok((number, *expr_span, None)),
+        Value::Number(number) => Ok((number, expr_span.clone(), None)),
         Value::Boolean(_) | Value::String(_) => {
             Err(vec![EvalError::InvalidContinuousLimitMaxType {
-                expr_span: *expr_span,
+                expr_span: expr_span.clone(),
                 found_value: value,
             }])
         }
@@ -318,7 +318,7 @@ fn eval_continuous_limits<E: ExternalEvaluationContext>(
         max,
         max_expr_span,
         unit,
-        limit_expr_span: *limit_expr_span,
+        limit_expr_span: limit_expr_span.clone(),
     })
 }
 
@@ -364,13 +364,13 @@ fn eval_discrete_limits<E: ExternalEvaluationContext>(
 
             eval_number_discrete_limits(
                 first_value,
-                Some((limit_unit, *first_expr_span)),
+                Some((limit_unit, first_expr_span.clone())),
                 results,
                 limit_expr_span,
             )
         }
         Value::Boolean(_) => Err(vec![EvalError::BooleanCannotBeDiscreteLimitValue {
-            expr_span: *first_expr_span,
+            expr_span: first_expr_span.clone(),
         }]),
     }
 }
@@ -393,25 +393,25 @@ fn eval_string_discrete_limits(
     let mut string_values = Vec::new();
 
     string_values.push(&first_value);
-    seen_strings.insert(&first_value, *first_expr_span);
+    seen_strings.insert(&first_value, first_expr_span.clone());
 
     for (value, expr_span) in &results {
         match value {
             Value::String(string) => {
                 if let Some(original_expr_span) = seen_strings.get(string) {
                     errors.push(EvalError::DuplicateStringLimit {
-                        expr_span: **expr_span,
-                        original_expr_span: *original_expr_span,
+                        expr_span: (*expr_span).clone(),
+                        original_expr_span: original_expr_span.clone(),
                         string_value: string.clone(),
                     });
                 } else {
                     string_values.push(string);
-                    seen_strings.insert(string, **expr_span);
+                    seen_strings.insert(string, (*expr_span).clone());
                 }
             }
             Value::Number(_) | Value::MeasuredNumber(_) | Value::Boolean(_) => {
                 errors.push(EvalError::ExpectedStringLimit {
-                    expr_span: **expr_span,
+                    expr_span: (*expr_span).clone(),
                     found_value: value.clone(),
                 });
             }
@@ -422,7 +422,7 @@ fn eval_string_discrete_limits(
         let strings = string_values.into_iter().cloned().collect();
         Ok(Limits::StringDiscrete {
             values: strings,
-            limit_expr_span: *limit_expr_span,
+            limit_expr_span: limit_expr_span.clone(),
         })
     } else {
         Err(errors)
@@ -453,13 +453,13 @@ fn eval_number_discrete_limits(
                     Some((limit_unit, limit_expr_span)) => {
                         errors.push(EvalError::DiscreteLimitUnitMismatch {
                             limit_unit: limit_unit.display_unit.clone(),
-                            limit_span: *limit_expr_span,
+                            limit_span: limit_expr_span.clone(),
                             value_unit: number_result_unit.display_unit.clone(),
-                            value_unit_span: *expr_span,
+                            value_unit_span: expr_span.clone(),
                         });
                     }
                     None => {
-                        limit_unit = Some((number_result_unit, *expr_span));
+                        limit_unit = Some((number_result_unit, expr_span.clone()));
                         numbers.push(number_result);
                     }
                 }
@@ -469,7 +469,7 @@ fn eval_number_discrete_limits(
             }
             Value::Boolean(_) | Value::String(_) => {
                 errors.push(EvalError::ExpectedNumberLimit {
-                    expr_span: *expr_span,
+                    expr_span: expr_span.clone(),
                     found_value: value,
                 });
             }
@@ -482,7 +482,7 @@ fn eval_number_discrete_limits(
         Ok(Limits::NumberDiscrete {
             values: numbers,
             unit: limit_unit,
-            limit_expr_span: *limit_expr_span,
+            limit_expr_span: limit_expr_span.clone(),
         })
     } else {
         Err(errors)
@@ -545,13 +545,13 @@ fn verify_value_is_within_default_limits(
     match value {
         Value::MeasuredNumber(number) if number.normalized_value().min() < 0.0 => {
             Err(vec![EvalError::ParameterValueBelowDefaultLimits {
-                param_expr_span: *param_expr_span,
+                param_expr_span: param_expr_span.clone(),
                 param_value: value.clone(),
             }])
         }
         Value::Number(number) if number.min() < 0.0 => {
             Err(vec![EvalError::ParameterValueBelowDefaultLimits {
-                param_expr_span: *param_expr_span,
+                param_expr_span: param_expr_span.clone(),
                 param_value: value.clone(),
             }])
         }
@@ -577,32 +577,32 @@ fn verify_value_is_within_number_range(
 ) -> Result<(), Vec<EvalError>> {
     match value {
         Value::Boolean(_) => Err(vec![EvalError::BooleanCannotHaveALimit {
-            expr_span: *param_expr_span,
+            expr_span: param_expr_span.clone(),
             limit_span: limit_expr_span,
         }]),
         Value::String(_) => Err(vec![EvalError::StringCannotHaveNumberLimit {
-            param_expr_span: *param_expr_span,
+            param_expr_span: param_expr_span.clone(),
             param_value: value.clone(),
             limit_span: limit_expr_span,
         }]),
         Value::Number(number) => {
             if let Some(limit_unit) = unit {
                 Err(vec![EvalError::UnitlessNumberCannotHaveLimitWithUnit {
-                    param_expr_span: *param_expr_span,
+                    param_expr_span: param_expr_span.clone(),
                     param_value: value.clone(),
                     limit_span: limit_expr_span,
                     limit_unit: limit_unit.display_unit,
                 }])
             } else if number.min() < min.min() {
                 Err(vec![EvalError::ParameterValueBelowContinuousLimits {
-                    param_expr_span: *param_expr_span,
+                    param_expr_span: param_expr_span.clone(),
                     param_value: value.clone(),
                     min_expr_span,
                     min_value: Value::Number(min),
                 }])
             } else if number.max() > max.max() {
                 Err(vec![EvalError::ParameterValueAboveContinuousLimits {
-                    param_expr_span: *param_expr_span,
+                    param_expr_span: param_expr_span.clone(),
                     param_value: value.clone(),
                     max_expr_span,
                     max_value: Value::Number(max),
@@ -630,14 +630,14 @@ fn verify_value_is_within_number_range(
 
             if number.normalized_value().min() < adjusted_min.normalized_value().min() {
                 Err(vec![EvalError::ParameterValueBelowContinuousLimits {
-                    param_expr_span: *param_expr_span,
+                    param_expr_span: param_expr_span.clone(),
                     param_value: value.clone(),
                     min_expr_span,
                     min_value: Value::Number(min),
                 }])
             } else if number.normalized_value().max() > adjusted_max.normalized_value().max() {
                 Err(vec![EvalError::ParameterValueAboveContinuousLimits {
-                    param_expr_span: *param_expr_span,
+                    param_expr_span: param_expr_span.clone(),
                     param_value: value.clone(),
                     max_expr_span,
                     max_value: Value::Number(max),
@@ -691,7 +691,7 @@ fn verify_value_is_within_number_discrete_limit(
                     .collect();
 
                 Err(vec![EvalError::ParameterValueNotInDiscreteLimits {
-                    param_expr_span: *param_expr_span,
+                    param_expr_span: param_expr_span.clone(),
                     param_value: value.clone(),
                     limit_expr_span,
                     limit_values: values,
@@ -702,7 +702,7 @@ fn verify_value_is_within_number_discrete_limit(
         Value::Number(number) => {
             if let Some(limit_unit) = unit {
                 return Err(vec![EvalError::UnitlessNumberCannotHaveLimitWithUnit {
-                    param_expr_span: *param_expr_span,
+                    param_expr_span: param_expr_span.clone(),
                     param_value: value.clone(),
                     limit_span: limit_expr_span,
                     limit_unit: limit_unit.display_unit,
@@ -718,7 +718,7 @@ fn verify_value_is_within_number_discrete_limit(
             } else {
                 let values: Vec<Value> = values.into_iter().map(Value::Number).collect();
                 Err(vec![EvalError::ParameterValueNotInDiscreteLimits {
-                    param_expr_span: *param_expr_span,
+                    param_expr_span: param_expr_span.clone(),
                     param_value: value.clone(),
                     limit_expr_span,
                     limit_values: values,
@@ -727,12 +727,12 @@ fn verify_value_is_within_number_discrete_limit(
         }
 
         Value::Boolean(_) => Err(vec![EvalError::BooleanCannotHaveALimit {
-            expr_span: *param_expr_span,
+            expr_span: param_expr_span.clone(),
             limit_span: limit_expr_span,
         }]),
 
         Value::String(_) => Err(vec![EvalError::StringCannotHaveNumberLimit {
-            param_expr_span: *param_expr_span,
+            param_expr_span: param_expr_span.clone(),
             param_value: value.clone(),
             limit_span: limit_expr_span,
         }]),
@@ -749,7 +749,7 @@ fn verify_value_is_within_string_discrete_limit(
         Value::String(string) if !values.contains(string) => {
             let values: Vec<Value> = values.into_iter().map(Value::String).collect();
             Err(vec![EvalError::ParameterValueNotInDiscreteLimits {
-                param_expr_span: *param_expr_span,
+                param_expr_span: param_expr_span.clone(),
                 param_value: value.clone(),
                 limit_expr_span,
                 limit_values: values,
@@ -757,12 +757,12 @@ fn verify_value_is_within_string_discrete_limit(
         }
         Value::String(_) => Ok(()),
         Value::Boolean(_) => Err(vec![EvalError::BooleanCannotHaveALimit {
-            expr_span: *param_expr_span,
+            expr_span: param_expr_span.clone(),
             limit_span: limit_expr_span,
         }]),
         Value::Number(_) | Value::MeasuredNumber(_) => {
             Err(vec![EvalError::NumberCannotHaveStringLimit {
-                param_expr_span: *param_expr_span,
+                param_expr_span: param_expr_span.clone(),
                 param_value: value.clone(),
                 limit_span: limit_expr_span,
             }])
@@ -903,7 +903,7 @@ pub fn get_parameter_dependency_values<E: ExternalEvaluationContext>(
     let mut out = IndexMap::new();
     for (dependency, dependency_span) in dependencies {
         let value = context
-            .lookup_parameter_value(dependency, *dependency_span)
+            .lookup_parameter_value(dependency, dependency_span.clone())
             .expect("dependency should be found because the expression evaluated successfully");
         out.insert(dependency.clone(), value);
     }
@@ -922,7 +922,11 @@ pub fn get_external_dependency_values<E: ExternalEvaluationContext>(
     let mut out = IndexMap::new();
     for ((reference_name, parameter_name), dependency_span) in dependencies {
         let value = context
-            .lookup_external_parameter_value(reference_name, parameter_name, *dependency_span)
+            .lookup_external_parameter_value(
+                reference_name,
+                parameter_name,
+                dependency_span.clone(),
+            )
             .expect("dependency should be found because the expression evaluated successfully");
         out.insert((reference_name.clone(), parameter_name.clone()), value);
     }
@@ -1698,7 +1702,7 @@ mod tests {
 
         use oneil_ir::DisplayCompositeUnit;
         use oneil_shared::labels::ParameterLabel;
-        use oneil_shared::span::SourceLocation;
+
         use oneil_shared::span::Span;
         use oneil_shared::symbols::{ParameterName, UnitBaseName, UnitName, UnitPrefix};
 
@@ -1708,17 +1712,7 @@ mod tests {
         /// It is not intended to be directly tested, but rather used
         /// as a placeholder when constructing IR nodes for testing.
         fn random_span() -> Span {
-            let start = SourceLocation {
-                offset: 0,
-                line: 0,
-                column: 0,
-            };
-            let end = SourceLocation {
-                offset: 0,
-                line: 0,
-                column: 0,
-            };
-            Span::new(start, end)
+            Span::synthetic()
         }
 
         /// Returns a display composite unit that isn't intended to be tested.

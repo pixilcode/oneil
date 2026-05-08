@@ -26,14 +26,14 @@ impl<T> Node<T> {
 
     /// Returns a reference to the node's span information
     #[must_use]
-    pub const fn span(&self) -> Span {
-        self.span
+    pub const fn span(&self) -> &Span {
+        &self.span
     }
 
     /// Returns a reference to the node's whitespace span information
     #[must_use]
-    pub const fn whitespace_span(&self) -> Span {
-        self.whitespace_span
+    pub const fn whitespace_span(&self) -> &Span {
+        &self.whitespace_span
     }
 
     /// Consumes the node and returns its value
@@ -45,11 +45,18 @@ impl<T> Node<T> {
     /// Wraps the node in a new node with the same span and whitespace span
     #[must_use]
     pub fn wrap<U>(self, wrapper: impl FnOnce(Self) -> U) -> Node<U> {
-        let span = self.span;
-        let whitespace_span = self.whitespace_span;
-        let value = wrapper(self);
-
-        Node::new(value, span, whitespace_span)
+        let Self {
+            value,
+            span,
+            whitespace_span,
+        } = self;
+        let node = Self {
+            value,
+            span: span.clone(),
+            whitespace_span: whitespace_span.clone(),
+        };
+        let new_value = wrapper(node);
+        Node::new(new_value, span, whitespace_span)
     }
 }
 

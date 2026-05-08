@@ -21,7 +21,7 @@ pub fn eval_unit<E: ExternalEvaluationContext>(
 
     // get the first unit
     let Some(first_unit) = units.next() else {
-        return (Unit::one(), unit_span);
+        return (Unit::one(), unit_span.clone());
     };
 
     // multiply the units together
@@ -36,7 +36,7 @@ pub fn eval_unit<E: ExternalEvaluationContext>(
 
     // construct the unit and return it
     let unit = result.with_unit_display_expr(display_info);
-    (unit, unit_span)
+    (unit, unit_span.clone())
 }
 
 /// Evaluates a single unit component using its pre-resolved information.
@@ -105,7 +105,7 @@ mod test {
     use std::f64::consts::PI;
 
     use oneil_output::Dimension;
-    use oneil_shared::span::SourceLocation;
+
     use oneil_shared::symbols::{UnitBaseName, UnitName, UnitPrefix};
 
     use crate::{
@@ -121,17 +121,7 @@ mod test {
     /// It is not intended to be directly tested, but rather used
     /// as a placeholder when constructing IR nodes for testing.
     fn random_span() -> Span {
-        let start = SourceLocation {
-            offset: 0,
-            line: 0,
-            column: 0,
-        };
-        let end = SourceLocation {
-            offset: 0,
-            line: 0,
-            column: 0,
-        };
-        Span::new(start, end)
+        Span::synthetic()
     }
 
     /// Returns a display unit that isn't intended to be tested.

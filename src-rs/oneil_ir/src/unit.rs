@@ -57,8 +57,8 @@ impl CompositeUnit {
 
     /// Returns the span of this composite unit.
     #[must_use]
-    pub const fn span(&self) -> Span {
-        self.span
+    pub const fn span(&self) -> &Span {
+        &self.span
     }
 
     /// Returns the pre-resolved dimension map for this composite unit.
@@ -102,8 +102,8 @@ impl Unit {
 
     /// Returns the span of this unit.
     #[must_use]
-    pub const fn span(&self) -> Span {
-        self.span
+    pub const fn span(&self) -> &Span {
+        &self.span
     }
 
     /// Returns the name of this unit.
@@ -114,8 +114,8 @@ impl Unit {
 
     /// Returns the span of the name of this unit.
     #[must_use]
-    pub const fn name_span(&self) -> Span {
-        self.name_span
+    pub const fn name_span(&self) -> &Span {
+        &self.name_span
     }
 
     /// Returns the exponent of this unit.
@@ -126,8 +126,8 @@ impl Unit {
 
     /// Returns the span of the exponent of this unit.
     #[must_use]
-    pub const fn exponent_span(&self) -> Option<Span> {
-        self.exponent_span
+    pub const fn exponent_span(&self) -> Option<&Span> {
+        self.exponent_span.as_ref()
     }
 
     /// Returns the unit info of this unit.

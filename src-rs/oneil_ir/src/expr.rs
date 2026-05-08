@@ -296,7 +296,7 @@ impl Expr {
                 right,
                 rest_chained,
             } => {
-                let visitor = visitor.visit_comparison_op(*span, op, left, right, rest_chained);
+                let visitor = visitor.visit_comparison_op(span, op, left, right, rest_chained);
                 let visitor = left.pre_order_visit(visitor);
                 let visitor = right.pre_order_visit(visitor);
                 rest_chained.iter().fold(visitor, |visitor, (_op, expr)| {
@@ -309,17 +309,17 @@ impl Expr {
                 left,
                 right,
             } => {
-                let visitor = visitor.visit_binary_op(*span, op, left, right);
+                let visitor = visitor.visit_binary_op(span, op, left, right);
                 let visitor = left.pre_order_visit(visitor);
                 right.pre_order_visit(visitor)
             }
             Self::Fallback { span, left, right } => {
-                let visitor = visitor.visit_fallback(*span, left, right);
+                let visitor = visitor.visit_fallback(span, left, right);
                 let visitor = left.pre_order_visit(visitor);
                 right.pre_order_visit(visitor)
             }
             Self::UnaryOp { span, op, expr } => {
-                let visitor = visitor.visit_unary_op(*span, op, expr);
+                let visitor = visitor.visit_unary_op(span, op, expr);
                 expr.pre_order_visit(visitor)
             }
             Self::FunctionCall {
@@ -328,14 +328,14 @@ impl Expr {
                 name,
                 args,
             } => {
-                let visitor = visitor.visit_function_call(*span, *name_span, name, args);
+                let visitor = visitor.visit_function_call(span, name_span, name, args);
                 args.iter()
                     .fold(visitor, |visitor, arg| arg.pre_order_visit(visitor))
             }
-            Self::Variable { span, variable } => visitor.visit_variable(*span, variable),
-            Self::Literal { span, value } => visitor.visit_literal(*span, value),
+            Self::Variable { span, variable } => visitor.visit_variable(span, variable),
+            Self::Literal { span, value } => visitor.visit_literal(span, value),
             Self::UnitCast { span, expr, unit } => {
-                let visitor = visitor.visit_unit_cast(*span, expr, unit);
+                let visitor = visitor.visit_unit_cast(span, expr, unit);
                 expr.pre_order_visit(visitor)
             }
         }
@@ -358,7 +358,7 @@ impl Expr {
                 let visitor = rest_chained.iter().fold(visitor, |visitor, (_op, expr)| {
                     expr.post_order_visit(visitor)
                 });
-                visitor.visit_comparison_op(*span, op, left, right, rest_chained)
+                visitor.visit_comparison_op(span, op, left, right, rest_chained)
             }
             Self::BinaryOp {
                 span,
@@ -368,16 +368,16 @@ impl Expr {
             } => {
                 let visitor = left.post_order_visit(visitor);
                 let visitor = right.post_order_visit(visitor);
-                visitor.visit_binary_op(*span, op, left, right)
+                visitor.visit_binary_op(span, op, left, right)
             }
             Self::Fallback { span, left, right } => {
                 let visitor = left.post_order_visit(visitor);
                 let visitor = right.post_order_visit(visitor);
-                visitor.visit_fallback(*span, left, right)
+                visitor.visit_fallback(span, left, right)
             }
             Self::UnaryOp { span, op, expr } => {
                 let visitor = expr.post_order_visit(visitor);
-                visitor.visit_unary_op(*span, op, expr)
+                visitor.visit_unary_op(span, op, expr)
             }
             Self::FunctionCall {
                 span,
@@ -389,13 +389,13 @@ impl Expr {
                     .iter()
                     .fold(visitor, |visitor, arg| arg.post_order_visit(visitor));
 
-                visitor.visit_function_call(*span, *name_span, name, args)
+                visitor.visit_function_call(span, name_span, name, args)
             }
-            Self::Variable { span, variable } => visitor.visit_variable(*span, variable),
-            Self::Literal { span, value } => visitor.visit_literal(*span, value),
+            Self::Variable { span, variable } => visitor.visit_variable(span, variable),
+            Self::Literal { span, value } => visitor.visit_literal(span, value),
             Self::UnitCast { span, expr, unit } => {
                 let visitor = expr.post_order_visit(visitor);
-                visitor.visit_unit_cast(*span, expr, unit)
+                visitor.visit_unit_cast(span, expr, unit)
             }
         }
     }
@@ -647,7 +647,7 @@ pub trait ExprVisitor: Sized {
     #[must_use]
     fn visit_comparison_op(
         self,
-        span: Span,
+        span: &Span,
         op: &ComparisonOp,
         left: &Expr,
         right: &Expr,
@@ -658,19 +658,19 @@ pub trait ExprVisitor: Sized {
 
     /// Visits a binary operation expression.
     #[must_use]
-    fn visit_binary_op(self, span: Span, op: &BinaryOp, left: &Expr, right: &Expr) -> Self {
+    fn visit_binary_op(self, span: &Span, op: &BinaryOp, left: &Expr, right: &Expr) -> Self {
         self
     }
 
     /// Visits a fallback expression (`left ? right`).
     #[must_use]
-    fn visit_fallback(self, span: Span, left: &Expr, right: &Expr) -> Self {
+    fn visit_fallback(self, span: &Span, left: &Expr, right: &Expr) -> Self {
         self
     }
 
     /// Visits a unary operation expression.
     #[must_use]
-    fn visit_unary_op(self, span: Span, op: &UnaryOp, expr: &Expr) -> Self {
+    fn visit_unary_op(self, span: &Span, op: &UnaryOp, expr: &Expr) -> Self {
         self
     }
 
@@ -678,8 +678,8 @@ pub trait ExprVisitor: Sized {
     #[must_use]
     fn visit_function_call(
         self,
-        span: Span,
-        name_span: Span,
+        span: &Span,
+        name_span: &Span,
         name: &FunctionName,
         args: &[Expr],
     ) -> Self {
@@ -688,19 +688,19 @@ pub trait ExprVisitor: Sized {
 
     /// Visits a variable reference expression.
     #[must_use]
-    fn visit_variable(self, span: Span, variable: &Variable) -> Self {
+    fn visit_variable(self, span: &Span, variable: &Variable) -> Self {
         self
     }
 
     /// Visits a literal value expression.
     #[must_use]
-    fn visit_literal(self, span: Span, value: &Literal) -> Self {
+    fn visit_literal(self, span: &Span, value: &Literal) -> Self {
         self
     }
 
     /// Visits a unit cast expression.
     #[must_use]
-    fn visit_unit_cast(self, span: Span, expr: &Expr, unit: &CompositeUnit) -> Self {
+    fn visit_unit_cast(self, span: &Span, expr: &Expr, unit: &CompositeUnit) -> Self {
         self
     }
 }

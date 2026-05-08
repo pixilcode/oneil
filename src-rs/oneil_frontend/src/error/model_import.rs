@@ -224,7 +224,7 @@ impl AsOneilDiagnostic for ModelImportResolutionError {
         self.to_string()
     }
 
-    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, _source: &str) -> Option<ErrorLocation> {
         match self {
             Self::ModelHasError {
                 model_path: _,
@@ -252,7 +252,7 @@ impl AsOneilDiagnostic for ModelImportResolutionError {
                 reference_span: location_span,
                 ..
             } => {
-                let location = ErrorLocation::from_source_and_span(source, *location_span);
+                let location = ErrorLocation::from_span(location_span);
                 Some(location)
             }
         }
@@ -275,7 +275,7 @@ impl AsOneilDiagnostic for ModelImportResolutionError {
         }
     }
 
-    fn context_with_source(&self, source: &str) -> Vec<(Context, Option<ErrorLocation>)> {
+    fn context_with_source(&self, _source: &str) -> Vec<(Context, Option<ErrorLocation>)> {
         match self {
             Self::ParentModelHasError {
                 parent_model_name,
@@ -283,21 +283,21 @@ impl AsOneilDiagnostic for ModelImportResolutionError {
                 ..
             } => {
                 let model_name = parent_model_name.as_str();
-                let location = ErrorLocation::from_source_and_span(source, *parent_model_name_span);
+                let location = ErrorLocation::from_span(parent_model_name_span);
                 vec![(
                     Context::Note(format!("model `{model_name}` failed to resolve")),
                     Some(location),
                 )]
             }
             Self::DuplicateSubmodel { original_span, .. } => {
-                let location = ErrorLocation::from_source_and_span(source, *original_span);
+                let location = ErrorLocation::from_span(original_span);
                 vec![(
                     Context::Note("submodel is originally defined here".to_string()),
                     Some(location),
                 )]
             }
             Self::DuplicateReference { original_span, .. } => {
-                let location = ErrorLocation::from_source_and_span(source, *original_span);
+                let location = ErrorLocation::from_span(original_span);
                 vec![(
                     Context::Note("reference is originally defined here".to_string()),
                     Some(location),

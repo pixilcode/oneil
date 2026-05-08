@@ -576,7 +576,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
                         parameter_instance_key: parameter_instance_key.clone(),
                         parameter_name: parameter_name.clone(),
                         looked_up_from_instance_key: looked_up_from_instance_key.clone(),
-                        looked_up_from_span,
+                        looked_up_from_span: looked_up_from_span.clone(),
                     }]))
                 }
                 ParamSlot::InProgress => SlotPeek::Cycle,
@@ -669,7 +669,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
             .parameters
             .iter()
             .filter_map(|(name, slot)| match slot {
-                ParamSlot::Pending(param) => Some((name.clone(), param.name_span())),
+                ParamSlot::Pending(param) => Some((name.clone(), param.name_span().clone())),
                 ParamSlot::InProgress | ParamSlot::Done(_) => None,
             })
             .collect();

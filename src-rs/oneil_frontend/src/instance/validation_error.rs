@@ -141,13 +141,15 @@ impl InstanceValidationError {
     /// Returns the source span the error attaches to. Used by the runtime's
     /// error rendering pipeline to compute line/column information.
     #[must_use]
-    pub const fn primary_span(&self) -> Span {
+    pub fn primary_span(&self) -> Span {
         match &self.kind {
             InstanceValidationErrorKind::UndefinedParameter { parameter_span, .. }
             | InstanceValidationErrorKind::UndefinedReferenceParameter { parameter_span, .. }
-            | InstanceValidationErrorKind::ParameterCycle { parameter_span, .. } => *parameter_span,
+            | InstanceValidationErrorKind::ParameterCycle { parameter_span, .. } => {
+                parameter_span.clone()
+            }
             InstanceValidationErrorKind::UndefinedReference { reference_span, .. } => {
-                *reference_span
+                reference_span.clone()
             }
         }
     }
@@ -239,11 +241,8 @@ impl AsOneilDiagnostic for InstanceValidationError {
         }
     }
 
-    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
-        Some(ErrorLocation::from_source_and_span(
-            source,
-            self.primary_span(),
-        ))
+    fn diagnostic_location(&self, _source: &str) -> Option<ErrorLocation> {
+        Some(ErrorLocation::from_span(&self.primary_span()))
     }
 
     fn context(&self) -> Vec<Context> {

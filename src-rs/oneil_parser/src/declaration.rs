@@ -53,11 +53,11 @@ pub fn parse_design_target_complete(input: InputSpan<'_>) -> Result<'_, DeclNode
 /// matches but the rest of the declaration is malformed, an error is returned
 /// rather than trying subsequent parsers.
 pub fn parse(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
-    if let Ok((_, node)) = parse_design_target_line.parse(input) {
+    if let Ok((_, node)) = parse_design_target_line.parse(input.clone()) {
         let err = if input.extra.require_design_header {
-            ParserError::design_header_duplicate(node.span())
+            ParserError::design_header_duplicate(node.span().clone())
         } else {
-            ParserError::design_header_wrong_file(node.span())
+            ParserError::design_header_wrong_file(node.span().clone())
         };
         return Err(nom::Err::Error(err));
     }
@@ -94,12 +94,14 @@ fn import_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
 
     // TODO: allow a path here (ex. `import foo.bar`)
     let (rest, import_path_token) = identifier
-        .or_fail_with(ParserError::import_missing_path(import_token.lexeme_span))
+        .or_fail_with(ParserError::import_missing_path(
+            import_token.lexeme_span.clone(),
+        ))
         .parse(rest)?;
 
     let (rest, end_of_line_token) = end_of_line
         .or_fail_with(ParserError::import_missing_end_of_line(
-            import_path_token.lexeme_span,
+            import_path_token.lexeme_span.clone(),
         ))
         .parse(rest)?;
 
@@ -109,7 +111,11 @@ fn import_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
 
     let import_path_str = Node::<String>::from(import_path_token);
 
-    let import_node = Node::new(Import::new(import_path_str), node_span, whitespace_span);
+    let import_node = Node::new(
+        Import::new(import_path_str),
+        node_span.clone(),
+        whitespace_span.clone(),
+    );
 
     let decl_node = Node::new(Decl::Import(import_node), node_span, whitespace_span);
 
@@ -124,12 +130,14 @@ pub fn parse_design_target_line(input: InputSpan<'_>) -> Result<'_, DeclNode, Pa
     let (rest, directory_path) = opt_directory_path.parse(rest)?;
 
     let (rest, target_token) = identifier
-        .or_fail_with(ParserError::design_missing_target(design_token.lexeme_span))
+        .or_fail_with(ParserError::design_missing_target(
+            design_token.lexeme_span.clone(),
+        ))
         .parse(rest)?;
 
     let (rest, end_of_line_token) = end_of_line
         .or_fail_with(ParserError::import_missing_end_of_line(
-            target_token.lexeme_span,
+            target_token.lexeme_span.clone(),
         ))
         .parse(rest)?;
 
@@ -138,12 +146,16 @@ pub fn parse_design_target_line(input: InputSpan<'_>) -> Result<'_, DeclNode, Pa
         Span::from_start_and_end(&design_token.lexeme_span, &end_of_line_token.lexeme_span);
     let whitespace_span = end_of_line_token.whitespace_span;
     let inner = if directory_path.is_empty() {
-        Node::new(DesignTarget::new(target_node), node_span, whitespace_span)
+        Node::new(
+            DesignTarget::new(target_node),
+            node_span.clone(),
+            whitespace_span.clone(),
+        )
     } else {
         Node::new(
             DesignTarget::with_path(directory_path, target_node),
-            node_span,
-            whitespace_span,
+            node_span.clone(),
+            whitespace_span.clone(),
         )
     };
     let decl_node = Node::new(Decl::DesignTarget(inner), node_span, whitespace_span);
@@ -155,11 +167,13 @@ pub fn parse_design_target_line(input: InputSpan<'_>) -> Result<'_, DeclNode, Pa
 /// declaration (with the `apply` keyword present), terminated by an end-of-line.
 fn apply_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
     let (rest, apply_token) = apply.convert_errors().parse(input)?;
-    let (rest, body) = parse_apply_body(rest, Some(apply_token.lexeme_span))?;
+    let (rest, body) = parse_apply_body(rest, Some(apply_token.lexeme_span.clone()))?;
 
     let body_end_span = body.span();
     let (rest, end_of_line_token) = end_of_line
-        .or_fail_with(ParserError::submodel_missing_end_of_line(body_end_span))
+        .or_fail_with(ParserError::submodel_missing_end_of_line(
+            body_end_span.clone(),
+        ))
         .parse(rest)?;
 
     let span_from_kw =
@@ -196,14 +210,14 @@ fn parse_apply_body(
     let file_node = IdentifierNode::from(file_token);
 
     let (rest, _to_token) = to
-        .or_fail_with(ParserError::apply_missing_target(file_node.span()))
+        .or_fail_with(ParserError::apply_missing_target(file_node.span().clone()))
         .parse(rest)?;
 
     let (rest, first_target) = identifier
-        .or_fail_with(ParserError::apply_missing_target(file_node.span()))
+        .or_fail_with(ParserError::apply_missing_target(file_node.span().clone()))
         .parse(rest)?;
     let first_target_node = IdentifierNode::from(first_target);
-    let mut last_segment_span = first_target_node.span();
+    let mut last_segment_span: Span = first_target_node.span().clone();
 
     let (rest, more_targets) = many0(|input| {
         let (rest, dot_token) = dot.convert_errors().parse(input)?;
@@ -217,7 +231,7 @@ fn parse_apply_body(
     .parse(rest)?;
 
     if let Some(last) = more_targets.last() {
-        last_segment_span = last.span();
+        last_segment_span = last.span().clone();
     }
 
     let target: Vec<IdentifierNode> = std::iter::once(first_target_node)
@@ -231,7 +245,7 @@ fn parse_apply_body(
         let (rest, items) = many0(nested_apply_item).parse(rest)?;
         let (rest, bracket_right_token) = bracket_right
             .or_fail_with(ParserError::unclosed_bracket(
-                bracket_left_token.lexeme_span,
+                bracket_left_token.lexeme_span.clone(),
             ))
             .parse(rest)?;
         Ok((rest, (bracket_left_token, bracket_right_token, items)))
@@ -248,7 +262,7 @@ fn parse_apply_body(
     } else {
         directory_path[0].span()
     };
-    let node_span = Span::from_start_and_end(&body_start_span, &body_end_span);
+    let node_span = Span::from_start_and_end(body_start_span, &body_end_span);
     let whitespace_span = body_end_span;
 
     let inner = ApplyDesign::new(directory_path, file_node, target, nested_applies);
@@ -326,7 +340,7 @@ fn design_parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserErr
 
     let (rest, linebreak_token) = end_of_line
         .or_fail_with(ParserError::parameter_missing_end_of_line(
-            value_node.span(),
+            value_node.span().clone(),
         ))
         .parse(rest)?;
 
@@ -341,10 +355,15 @@ fn design_parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserErr
     };
     let (param_end_span, param_whitespace_span) = note_node.as_ref().map_or(
         (linebreak_token.lexeme_span, linebreak_token.whitespace_span),
-        |note_node| (note_node.span(), note_node.whitespace_span()),
+        |note_node| {
+            (
+                note_node.span().clone(),
+                note_node.whitespace_span().clone(),
+            )
+        },
     );
 
-    let param_span = Span::from_start_and_end(&param_start_span, &param_end_span);
+    let param_span = Span::from_start_and_end(param_start_span, &param_end_span);
     let inner = DesignParameter::new(
         ident_node,
         instance_path,
@@ -354,7 +373,7 @@ fn design_parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserErr
         note_node,
         label_node,
     );
-    let inner_node = Node::new(inner, param_span, param_whitespace_span);
+    let inner_node = Node::new(inner, param_span.clone(), param_whitespace_span.clone());
     let decl_node = Node::new(
         Decl::DesignParameter(inner_node),
         param_span,
@@ -396,18 +415,20 @@ fn submodel_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
     // itself denotes extraction; there is no introducing keyword.
     let (rest, submodel_list) = opt(submodel_list).parse(rest)?;
 
-    let final_span = submodel_list
+    let final_span: Span = submodel_list
         .as_ref()
-        .map_or_else(|| model_info.span(), Node::span);
+        .map_or_else(|| model_info.span().clone(), |n| n.span().clone());
 
     let (rest, end_of_line_token) = end_of_line
-        .or_fail_with(ParserError::submodel_missing_end_of_line(final_span))
+        .or_fail_with(ParserError::submodel_missing_end_of_line(
+            final_span.clone(),
+        ))
         .parse(rest)?;
 
     let submodel_node = Node::new(
         SubmodelDecl::new(directory_path, model_info, submodel_list, model_kind),
-        final_span,
-        end_of_line_token.whitespace_span,
+        final_span.clone(),
+        end_of_line_token.whitespace_span.clone(),
     );
 
     let decl_node = Node::new(
@@ -459,17 +480,17 @@ fn model_info_simple(input: InputSpan<'_>) -> Result<'_, ModelInfoNode, ParserEr
 
     let (rest, alias) = opt(as_alias).parse(rest)?;
 
-    let (final_span, whitespace_span) = alias.as_ref().map_or_else(
+    let (final_span, whitespace_span): (Span, Span) = alias.as_ref().map_or_else(
         || {
             (
-                top_component_node.span(),
-                top_component_node.whitespace_span(),
+                top_component_node.span().clone(),
+                top_component_node.whitespace_span().clone(),
             )
         },
-        |a| (a.span(), a.whitespace_span()),
+        |a| (a.span().clone(), a.whitespace_span().clone()),
     );
 
-    let model_info_span = Span::from_start_and_end(&top_component_node.span(), &final_span);
+    let model_info_span = Span::from_start_and_end(top_component_node.span(), &final_span);
     let model_info = ModelInfo::new(top_component_node, vec![], alias);
 
     Ok((
@@ -486,16 +507,19 @@ pub fn model_info(input: InputSpan<'_>) -> Result<'_, ModelInfoNode, ParserError
     let (rest, subcomponents) = opt_subcomponents.parse(rest)?;
     let (rest, alias) = opt(as_alias).parse(rest)?;
 
-    let (final_span, whitespace_span) = match (subcomponents.last(), &alias) {
-        (_, Some(alias)) => (alias.span(), alias.whitespace_span()),
-        (Some(subcomponent), None) => (subcomponent.span(), subcomponent.whitespace_span()),
+    let (final_span, whitespace_span): (Span, Span) = match (subcomponents.last(), &alias) {
+        (_, Some(alias)) => (alias.span().clone(), alias.whitespace_span().clone()),
+        (Some(subcomponent), None) => (
+            subcomponent.span().clone(),
+            subcomponent.whitespace_span().clone(),
+        ),
         (None, None) => (
-            top_component_node.span(),
-            top_component_node.whitespace_span(),
+            top_component_node.span().clone(),
+            top_component_node.whitespace_span().clone(),
         ),
     };
 
-    let model_info_span = Span::from_start_and_end(&top_component_node.span(), &final_span);
+    let model_info_span = Span::from_start_and_end(top_component_node.span(), &final_span);
     let model_info = ModelInfo::new(top_component_node, subcomponents, alias);
 
     Ok((
@@ -569,7 +593,7 @@ fn submodel_list(input: InputSpan<'_>) -> Result<'_, SubmodelListNode, ParserErr
 
     let (rest, bracket_right_token) = bracket_right
         .or_fail_with(ParserError::unclosed_bracket(
-            bracket_left_token.lexeme_span,
+            bracket_left_token.lexeme_span.clone(),
         ))
         .parse(rest)?;
 
@@ -593,8 +617,8 @@ fn submodel_list(input: InputSpan<'_>) -> Result<'_, SubmodelListNode, ParserErr
 fn parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
     let (rest, parameter) = parse_parameter.parse(input)?;
 
-    let parameter_span = parameter.span();
-    let parameter_whitespace_span = parameter.whitespace_span();
+    let parameter_span = parameter.span().clone();
+    let parameter_whitespace_span = parameter.whitespace_span().clone();
     let decl_node = Node::new(
         Decl::Parameter(parameter),
         parameter_span,
@@ -608,8 +632,8 @@ fn parameter_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
 fn test_decl(input: InputSpan<'_>) -> Result<'_, DeclNode, ParserError> {
     let (rest, test) = parse_test.parse(input)?;
 
-    let span = test.span();
-    let whitespace_span = test.whitespace_span();
+    let span = test.span().clone();
+    let whitespace_span = test.whitespace_span().clone();
     let decl_node = Node::new(Decl::Test(test), span, whitespace_span);
 
     Ok((rest, decl_node))

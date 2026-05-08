@@ -37,12 +37,12 @@ pub fn token<'a, O>(
         let (rest, lexeme) = recognize(f).convert_error_to(convert_error).parse(input)?;
 
         let lexeme_str = lexeme.fragment();
-        let lexeme_span = span_from(lexeme, rest);
+        let lexeme_span = span_from(&lexeme, &rest);
 
         // consume the whitespace
         let (rest, whitespace) = inline_whitespace.parse(rest)?;
 
-        let whitespace_span = span_from(whitespace, rest);
+        let whitespace_span = span_from(&whitespace, &rest);
 
         let token = Token {
             lexeme_str,
@@ -62,7 +62,7 @@ pub fn token<'a, O>(
 ///
 /// This structure allows the parser to maintain precise location information
 /// while handling whitespace appropriately during tokenization.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'a> {
     pub lexeme_str: &'a str,
     pub lexeme_span: Span,

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use nom::{IResult, Parser as NomParser, error::Error};
 use nom_locate::LocatedSpan;
 use oneil_shared::span::{SourceLocation, Span};
@@ -10,7 +12,8 @@ use super::config::Config;
 /// This type is used throughout the parser to track source locations and parser configuration.
 pub type InputSpan<'a> = LocatedSpan<&'a str, Config>;
 
-pub fn source_location_from(input_span: InputSpan<'_>) -> SourceLocation {
+/// Extracts a [`SourceLocation`] from an [`InputSpan`].
+pub fn source_location_from(input_span: &InputSpan<'_>) -> SourceLocation {
     SourceLocation {
         offset: input_span.location_offset(),
         line: usize::try_from(input_span.location_line())
@@ -19,10 +22,19 @@ pub fn source_location_from(input_span: InputSpan<'_>) -> SourceLocation {
     }
 }
 
-pub fn span_from(start_input_span: InputSpan<'_>, end_input_span: InputSpan<'_>) -> Span {
+/// Builds a [`Span`] that runs from `start_input_span` to `end_input_span`.
+///
+/// The path and source are taken from `start_input_span`'s [`Config`] extra
+/// data, so every span produced by the parser automatically carries the correct
+/// file identity.
+pub fn span_from(start_input_span: &InputSpan<'_>, end_input_span: &InputSpan<'_>) -> Span {
+    let path = Arc::clone(&start_input_span.extra.path);
+    let source = Arc::clone(&start_input_span.extra.source);
     Span::new(
         source_location_from(start_input_span),
         source_location_from(end_input_span),
+        path,
+        source,
     )
 }
 

@@ -41,18 +41,19 @@ fn end_of_line_span(input: InputSpan<'_>) -> Result<'_, InputSpan<'_>, TokenErro
 fn single_line_note(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     let (rest, matched) = recognize((char('~'), not_line_ending)).parse(input)?;
 
-    let lexeme_str = matched.fragment();
+    let binding = matched.clone();
+    let lexeme_str = binding.fragment();
 
-    let lexeme_span = span_from(matched, rest);
+    let lexeme_span = span_from(&matched, &rest);
 
     let (rest, whitespace) = end_of_line_span(rest)?;
 
-    if multi_line_note_delimiter(matched).is_ok() {
-        let error = TokenError::expected_note_from_span(input);
+    if multi_line_note_delimiter(matched.clone()).is_ok() {
+        let error = TokenError::expected_note_from_span(&matched);
         return Err(nom::Err::Error(error));
     }
 
-    let whitespace_span = span_from(whitespace, rest);
+    let whitespace_span = span_from(&whitespace, &rest);
 
     Ok((
         rest,
@@ -78,9 +79,12 @@ fn multi_line_note_delimiter(input: InputSpan<'_>) -> Result<'_, InputSpan<'_>, 
 
 /// Parses the content of a multi-line note.
 fn multi_line_note_content(input: InputSpan<'_>) -> Result<'_, InputSpan<'_>, TokenError> {
-    recognize(many0(verify((not_line_ending, line_ending), |(s, _)| {
-        multi_line_note_delimiter.parse(*s).is_err()
-    })))
+    recognize(many0(verify(
+        (not_line_ending, line_ending),
+        |(s, _): &(InputSpan<'_>, InputSpan<'_>)| {
+            multi_line_note_delimiter.parse(s.clone()).is_err()
+        },
+    )))
     .parse(input)
 }
 
@@ -94,7 +98,7 @@ fn multi_line_note_content(input: InputSpan<'_>) -> Result<'_, InputSpan<'_>, To
 fn multi_line_note(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     let (rest, content) = recognize(|input| {
         let (rest, delimiter_input_span) = multi_line_note_delimiter.parse(input)?;
-        let delimiter_span = span_from(delimiter_input_span, rest);
+        let delimiter_span = span_from(&delimiter_input_span, &rest);
 
         let (rest, ()) = (|input| {
             let (rest, _) = line_ending.parse(input)?;
@@ -108,12 +112,12 @@ fn multi_line_note(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     })
     .parse(input)?;
     let lexeme_str = content.fragment();
-    let lexeme_span = span_from(content, rest);
+    let lexeme_span = span_from(&content, &rest);
 
     let (rest, whitespace) = end_of_line_span
         .or_fail_with(TokenError::invalid_closing_delimiter)
         .parse(rest)?;
-    let whitespace_span = span_from(whitespace, rest);
+    let whitespace_span = span_from(&whitespace, &rest);
 
     Ok((
         rest,

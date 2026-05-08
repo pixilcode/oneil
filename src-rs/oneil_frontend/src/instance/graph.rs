@@ -186,14 +186,6 @@ fn attach_file_resolution_errors(graph: &mut InstanceGraph, path: &ModelPath, ct
     }
 }
 
-const fn root_frame_span() -> Span {
-    Span::empty(oneil_shared::span::SourceLocation {
-        offset: 0,
-        line: 1,
-        column: 1,
-    })
-}
-
 // ── Public entry points ──────────────────────────────────────────────────────
 
 /// Convenience over [`build_unit_graph_for`] for the model variant.
@@ -223,7 +215,7 @@ pub fn build_unit_graph_for(
     design_info: &IndexMap<ModelPath, ModelDesignInfo>,
 ) -> InstanceGraph {
     let ctx = GraphCtx::new(templates, design_info);
-    build_unit_graph_inner(unit, root_frame_span(), cache, stack, &ctx)
+    build_unit_graph_inner(unit, Span::synthetic(), cache, stack, &ctx)
 }
 
 /// Builds the user-facing composed graph for `root_path`, layering on
@@ -239,12 +231,12 @@ pub fn apply_designs(
     let mut stack = Vec::new();
     let root_unit = CompilationUnit::Model(root_path.clone());
     let mut composed =
-        build_unit_graph_inner(&root_unit, root_frame_span(), cache, &mut stack, &ctx);
+        build_unit_graph_inner(&root_unit, Span::synthetic(), cache, &mut stack, &ctx);
 
     for app in runtime_designs {
         let design_file = app.design_path.to_model_path();
         let applied_via = ir::DesignApplication {
-            apply_span: app.span,
+            apply_span: app.span.clone(),
             applied_in: root_path.clone(),
             design_path: app.design_path.clone(),
         };
@@ -347,7 +339,7 @@ fn build_model_unit_graph(
         let applies: Vec<ApplyDesign> = info.applied_designs.clone();
         for app in &applies {
             let applied_via = ir::DesignApplication {
-                apply_span: app.span,
+                apply_span: app.span.clone(),
                 applied_in: model_path.clone(),
                 design_path: app.design_path.clone(),
             };
@@ -395,12 +387,12 @@ fn build_design_unit_graph(
     };
 
     let target_unit = CompilationUnit::Model(target_path);
-    if let Some(error) = cycle_error_for_revisit(&target_unit, root_frame_span(), stack) {
+    if let Some(error) = cycle_error_for_revisit(&target_unit, Span::synthetic(), stack) {
         let mut graph = empty_with_errors(ctx);
         graph.cycle_errors.push(error);
         return graph;
     }
-    let mut graph = build_unit_graph_inner(&target_unit, root_frame_span(), cache, stack, ctx);
+    let mut graph = build_unit_graph_inner(&target_unit, Span::synthetic(), cache, stack, ctx);
     let mut root = (*graph.root).clone();
 
     // Overlay the design's own contributions at the target root, then
@@ -441,13 +433,13 @@ fn build_instance_subtree(
             let sub = node
                 .get_submodel(&alias)
                 .expect("alias just enumerated from submodels");
-            (sub.instance.path().clone(), sub.name_span)
+            (sub.instance.path().clone(), sub.name_span.clone())
         };
         // Design-file submodels (path ends in .one) are routed through
         // CompilationUnit::Design so build_design_unit_graph applies the
         // design's overrides on top of the target model.
         let child_unit = child_compilation_unit(child_path);
-        if let Some(error) = cycle_error_for_revisit(&child_unit, name_span, stack) {
+        if let Some(error) = cycle_error_for_revisit(&child_unit, name_span.clone(), stack) {
             graph.cycle_errors.push(error);
             continue;
         }
@@ -467,14 +459,14 @@ fn build_instance_subtree(
     let ref_paths: Vec<(ModelPath, Span)> = node
         .references()
         .values()
-        .map(|r| (r.path.clone(), r.name_span))
+        .map(|r| (r.path.clone(), r.name_span.clone()))
         .collect();
     for (path, name_span) in ref_paths {
         if graph.reference_pool.contains_key(&path) {
             continue;
         }
         let child_unit = CompilationUnit::Model(path.clone());
-        if let Some(error) = cycle_error_for_revisit(&child_unit, name_span, stack) {
+        if let Some(error) = cycle_error_for_revisit(&child_unit, name_span.clone(), stack) {
             graph.cycle_errors.push(error);
             continue;
         }
@@ -556,7 +548,7 @@ fn cycle_error_for_revisit(
     cycle.push(child_unit.clone());
     let target_span = stack
         .get(stack_idx + 1)
-        .map_or(back_edge_span, |f| f.imported_at);
+        .map_or(back_edge_span, |f| f.imported_at.clone());
     let target_path = stack[stack_idx].unit.source_path();
     Some(CompilationCycleError::new(cycle, target_path, target_span))
 }
@@ -582,14 +574,9 @@ fn apply_design_at_target_in_place(
         // Apply target couldn't be resolved against the live tree;
         // surface as a contribution diagnostic on the (synthetic)
         // host-path equivalent of the apply target.
-        let span = applied_via.as_ref().map_or(
-            Span::empty(oneil_shared::span::SourceLocation {
-                offset: 0,
-                line: 1,
-                column: 1,
-            }),
-            |a| a.apply_span,
-        );
+        let span = applied_via
+            .as_ref()
+            .map_or(Span::synthetic(), |a| a.apply_span.clone());
         contribution_errors.push(ContributionDiagnostic::new(
             target.clone(),
             DesignResolutionError::new(
@@ -659,7 +646,7 @@ fn apply_design_recursive(
         let nested_target = effective_target.join(&app.target);
         let nested_design_file = app.design_path.to_model_path();
         let nested_applied_via = ir::DesignApplication {
-            apply_span: app.span,
+            apply_span: app.span.clone(),
             applied_in: design_file.clone(),
             design_path: app.design_path.clone(),
         };
@@ -744,24 +731,7 @@ fn apply_scoped_overlay(
         // Scoped path didn't resolve. Surface a diagnostic.
         let span = applied_via
             .filter(|a| a.apply_span.start() != a.apply_span.end())
-            .map_or_else(
-                || {
-                    let loc = oneil_shared::span::SourceLocation {
-                        offset: 0,
-                        line: 1,
-                        column: 1,
-                    };
-                    Span::new(
-                        loc,
-                        oneil_shared::span::SourceLocation {
-                            offset: 1,
-                            line: 1,
-                            column: 2,
-                        },
-                    )
-                },
-                |a| a.apply_span,
-            );
+            .map_or_else(Span::synthetic, |a| a.apply_span.clone());
         let anchor_base = match &anchor_loc.absolute_path {
             AbsolutePath::Root(p) | AbsolutePath::Pool(_, p) => p.clone(),
         };
@@ -814,7 +784,7 @@ fn apply_overlay_at_host(
     for (name, parameter) in additions {
         let provenance = ir::DesignProvenance {
             design_path: design_file.clone(),
-            assignment_span: parameter.span(),
+            assignment_span: parameter.span().clone(),
             anchor_path: anchor_path.clone(),
             applied_via: applied_via.cloned(),
         };
@@ -838,7 +808,7 @@ fn apply_overlay_at_host(
             );
             contribution_errors.push(ContributionDiagnostic::new(
                 host_path.clone(),
-                DesignResolutionError::new(message, overlay.design_span),
+                DesignResolutionError::new(message, overlay.design_span.clone()),
                 design_file.clone(),
                 applied_via.cloned(),
             ));
@@ -855,7 +825,7 @@ fn apply_overlay_at_host(
         }
         let provenance = ir::DesignProvenance {
             design_path: design_file.clone(),
-            assignment_span: overlay.design_span,
+            assignment_span: overlay.design_span.clone(),
             anchor_path: anchor_path.clone(),
             applied_via: applied_via.cloned(),
         };
@@ -1096,7 +1066,7 @@ fn check_unit_compatibility(
             target_unit.display_unit().to_resolved_display(),
             overlay_unit.display_unit().to_resolved_display(),
         ),
-        overlay.design_span,
+        overlay.design_span.clone(),
     ))
 }
 
@@ -1221,7 +1191,7 @@ fn classify_variable(variable: &mut ir::Variable, scope: &ClassifyScope<'_>) {
                 let ident = BuiltinValueName::new(parameter_name.as_str().to_string());
                 *variable = ir::Variable::Builtin {
                     ident,
-                    ident_span: *parameter_span,
+                    ident_span: parameter_span.clone(),
                 };
             }
             // Else: leave as `Parameter`; validation surfaces UndefinedParameter.
@@ -1231,7 +1201,7 @@ fn classify_variable(variable: &mut ir::Variable, scope: &ClassifyScope<'_>) {
             if scope.parameters.contains(&name) {
                 *variable = ir::Variable::Parameter {
                     parameter_name: name,
-                    parameter_span: *ident_span,
+                    parameter_span: ident_span.clone(),
                 };
             }
         }
@@ -1246,19 +1216,11 @@ mod tests {
     use indexmap::IndexSet;
     use oneil_ir as ir;
     use oneil_shared::{
-        span::{SourceLocation, Span},
+        span::Span,
         symbols::{BuiltinValueName, ParameterName, ReferenceName},
     };
 
     use super::{BuiltinLookup, ClassifyScope, classify_variable};
-
-    fn dummy_span() -> Span {
-        Span::empty(SourceLocation {
-            offset: 0,
-            line: 1,
-            column: 1,
-        })
-    }
 
     struct StubBuiltins {
         names: Vec<String>,
@@ -1289,7 +1251,7 @@ mod tests {
             builtins: &builtins,
         };
 
-        let mut var = ir::Variable::parameter(name.clone(), dummy_span());
+        let mut var = ir::Variable::parameter(name.clone(), Span::synthetic());
         classify_variable(&mut var, &scope);
 
         match var {
@@ -1311,7 +1273,7 @@ mod tests {
             builtins: &builtins,
         };
 
-        let mut var = ir::Variable::parameter(ParameterName::from("pi"), dummy_span());
+        let mut var = ir::Variable::parameter(ParameterName::from("pi"), Span::synthetic());
         classify_variable(&mut var, &scope);
 
         match var {
@@ -1332,7 +1294,8 @@ mod tests {
             builtins: &builtins,
         };
 
-        let mut var = ir::Variable::builtin(BuiltinValueName::new("pi".to_string()), dummy_span());
+        let mut var =
+            ir::Variable::builtin(BuiltinValueName::new("pi".to_string()), Span::synthetic());
         classify_variable(&mut var, &scope);
 
         match var {
@@ -1354,7 +1317,7 @@ mod tests {
             builtins: &builtins,
         };
 
-        let mut var = ir::Variable::parameter(ParameterName::from("ghost"), dummy_span());
+        let mut var = ir::Variable::parameter(ParameterName::from("ghost"), Span::synthetic());
         classify_variable(&mut var, &scope);
 
         match var {
@@ -1378,9 +1341,9 @@ mod tests {
 
         let mut var = ir::Variable::external(
             ReferenceName::new("r".to_string()),
-            dummy_span(),
+            Span::synthetic(),
             ParameterName::from("p"),
-            dummy_span(),
+            Span::synthetic(),
         );
         classify_variable(&mut var, &scope);
 

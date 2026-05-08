@@ -24,7 +24,7 @@ pub fn resolve_unit<E: ExternalResolutionContext>(
     let display_unit = resolve_display_unit(unit);
 
     let dimension = ir::compute_dimension_map(&units, |name| context.lookup_unit(name).cloned());
-    let composite = ir::CompositeUnit::new(units, display_unit, unit.span(), dimension);
+    let composite = ir::CompositeUnit::new(units, display_unit, unit.span().clone(), dimension);
 
     if errors.is_empty() {
         Ok(composite)
@@ -58,9 +58,9 @@ fn resolve_unit_recursive<E: ExternalResolutionContext>(
             identifier,
             exponent,
         } => {
-            let unit_span = unit.span();
-            let name_span = identifier.span();
-            let exponent_span = exponent.as_ref().map(ast::Node::span);
+            let unit_span = unit.span().clone();
+            let name_span = identifier.span().clone();
+            let exponent_span = exponent.as_ref().map(|n| n.span().clone());
 
             let exponent_value = exponent.as_ref().map_or(1.0, |e| e.value());
             let exponent_value = if is_inverse {

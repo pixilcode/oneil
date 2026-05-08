@@ -60,8 +60,8 @@ fn unit_expr(input: InputSpan<'_>) -> Result<'_, UnitExprNode, ParserError> {
             .fold(first_term_node, |acc_node, (op, expr_node)| {
                 let left = acc_node;
                 let right = expr_node;
-                let span = Span::from_start_and_end(&left.span(), &right.span());
-                let whitespace_span = right.whitespace_span();
+                let span = Span::from_start_and_end(left.span(), right.span());
+                let whitespace_span = right.whitespace_span().clone();
 
                 Node::new(UnitExpr::binary_op(op, left, right), span, whitespace_span)
             });
@@ -91,10 +91,10 @@ fn unit_term(input: InputSpan<'_>) -> Result<'_, UnitExprNode, ParserError> {
             n.into_node_with_value(UnitExponent::new(parse_result))
         });
 
-        let span_start = id_node.span();
-        let (span_end, whitespace_span) = exp_node.as_ref().map_or_else(
-            || (id_node.span(), id_node.whitespace_span()),
-            |n| (n.span(), n.whitespace_span()),
+        let span_start = id_node.span().clone();
+        let (span_end, whitespace_span): (Span, Span) = exp_node.clone().map_or_else(
+            || (id_node.span().clone(), id_node.whitespace_span().clone()),
+            |n| (n.span().clone(), n.whitespace_span().clone()),
         );
         let span = Span::from_start_and_end(&span_start, &span_end);
 
@@ -115,12 +115,14 @@ fn unit_term(input: InputSpan<'_>) -> Result<'_, UnitExprNode, ParserError> {
 
         let (rest, expr) = unit_expr
             .or_fail_with(ParserError::unit_paren_missing_expr(
-                paren_left_token.lexeme_span,
+                paren_left_token.lexeme_span.clone(),
             ))
             .parse(rest)?;
 
         let (rest, paren_right_token) = paren_right
-            .or_fail_with(ParserError::unclosed_paren(paren_left_token.lexeme_span))
+            .or_fail_with(ParserError::unclosed_paren(
+                paren_left_token.lexeme_span.clone(),
+            ))
             .parse(rest)?;
 
         let span = Span::from_start_and_end(

@@ -110,7 +110,7 @@ fn get_model_tests<'runtime>(
     let failed_tests = tests
         .values()
         .filter_map(|test| match &test.result {
-            TestResult::Failed { debug_info } => Some((test.expr_span, &**debug_info)),
+            TestResult::Failed { debug_info } => Some((test.expr_span.clone(), &**debug_info)),
             TestResult::Passed => None,
         })
         .collect::<Vec<_>>();
@@ -525,8 +525,8 @@ fn print_all_tests<'runtime>(
     };
 
     for test in tests.values() {
-        let test_start_offset = test.expr_span.start().offset;
-        let test_end_offset = test.expr_span.end().offset;
+        let test_start_offset = test.expr_span.clone().start().offset;
+        let test_end_offset = test.expr_span.clone().end().offset;
         let test_expr_str = file_contents.get(test_start_offset..test_end_offset);
 
         if let Some(test_expr_str) = test_expr_str {
@@ -535,8 +535,8 @@ fn print_all_tests<'runtime>(
             println!("{test_label} {test_expr_str}");
         } else {
             let error_label = stylesheet::ERROR_COLOR.style("error");
-            let test_start_line = test.expr_span.start().line;
-            let test_start_column = test.expr_span.start().column;
+            let test_start_line = test.expr_span.clone().start().line;
+            let test_start_column = test.expr_span.clone().start().column;
 
             println!(
                 "{error_label}: couldn't get test expression for test at line {test_start_line}, column {test_start_column}"

@@ -6,6 +6,8 @@
 
 use std::result::Result as StdResult;
 
+use std::sync::Arc;
+
 use nom::{
     Input, Parser as _,
     bytes::complete::take_while,
@@ -53,10 +55,16 @@ pub fn parse_complete(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserP
 /// declarations or sections fail, allowing multiple syntax errors to be
 /// reported in a single pass.
 fn model(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserPartialModelError>> {
+    // Capture path and source from input before it is moved into the parser.
+    let path = Arc::clone(&input.extra.path);
+    let source = Arc::clone(&input.extra.source);
+    // Capture the start location before consuming input.
+    let model_span_start = source_location_from(&input);
+
     let (rest, end_of_line_token) = opt(end_of_line).parse(input).expect("should always parse");
 
     let (rest, note) = opt(parse_note)
-        .parse(rest)
+        .parse(rest.clone())
         .map_err(|error| handle_model_note_failure(rest, error))?;
 
     let (rest, mut decls, decl_errors) = parse_top_level_decls(rest);
@@ -67,21 +75,18 @@ fn model(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserPartialModelEr
 
     let errors = [decl_errors, section_errors].concat();
 
-    // get the start of the model
-    let model_span_start = source_location_from(input);
-
     // get the last span/whitespace span of the model
     let last_end_of_line_spans =
         end_of_line_token.map(|token| (token.lexeme_span, token.whitespace_span));
     let last_note_spans = note
         .as_ref()
-        .map(|note| (note.span(), note.whitespace_span()));
+        .map(|note| (note.span().clone(), note.whitespace_span().clone()));
     let last_decl_spans = decls
         .last()
-        .map(|decl| (decl.span(), decl.whitespace_span()));
+        .map(|decl| (decl.span().clone(), decl.whitespace_span().clone()));
     let last_section_spans = sections
         .last()
-        .map(|section| (section.span(), section.whitespace_span()));
+        .map(|section| (section.span().clone(), section.whitespace_span().clone()));
 
     let (last_node_span, last_node_whitespace_span) = [
         last_end_of_line_spans,
@@ -104,12 +109,17 @@ fn model(input: InputSpan<'_>) -> Result<'_, ModelNode, Box<ParserPartialModelEr
     let model_span_end = last_node_span.map_or(model_span_start, |span| *span.end());
 
     // build the model span
-    let model_span = Span::new(model_span_start, model_span_end);
+    let model_span = Span::new(
+        model_span_start,
+        model_span_end,
+        Arc::clone(&path),
+        Arc::clone(&source),
+    );
 
     // calculate the whitespace span of the model
     // (if there was no last node, use the model span)
     let model_whitespace_span = last_node_whitespace_span
-        .unwrap_or_else(|| Span::new(*model_span.end(), *model_span.end()));
+        .unwrap_or_else(|| Span::new(*model_span.end(), *model_span.end(), path, source));
 
     let model_node = Node::new(
         Model::new(note, decls, sections),
@@ -139,9 +149,11 @@ fn handle_model_note_failure(
         nom::Err::Error(e) => panic!("should not be able to fail with an error: {e:?}"),
 
         nom::Err::Failure(e) => {
-            let source_location = source_location_from(input);
-            let span = Span::empty(source_location);
-            let model_node = ModelNode::new(Model::empty(), span, span);
+            let source_location = source_location_from(&input);
+            let path = Arc::clone(&input.extra.path);
+            let source_text = Arc::clone(&input.extra.source);
+            let span = Span::empty(source_location, path, source_text);
+            let model_node = ModelNode::new(Model::empty(), span.clone(), span);
             let errors = vec![e];
             let partial_error = ParserPartialModelError::new(model_node, errors);
             nom::Err::Failure(Box::new(partial_error))
@@ -159,7 +171,7 @@ fn handle_model_note_failure(
 /// diagnostics.
 fn parse_top_level_decls(input: InputSpan<'_>) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
     if input.extra.require_design_header {
-        parse_design_file_decls(input)
+        parse_design_file_decls(&input)
     } else {
         parse_decls_recur(input, vec![], vec![], false)
     }
@@ -174,20 +186,24 @@ fn parse_top_level_decls(input: InputSpan<'_>) -> (InputSpan<'_>, Vec<DeclNode>,
 ///
 /// - whitespace-only / empty input → [`ParserError::design_header_missing`] ("missing design target")
 /// - any other content where the first declaration is not `design` → [`ParserError::design_header_not_first`]
-fn parse_design_file_decls(
-    input: InputSpan<'_>,
-) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
-    match parse_design_target_line(input) {
+fn parse_design_file_decls<'a>(
+    input: &InputSpan<'a>,
+) -> (InputSpan<'a>, Vec<DeclNode>, Vec<ParserError>) {
+    match parse_design_target_line(input.clone()) {
         Ok((mut rest, node)) => {
             rest.extra.allow_design_shorthand = true;
             parse_decls_recur(rest, vec![node], vec![], false)
         }
         Err(nom::Err::Error(e) | nom::Err::Failure(e)) => {
-            let rest = skip_to_next_line_with_content(input, e.error_offset);
+            let rest = skip_to_next_line_with_content(input.clone(), e.error_offset);
             let (trimmed, _) = take_while::<_, _, nom::error::Error<_>>(char::is_whitespace)
-                .parse(input)
+                .parse(input.clone())
                 .expect("take_while whitespace always succeeds");
-            let span = Span::empty(source_location_from(trimmed));
+            let span = Span::empty(
+                source_location_from(&trimmed),
+                Arc::clone(&trimmed.extra.path),
+                Arc::clone(&trimmed.extra.source),
+            );
             let header_error = if input.fragment().chars().all(char::is_whitespace) {
                 ParserError::design_header_missing(span)
             } else {
@@ -214,7 +230,7 @@ fn parse_decls_recur(
     mut acc_errors: Vec<ParserError>,
     last_was_error: bool,
 ) -> (InputSpan<'_>, Vec<DeclNode>, Vec<ParserError>) {
-    let result = parse_decl(input);
+    let result = parse_decl(input.clone());
 
     match result {
         Ok((rest, decl)) => {
@@ -227,7 +243,7 @@ fn parse_decls_recur(
             // If it is, return the accumulated declarations and errors
             let end_of_file = value((), take_while(char::is_whitespace).and(eof));
             let section = value((), section);
-            if section.or(end_of_file).parse(input).is_ok() {
+            if section.or(end_of_file).parse(input.clone()).is_ok() {
                 return (input, acc_decls, acc_errors);
             }
 
@@ -241,7 +257,7 @@ fn parse_decls_recur(
                 last_was_error && e.reason == ParserErrorReason::Expect(ExpectKind::Decl);
 
             if !is_possible_part_of_previous_decl {
-                acc_errors.push(e);
+                acc_errors.push(e.clone());
             }
 
             // All declarations must be terminated by an end of line, so we
@@ -275,7 +291,7 @@ fn parse_sections(
         Vec<DeclNode>,
         Vec<ParserError>,
     ) {
-        let section_result = parse_section(input);
+        let section_result = parse_section(input.clone());
 
         match section_result {
             Some((rest, section_result, errors)) => {
@@ -306,7 +322,7 @@ type SectionErrors = Vec<ParserError>;
 
 /// Parses a section within a model
 fn parse_section(input: InputSpan<'_>) -> Option<(InputSpan<'_>, SectionResult, SectionErrors)> {
-    let section_header_result = parse_section_header(input);
+    let section_header_result = parse_section_header(input.clone());
 
     let (rest, header, mut errors) = match section_header_result {
         Ok((rest, header)) => (rest, Some(header), vec![]),
@@ -331,12 +347,13 @@ fn parse_section(input: InputSpan<'_>) -> Option<(InputSpan<'_>, SectionResult, 
 
     match header {
         Some(header) => {
-            let section_start_span = header.span();
-            let (section_end_span, section_whitespace_span) = match (&note, decls.last()) {
-                (_, Some(decl)) => (decl.span(), decl.whitespace_span()),
-                (Some(note), _) => (note.span(), note.whitespace_span()),
-                (_, _) => (header.span(), header.whitespace_span()),
-            };
+            let section_start_span = header.span().clone();
+            let (section_end_span, section_whitespace_span): (Span, Span) =
+                match (&note, decls.last()) {
+                    (_, Some(decl)) => (decl.span().clone(), decl.whitespace_span().clone()),
+                    (Some(note), _) => (note.span().clone(), note.whitespace_span().clone()),
+                    (_, _) => (header.span().clone(), header.whitespace_span().clone()),
+                };
 
             let section_span = Span::from_start_and_end(&section_start_span, &section_end_span);
 
@@ -360,15 +377,14 @@ fn parse_section_header(input: InputSpan<'_>) -> Result<'_, SectionHeaderNode, P
 
     let (rest, label_token) = label
         .or_fail_with(ParserError::section_missing_label(
-            section_token.lexeme_span,
+            section_token.lexeme_span.clone(),
         ))
         .parse(rest)?;
+    let label_lexeme_span = label_token.lexeme_span.clone();
     let label_node = SectionLabelNode::from(label_token);
 
     let (rest, end_of_line_token) = end_of_line
-        .or_fail_with(ParserError::section_missing_end_of_line(
-            label_token.lexeme_span,
-        ))
+        .or_fail_with(ParserError::section_missing_end_of_line(label_lexeme_span))
         .parse(rest)?;
 
     let label_span =
@@ -410,7 +426,7 @@ fn skip_to_next_line_with_content(input: InputSpan<'_>, error_offset: usize) -> 
         .expect("should always parse either a line break or EOF");
 
     opt(parse_note)
-        .parse(rest)
+        .parse(rest.clone())
         // if the note parsing failed, return the previous `rest`
         .map_or_else(|_| rest, |(rest, _)| rest)
 }
@@ -689,7 +705,7 @@ mod tests {
             assert_eq!(errors[0].error_offset, 7);
             let ParserErrorReason::Incomplete {
                 kind: IncompleteKind::Section(SectionKind::MissingLabel),
-                cause,
+                ref cause,
             } = errors[0].reason
             else {
                 panic!("Unexpected reason {:?}", errors[0].reason);
@@ -715,7 +731,7 @@ mod tests {
             assert_eq!(errors[0].error_offset, 12);
             let ParserErrorReason::Incomplete {
                 kind: IncompleteKind::Section(SectionKind::MissingEndOfLine),
-                cause,
+                ref cause,
             } = errors[0].reason
             else {
                 panic!("Unexpected reason {:?}", errors[0].reason);
@@ -953,7 +969,7 @@ mod tests {
             assert_eq!(errors[0].error_offset, 4);
             let ParserErrorReason::Incomplete {
                 kind: IncompleteKind::Parameter(_),
-                cause,
+                ref cause,
             } = errors[0].reason
             else {
                 panic!("Unexpected reason {:?}", errors[0].reason);
@@ -979,7 +995,7 @@ mod tests {
             assert_eq!(errors[0].error_offset, 6);
             let ParserErrorReason::Incomplete {
                 kind: IncompleteKind::Parameter(_),
-                cause,
+                ref cause,
             } = errors[0].reason
             else {
                 panic!("Unexpected reason {:?}", errors[0].reason);

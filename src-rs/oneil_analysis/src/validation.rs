@@ -146,7 +146,8 @@ fn validate_instance(
         let provenance = parameter.design_provenance();
         let anchor = provenance
             .and_then(|prov| resolve_anchor_for_validation(instance, ancestors, &prov.anchor_path));
-        let design_info = provenance.map(|prov| (prov.design_path.clone(), prov.assignment_span));
+        let design_info =
+            provenance.map(|prov| (prov.design_path.clone(), prov.assignment_span.clone()));
         validate_value(
             parameter.value(),
             instance,
@@ -307,7 +308,7 @@ fn validate_expr(
                 host_location: location.clone(),
                 kind: InstanceValidationErrorKind::UndefinedParameter {
                     parameter_name: parameter_name.clone(),
-                    parameter_span: *parameter_span,
+                    parameter_span: parameter_span.clone(),
                     best_match,
                     design_info: design_info.cloned(),
                 },
@@ -346,7 +347,7 @@ fn validate_expr(
                     host_location: location.clone(),
                     kind: InstanceValidationErrorKind::UndefinedReference {
                         reference_name: reference_name.clone(),
-                        reference_span: *reference_span,
+                        reference_span: reference_span.clone(),
                         best_match,
                         design_info: design_info.cloned(),
                     },
@@ -394,9 +395,9 @@ fn validate_expr(
                 host_location: location.clone(),
                 kind: InstanceValidationErrorKind::UndefinedReferenceParameter {
                     reference_name: reference_name.clone(),
-                    reference_span: *reference_span,
+                    reference_span: reference_span.clone(),
                     parameter_name: parameter_name.clone(),
-                    parameter_span: *parameter_span,
+                    parameter_span: parameter_span.clone(),
                     target_model: target_path,
                     best_match,
                     design_info: design_info.cloned(),
@@ -574,11 +575,11 @@ impl ParamDepGraph {
                 node_index.insert((host_id.clone(), name.clone()), nodes.len());
                 let design_info = parameter
                     .design_provenance()
-                    .map(|p| (p.design_path.clone(), p.assignment_span));
+                    .map(|p| (p.design_path.clone(), p.assignment_span.clone()));
                 nodes.push((
                     host_id.clone(),
                     name.clone(),
-                    parameter.name_span(),
+                    parameter.name_span().clone(),
                     instance.path().clone(),
                     design_info,
                 ));
@@ -787,7 +788,7 @@ fn collect_cycle_errors(dep: &ParamDepGraph, errors: &mut Vec<InstanceValidation
                 host_location: HostLocation::Parameter(parameter_name.clone()),
                 kind: InstanceValidationErrorKind::ParameterCycle {
                     parameter_name: parameter_name.clone(),
-                    parameter_span: *parameter_span,
+                    parameter_span: parameter_span.clone(),
                     design_info: design_info.clone(),
                     cycle: rotated,
                 },
@@ -888,11 +889,11 @@ fn collect_nodes_subtree<F: FnMut(HostId, ParameterName, Span, ModelPath, Design
     for (name, parameter) in node.parameters() {
         let design_info = parameter
             .design_provenance()
-            .map(|p| (p.design_path.clone(), p.assignment_span));
+            .map(|p| (p.design_path.clone(), p.assignment_span.clone()));
         f(
             host_id.clone(),
             name.clone(),
-            parameter.name_span(),
+            parameter.name_span().clone(),
             node.path().clone(),
             design_info,
         );

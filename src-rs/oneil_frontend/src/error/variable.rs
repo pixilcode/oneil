@@ -173,7 +173,7 @@ impl AsOneilDiagnostic for VariableResolutionError {
                 reference_span,
                 best_match: _,
             } => {
-                let location = ErrorLocation::from_source_and_span(source, *reference_span);
+                let location = ErrorLocation::from_span(reference_span);
                 Some(location)
             }
             Self::UndefinedFunction {
@@ -186,7 +186,7 @@ impl AsOneilDiagnostic for VariableResolutionError {
                 relevant_span,
                 python_paths: _,
             } => {
-                let location = ErrorLocation::from_source_and_span(source, *relevant_span);
+                let location = ErrorLocation::from_span(relevant_span);
                 Some(location)
             }
             Self::UnitResolution(unit_error) => unit_error.diagnostic_location(source),

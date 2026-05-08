@@ -391,7 +391,7 @@ fn surface_apply_hop(
     if &hop.applied_in != model_path {
         return;
     }
-    if hop.apply_span.start() == hop.apply_span.end() {
+    if hop.apply_span.clone().start() == hop.apply_span.clone().end() {
         return;
     }
     let design_basename = hop
@@ -401,7 +401,7 @@ fn surface_apply_hop(
         .and_then(|s| s.to_str())
         .unwrap_or("<design>");
     let message = format!("applied design `{design_basename}` produced invalid contributions");
-    let synthetic = DesignResolutionError::new(message, hop.apply_span);
+    let synthetic = DesignResolutionError::new(message, hop.apply_span.clone());
     out.push(OneilDiagnostic::from_error_with_source(
         &synthetic,
         path_buf.to_path_buf(),
@@ -430,7 +430,7 @@ fn extend_models_with_apply(
         }
     }
     if let Some(hop) = applied_via
-        && hop.apply_span.start() != hop.apply_span.end()
+        && hop.apply_span.clone().start() != hop.apply_span.clone().end()
         && &hop.applied_in != model_path
     {
         models_with_errors.insert(EvalInstanceKey::root(hop.applied_in.clone()));
@@ -688,7 +688,7 @@ fn emit_submodel_import_notifications(
     for (ref_name, submodel) in model.submodels() {
         if independently_errored.contains(submodel.instance.path()) {
             let message = format!("submodel `{}` has errors", ref_name.as_str());
-            let synthetic = DesignResolutionError::new(message, submodel.name_span);
+            let synthetic = DesignResolutionError::new(message, submodel.name_span.clone());
             out.push(OneilDiagnostic::from_error_with_source(
                 &synthetic,
                 path_buf.to_path_buf(),
@@ -699,7 +699,7 @@ fn emit_submodel_import_notifications(
     for (ref_name, ref_import) in model.references() {
         if independently_errored.contains(&ref_import.path) {
             let message = format!("reference `{}` has errors", ref_name.as_str());
-            let synthetic = DesignResolutionError::new(message, ref_import.name_span);
+            let synthetic = DesignResolutionError::new(message, ref_import.name_span.clone());
             out.push(OneilDiagnostic::from_error_with_source(
                 &synthetic,
                 path_buf.to_path_buf(),
@@ -1185,21 +1185,20 @@ fn build_validation_oneil_error(
 
     if let Some((design_path, assignment_span)) = design_info {
         let design_source_path = design_path.into();
-        if let Some(Ok(design_source)) = source_cache.get_entry(&design_source_path) {
+        if let Some(Ok(_design_source)) = source_cache.get_entry(&design_source_path) {
             let design_path_buf = design_path.clone().into_path_buf();
             // For `ParameterCycle` the primary span is in the host model, so we
             // use `assignment_span` (the design's `param = value` line).
             // For `Undefined*` the variable spans are already in design-file space.
             let span_in_design = match &error.kind {
-                InstanceValidationErrorKind::ParameterCycle { .. } => *assignment_span,
+                InstanceValidationErrorKind::ParameterCycle { .. } => assignment_span.clone(),
                 InstanceValidationErrorKind::UndefinedParameter { .. }
                 | InstanceValidationErrorKind::UndefinedReference { .. }
                 | InstanceValidationErrorKind::UndefinedReferenceParameter { .. } => {
                     error.primary_span()
                 }
             };
-            let design_location =
-                ErrorLocation::from_source_and_span(design_source, span_in_design);
+            let design_location = ErrorLocation::from_span(&span_in_design);
 
             let model_name = host_path
                 .file_name()
@@ -1377,6 +1376,11 @@ mod validation_error_tests {
     use crate::cache::SourceCache;
 
     fn span(start: usize, end: usize) -> Span {
+        use std::path::Path;
+        use std::sync::Arc;
+        // Source needs to be long enough for the end offset.
+        let source: Arc<str> = Arc::from(" ".repeat(end + 1).as_str());
+        let path: Arc<Path> = Arc::from(Path::new("test.on"));
         Span::new(
             SourceLocation {
                 offset: start,
@@ -1388,6 +1392,8 @@ mod validation_error_tests {
                 line: 1,
                 column: end + 1,
             },
+            path,
+            source,
         )
     }
 
@@ -1433,7 +1439,7 @@ mod validation_error_tests {
             ParameterResolutionError::VariableResolution(
                 VariableResolutionError::undefined_parameter(
                     parameter_name.clone(),
-                    parameter_span,
+                    parameter_span.clone(),
                     None,
                 ),
             ),
@@ -1519,7 +1525,7 @@ mod validation_error_tests {
             ParameterResolutionError::VariableResolution(
                 VariableResolutionError::undefined_parameter(
                     parameter_name.clone(),
-                    parameter_span,
+                    parameter_span.clone(),
                     None,
                 ),
             ),

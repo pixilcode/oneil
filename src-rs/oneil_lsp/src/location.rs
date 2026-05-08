@@ -11,7 +11,7 @@ use tower_lsp_server::ls_types::{Location, Position, Range, Uri};
     clippy::cast_possible_truncation,
     reason = "we know the values are not pointers"
 )]
-pub const fn span_to_range(span: Span) -> Range {
+pub const fn span_to_range(span: &Span) -> Range {
     Range {
         start: Position {
             line: (span.start().line - 1) as u32,
@@ -25,7 +25,7 @@ pub const fn span_to_range(span: Span) -> Range {
 }
 
 /// Converts a model path and span to an LSP [`Location`].
-pub fn span_to_location(model_path: &ModelPath, span: Span) -> Location {
+pub fn span_to_location(model_path: &ModelPath, span: &Span) -> Location {
     let uri = Uri::from_file_path(model_path.as_path()).unwrap_or_else(|| {
         panic!(
             "Failed to convert model path to URI: {}",

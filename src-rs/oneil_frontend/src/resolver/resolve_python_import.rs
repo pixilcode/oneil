@@ -26,8 +26,8 @@ pub fn resolve_python_imports<E>(
                 resolution_context.add_python_import_error_to_active_model(
                     python_path.clone(),
                     PythonImportResolutionError::duplicate_import(
-                        *original_import.import_path_span(),
-                        python_path_span,
+                        original_import.import_path_span().clone(),
+                        python_path_span.clone(),
                         python_path,
                     ),
                 );
@@ -35,7 +35,8 @@ pub fn resolve_python_imports<E>(
                 continue;
             }
 
-            resolution_context.load_python_import_to_active_model(&python_path, python_path_span);
+            resolution_context
+                .load_python_import_to_active_model(&python_path, python_path_span.clone());
         }
 
         #[cfg(not(feature = "python"))]

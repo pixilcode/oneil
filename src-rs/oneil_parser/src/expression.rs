@@ -68,8 +68,8 @@ fn left_associative_binary_op<'a>(
                 let left = acc;
                 let right = expr;
 
-                let span = Span::from_start_and_end(&left.span(), &right.span());
-                let whitespace_span = right.whitespace_span();
+                let span = Span::from_start_and_end(left.span(), right.span());
+                let whitespace_span = right.whitespace_span().clone();
 
                 Node::new(Expr::binary_op(op, left, right), span, whitespace_span)
             });
@@ -140,8 +140,8 @@ fn fallback_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
         let left = acc;
         let right = expr;
 
-        let span = Span::from_start_and_end(&left.span(), &right.span());
-        let whitespace_span = right.whitespace_span();
+        let span = Span::from_start_and_end(left.span(), right.span());
+        let whitespace_span = right.whitespace_span().clone();
 
         Node::new(Expr::fallback(left, right), span, whitespace_span)
     });
@@ -178,8 +178,8 @@ fn not_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
                 .or_fail_with(ParserError::unary_op_missing_operand(&not_op))
                 .parse(rest)?;
 
-            let span = Span::from_start_and_end(&not_op.span(), &expr.span());
-            let whitespace_span = expr.whitespace_span();
+            let span = Span::from_start_and_end(not_op.span(), expr.span());
+            let whitespace_span = expr.whitespace_span().clone();
 
             Ok((
                 rest,
@@ -229,8 +229,8 @@ fn comparison_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
                 .last()
                 .map_or_else(|| right.span(), |(_, operand)| operand.span());
 
-            let span = Span::from_start_and_end(&left.span(), &last_span);
-            let whitespace_span = right.whitespace_span();
+            let span = Span::from_start_and_end(left.span(), last_span);
+            let whitespace_span = right.whitespace_span().clone();
 
             Node::new(
                 Expr::comparison_op(second_op, left, right, rest_operands),
@@ -267,8 +267,8 @@ fn minmax_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
         Some((op, second_operand)) => {
             let left = first_operand;
             let right = second_operand;
-            let span = Span::from_start_and_end(&left.span(), &right.span());
-            let whitespace_span = right.whitespace_span();
+            let span = Span::from_start_and_end(left.span(), right.span());
+            let whitespace_span = right.whitespace_span().clone();
 
             Node::new(Expr::binary_op(op, left, right), span, whitespace_span)
         }
@@ -326,8 +326,8 @@ fn exponential_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
             let left = first_operand;
             let right = second_operand;
 
-            let span = Span::from_start_and_end(&left.span(), &right.span());
-            let whitespace_span = right.whitespace_span();
+            let span = Span::from_start_and_end(left.span(), right.span());
+            let whitespace_span = right.whitespace_span().clone();
 
             Node::new(Expr::binary_op(op, left, right), span, whitespace_span)
         }
@@ -350,8 +350,8 @@ fn neg_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
                 .or_fail_with(ParserError::unary_op_missing_operand(&minus_op))
                 .parse(rest)?;
 
-            let span = Span::from_start_and_end(&minus_op.span(), &expr.span());
-            let whitespace_span = expr.whitespace_span();
+            let span = Span::from_start_and_end(minus_op.span(), expr.span());
+            let whitespace_span = expr.whitespace_span().clone();
 
             Ok((
                 rest,
@@ -406,7 +406,7 @@ fn function_call(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
         .or_fail_with(ParserError::unclosed_paren(paren_left_token.lexeme_span))
         .parse(rest)?;
 
-    let span = Span::from_start_and_end(&name_node.span(), &paren_right_token.lexeme_span);
+    let span = Span::from_start_and_end(name_node.span(), &paren_right_token.lexeme_span);
     let whitespace_span = paren_right_token.whitespace_span;
 
     Ok((
@@ -426,7 +426,9 @@ fn unit_cast(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
         ))
         .parse(rest)?;
     let (rest, paren_right_token) = paren_right
-        .or_fail_with(ParserError::unclosed_paren(paren_left_token.lexeme_span))
+        .or_fail_with(ParserError::unclosed_paren(
+            paren_left_token.lexeme_span.clone(),
+        ))
         .parse(rest)?;
 
     let span = Span::from_start_and_end(
@@ -462,16 +464,14 @@ fn variable(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
 
     let variable_node = reference_model_id_node.map_or_else(
         || {
-            let parameter_id_node = IdentifierNode::from(parameter_id);
+            let parameter_id_node = IdentifierNode::from(parameter_id.clone());
             parameter_id_node.wrap(Variable::identifier)
         },
         |reference_model_id_node| {
-            let parameter_id_node = ParameterNameNode::from(parameter_id);
-            let variable_span = Span::from_start_and_end(
-                &parameter_id_node.span(),
-                &reference_model_id_node.span(),
-            );
-            let variable_whitespace_span = reference_model_id_node.whitespace_span();
+            let parameter_id_node = ParameterNameNode::from(parameter_id.clone());
+            let variable_span =
+                Span::from_start_and_end(parameter_id_node.span(), reference_model_id_node.span());
+            let variable_whitespace_span = reference_model_id_node.whitespace_span().clone();
 
             let variable = Variable::model_parameter(reference_model_id_node, parameter_id_node);
 
@@ -490,12 +490,14 @@ fn parenthesized_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError>
 
     let (rest, expr) = expr
         .or_fail_with(ParserError::expr_paren_missing_expression(
-            paren_left_token.lexeme_span,
+            paren_left_token.lexeme_span.clone(),
         ))
         .parse(rest)?;
 
     let (rest, paren_right_token) = paren_right
-        .or_fail_with(ParserError::unclosed_paren(paren_left_token.lexeme_span))
+        .or_fail_with(ParserError::unclosed_paren(
+            paren_left_token.lexeme_span.clone(),
+        ))
         .parse(rest)?;
 
     // note: we need to wrap the expr in a parenthesized node in order to keep the spans accurate

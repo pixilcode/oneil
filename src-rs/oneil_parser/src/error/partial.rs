@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 use std::ops;
+use std::{path::Path, sync::Arc};
 
 use nom::error::ParseError;
 use oneil_ast::{Model, ModelNode};
@@ -38,9 +39,9 @@ impl ParseError<InputSpan<'_>> for ParserPartialModelError {
             column,
         };
 
-        let span = Span::empty(source_location);
+        let span = Span::empty(source_location, Arc::from(Path::new("")), Arc::from(""));
 
-        let model_node = ModelNode::new(Model::empty(), span, span);
+        let model_node = ModelNode::new(Model::empty(), span.clone(), span);
 
         Self(PartialError::new(
             model_node,

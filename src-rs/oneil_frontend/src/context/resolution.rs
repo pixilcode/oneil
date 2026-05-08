@@ -501,13 +501,13 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     pub fn get_named_child_span_in_active_model(&self, name: &ReferenceName) -> Option<Span> {
         let model = self.active_model();
         if let Some(r) = model.references().get(name) {
-            return Some(r.name_span);
+            return Some(r.name_span.clone());
         }
         if let Some(s) = model.submodels().get(name) {
-            return Some(s.name_span);
+            return Some(s.name_span.clone());
         }
         if let Some(a) = model.aliases().get(name) {
-            return Some(a.name_span);
+            return Some(a.name_span.clone());
         }
         None
     }

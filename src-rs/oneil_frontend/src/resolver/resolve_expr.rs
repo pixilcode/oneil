@@ -33,24 +33,31 @@ where
             left,
             right,
             rest_chained,
-        } => resolve_comparison_expression(span, op, left, right, rest_chained, resolution_context),
+        } => resolve_comparison_expression(
+            span.clone(),
+            op,
+            left,
+            right,
+            rest_chained,
+            resolution_context,
+        ),
         ast::Expr::BinaryOp { op, left, right } => {
-            resolve_binary_expression(span, op, left, right, resolution_context)
+            resolve_binary_expression(span.clone(), op, left, right, resolution_context)
         }
         ast::Expr::Fallback { left, right } => {
             resolve_fallback_expression(span, left, right, resolution_context)
         }
         ast::Expr::UnaryOp { op, expr } => {
-            resolve_unary_expression(span, op, expr, resolution_context)
+            resolve_unary_expression(span.clone(), op, expr, resolution_context)
         }
         ast::Expr::FunctionCall { name, args } => {
-            resolve_function_call_expression(span, name, args, resolution_context)
+            resolve_function_call_expression(span.clone(), name, args, resolution_context)
         }
         ast::Expr::UnitCast { expr, unit } => {
-            resolve_unit_cast_expression(span, expr, unit, resolution_context)
+            resolve_unit_cast_expression(span.clone(), expr, unit, resolution_context)
         }
         ast::Expr::Variable(variable) => resolve_variable_expression(variable, resolution_context),
-        ast::Expr::Literal(literal) => Ok(resolve_literal_expression(span, literal)),
+        ast::Expr::Literal(literal) => Ok(resolve_literal_expression(span.clone(), literal)),
         ast::Expr::Parenthesized { expr } => {
             resolve_parenthesized_expression(expr, resolution_context)
         }
@@ -112,7 +119,7 @@ where
 
 /// Resolves a fallback expression (`left ? right`).
 fn resolve_fallback_expression<E>(
-    span: Span,
+    span: &Span,
     left: &ast::ExprNode,
     right: &ast::ExprNode,
     resolution_context: &ResolutionContext<'_, E>,
@@ -123,7 +130,7 @@ where
     let left = resolve_expr(left, resolution_context);
     let right = resolve_expr(right, resolution_context);
     let (left, right) = error::combine_errors(left, right)?;
-    Ok(ir::Expr::fallback(span, left, right))
+    Ok(ir::Expr::fallback(span.clone(), left, right))
 }
 
 /// Resolves a unary operation expression.
@@ -161,7 +168,7 @@ where
     let args = error::combine_error_list(args)?;
 
     let name_with_span = name_with_span.map_err(|e| vec![e])?;
-    let expr = ir::Expr::function_call(span, name.span(), name_with_span, args);
+    let expr = ir::Expr::function_call(span, name.span().clone(), name_with_span, args);
     Ok(expr)
 }
 
@@ -250,6 +257,7 @@ fn resolve_unary_op(op: &ast::UnaryOpNode) -> ir::UnaryOp {
 }
 
 /// Resolves a function name to a model function name.
+#[expect(clippy::result_large_err)]
 fn resolve_function_name<E>(
     name: &ast::IdentifierNode,
     resolution_context: &ResolutionContext<'_, E>,
@@ -261,7 +269,7 @@ where
 
     if resolution_context.has_builtin_function(name) {
         let name = BuiltinFunctionName::from(name.as_str());
-        return Ok(ir::FunctionName::builtin(name, name_span));
+        return Ok(ir::FunctionName::builtin(name, name_span.clone()));
     }
 
     let name = PyFunctionName::from(name.as_str());
@@ -273,18 +281,18 @@ where
 
             Err(VariableResolutionError::undefined_function(
                 name.as_str().to_string(),
-                name_span,
+                name_span.clone(),
                 best_match,
             ))
         }
         1 => Ok(ir::FunctionName::imported(
             python_paths[0].clone(),
             name,
-            name_span,
+            name_span.clone(),
         )),
         _ => Err(VariableResolutionError::multiple_functions_found(
             name.as_str().to_string(),
-            name_span,
+            name_span.clone(),
             python_paths,
         )),
     }
@@ -327,12 +335,13 @@ pub fn get_expr_internal_dependencies(expr: &ast::ExprNode) -> IndexMap<ast::Ide
     }
 
     impl ast::ExprVisitor for ExprInternalDependencyVisitor {
-        fn visit_variable(mut self, _span: Span, var: &ast::VariableNode) -> Self {
+        fn visit_variable(mut self, _span: &Span, var: &ast::VariableNode) -> Self {
             match &**var {
                 ast::Variable::Identifier(identifier_node) => {
                     let identifier = ast::Identifier::from(identifier_node.as_str());
                     let identifier_span = identifier_node.span();
-                    self.dependencies.insert(identifier, identifier_span);
+                    self.dependencies
+                        .insert(identifier, identifier_span.clone());
                     self
                 }
 
@@ -369,10 +378,11 @@ pub fn get_expr_dependencies(expr: &ir::Expr) -> Dependencies {
     }
 
     impl ir::ExprVisitor for ExprDependencyVisitor {
-        fn visit_variable(mut self, span: Span, variable: &ir::Variable) -> Self {
+        fn visit_variable(mut self, span: &Span, variable: &ir::Variable) -> Self {
             match variable {
                 ir::Variable::Builtin { ident, ident_span } => {
-                    self.dependencies.insert_builtin(ident.clone(), *ident_span);
+                    self.dependencies
+                        .insert_builtin(ident.clone(), ident_span.clone());
                     self
                 }
 
@@ -381,7 +391,7 @@ pub fn get_expr_dependencies(expr: &ir::Expr) -> Dependencies {
                     parameter_span,
                 } => {
                     self.dependencies
-                        .insert_parameter(parameter_name.clone(), *parameter_span);
+                        .insert_parameter(parameter_name.clone(), parameter_span.clone());
                     self
                 }
 
@@ -393,7 +403,7 @@ pub fn get_expr_dependencies(expr: &ir::Expr) -> Dependencies {
                     self.dependencies.insert_external(
                         reference_name.clone(),
                         parameter_name.clone(),
-                        span,
+                        span.clone(),
                     );
                     self
                 }

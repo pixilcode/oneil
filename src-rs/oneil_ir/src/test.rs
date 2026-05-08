@@ -35,8 +35,8 @@ impl Test {
 
     /// Returns the span of the entire test definition.
     #[must_use]
-    pub const fn span(&self) -> Span {
-        self.span
+    pub const fn span(&self) -> &Span {
+        &self.span
     }
 
     /// Returns the trace level for this test.

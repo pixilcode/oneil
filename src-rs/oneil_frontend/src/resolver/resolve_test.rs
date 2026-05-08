@@ -24,7 +24,7 @@ pub fn resolve_tests<E>(
 {
     let tests = tests.into_iter().enumerate().map(|(test_index, decl)| {
         let test_index = TestIndex::new(test_index);
-        let test_span = decl.test.span();
+        let test_span = decl.test.span().clone();
 
         let trace_level = resolve_trace_level(decl.test.trace_level());
 

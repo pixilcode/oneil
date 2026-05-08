@@ -32,8 +32,8 @@ impl DesignResolutionError {
 
     /// Returns the source span associated with this error.
     #[must_use]
-    pub const fn span(&self) -> Span {
-        self.span
+    pub fn span(&self) -> Span {
+        self.span.clone()
     }
 }
 
@@ -52,7 +52,7 @@ impl AsOneilDiagnostic for DesignResolutionError {
         self.to_string()
     }
 
-    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
-        Some(ErrorLocation::from_source_and_span(source, self.span))
+    fn diagnostic_location(&self, _source: &str) -> Option<ErrorLocation> {
+        Some(ErrorLocation::from_span(&self.span))
     }
 }

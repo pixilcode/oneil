@@ -22,6 +22,7 @@ use crate::{
 //   instance graph is built (when all design contributions are known).
 
 /// Resolves a variable expression to its corresponding model expression.
+#[expect(clippy::result_large_err)]
 pub fn resolve_variable<E>(
     variable: &ast::VariableNode,
     resolution_context: &ResolutionContext<'_, E>,
@@ -39,12 +40,13 @@ where
         } => Ok(resolve_model_parameter_variable(
             reference_model,
             parameter,
-            variable.span(),
+            variable.span().clone(),
         )),
     }
 }
 
 /// Resolves a bare identifier: an active-model parameter or a builtin value.
+#[expect(clippy::result_large_err)]
 fn resolve_identifier_variable<E>(
     variable: &ast::VariableNode,
     identifier: &ast::IdentifierNode,
@@ -54,8 +56,8 @@ where
     E: ExternalResolutionContext,
 {
     let var_identifier = ParameterName::from(identifier.as_str());
-    let variable_span = variable.span();
-    let identifier_span = identifier.span();
+    let variable_span = variable.span().clone();
+    let identifier_span = identifier.span().clone();
 
     match resolution_context.lookup_parameter_in_active_model(&var_identifier) {
         ParameterResult::Found(_parameter) => {
@@ -98,9 +100,9 @@ fn resolve_model_parameter_variable(
     variable_span: Span,
 ) -> ir::Expr {
     let reference_name = reference_model.clone().take_value();
-    let reference_name_span = reference_model.span();
+    let reference_name_span = reference_model.span().clone();
     let var_identifier = parameter.clone().take_value();
-    let var_identifier_span = parameter.span();
+    let var_identifier_span = parameter.span().clone();
 
     ir::Expr::external_variable(
         variable_span,

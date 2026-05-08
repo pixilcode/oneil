@@ -117,6 +117,7 @@ impl ParameterValue {
 }
 
 /// Parameter limits that constrain the allowed values
+#[expect(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Limits {
     /// Continuous limits with minimum and maximum values

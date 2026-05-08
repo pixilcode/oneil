@@ -127,7 +127,7 @@ impl ParameterBuilder {
         let name = ParameterName::from(name);
         self.name = Some(name);
         let span = unimportant_span();
-        self.name_span = Some(span);
+        self.name_span = Some(span.clone());
         self.span = Some(span);
         self
     }

@@ -1134,9 +1134,9 @@ mod helper {
                 } else {
                     errors.push(EvalError::UnitMismatch {
                         expected_unit: expected_unit.display_unit.clone(),
-                        expected_source_span: **expected_unit_value_span,
+                        expected_source_span: (**expected_unit_value_span).clone(),
                         found_unit: number.unit().display_unit.clone(),
-                        found_span: *value_span,
+                        found_span: value_span.clone(),
                     });
                 }
             }
@@ -1150,12 +1150,12 @@ mod helper {
                 } else {
                     errors.push(EvalError::TypeMismatch {
                         expected_type: ExpectedType::Number { number_type: None },
-                        expected_source_span: **first_number_span,
+                        expected_source_span: (**first_number_span).clone(),
                         found_type: ValueType::MeasuredNumber {
                             number_type: number.normalized_value().type_(),
                             unit: number.unit().clone(),
                         },
-                        found_span: *value_span,
+                        found_span: value_span.clone(),
                     });
                 }
             }
@@ -1192,11 +1192,11 @@ mod helper {
                             number_type: None,
                             unit: Some(expected_unit.display_unit.clone()),
                         },
-                        expected_source_span: **expected_unit_value_span,
+                        expected_source_span: (**expected_unit_value_span).clone(),
                         found_type: ValueType::Number {
                             number_type: number.type_(),
                         },
-                        found_span: *value_span,
+                        found_span: value_span.clone(),
                     });
                 }
             }
@@ -1216,7 +1216,7 @@ mod helper {
         errors.push(EvalError::InvalidType {
             expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
             found_type: value.type_(),
-            found_span: *value_span,
+            found_span: value_span.clone(),
         });
     }
 

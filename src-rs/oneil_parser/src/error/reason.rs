@@ -5,7 +5,7 @@ use oneil_shared::span::Span;
 use crate::token::error::TokenErrorKind;
 
 /// The different kinds of errors that can occur during parsing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserErrorReason {
     /// Expected an AST node but found something else
     Expect(ExpectKind),

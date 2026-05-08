@@ -2,7 +2,7 @@
 
 use oneil_builtins::{BuiltinFunction, BuiltinRef};
 use oneil_output::{DisplayUnit, Value};
-use oneil_shared::span::{SourceLocation, Span};
+use oneil_shared::span::Span;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
@@ -85,14 +85,8 @@ pub fn units(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// Returns a dummy span for Python-originated calls (no source location).
 ///
 /// This is used when only the message of the resulting error is needed.
-const fn dummy_span() -> Span {
-    let loc = SourceLocation {
-        offset: 0,
-        line: 1,
-        column: 1,
-    };
-
-    Span::empty(loc)
+fn dummy_span() -> Span {
+    Span::synthetic()
 }
 
 /// Wrapper that exposes a single Oneil builtin function as a Python callable.

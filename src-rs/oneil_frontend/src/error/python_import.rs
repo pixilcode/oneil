@@ -89,18 +89,18 @@ impl AsOneilDiagnostic for PythonImportResolutionError {
         self.to_string()
     }
 
-    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, _source: &str) -> Option<ErrorLocation> {
         match self {
             Self::PythonNotEnabled { span, .. } => {
-                let location = ErrorLocation::from_source_and_span(source, *span);
+                let location = ErrorLocation::from_span(span);
                 Some(location)
             }
             Self::DuplicateImport { duplicate_span, .. } => {
-                let location = ErrorLocation::from_source_and_span(source, *duplicate_span);
+                let location = ErrorLocation::from_span(duplicate_span);
                 Some(location)
             }
             Self::FailedValidation { ident_span, .. } => {
-                let location = ErrorLocation::from_source_and_span(source, *ident_span);
+                let location = ErrorLocation::from_span(ident_span);
                 Some(location)
             }
         }
@@ -115,10 +115,10 @@ impl AsOneilDiagnostic for PythonImportResolutionError {
         }
     }
 
-    fn context_with_source(&self, source: &str) -> Vec<(Context, Option<ErrorLocation>)> {
+    fn context_with_source(&self, _source: &str) -> Vec<(Context, Option<ErrorLocation>)> {
         match self {
             Self::DuplicateImport { original_span, .. } => {
-                let location = ErrorLocation::from_source_and_span(source, *original_span);
+                let location = ErrorLocation::from_span(original_span);
                 vec![(
                     Context::Note("original import found here".to_string()),
                     Some(location),

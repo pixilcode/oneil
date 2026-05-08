@@ -995,7 +995,7 @@ impl AsOneilDiagnostic for EvalError {
     }
 
     #[expect(clippy::too_many_lines, reason = "matching on each enum variant")]
-    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, _source: &str) -> Option<ErrorLocation> {
         match self {
             Self::TypeMismatch {
                 expected_type: _,
@@ -1197,7 +1197,7 @@ impl AsOneilDiagnostic for EvalError {
             }
             | Self::PythonNotEnabled {
                 relevant_span: location_span,
-            } => Some(ErrorLocation::from_source_and_span(source, *location_span)),
+            } => Some(ErrorLocation::from_span(location_span)),
         }
     }
 
@@ -1501,7 +1501,7 @@ impl AsOneilDiagnostic for EvalError {
         clippy::match_same_arms,
         reason = "in order to keep the enums in order, we don't combine the same arms"
     )]
-    fn context_with_source(&self, source: &str) -> Vec<(ErrorContext, Option<ErrorLocation>)> {
+    fn context_with_source(&self, _source: &str) -> Vec<(ErrorContext, Option<ErrorLocation>)> {
         match self {
             Self::TypeMismatch {
                 expected_type,
@@ -1512,10 +1512,7 @@ impl AsOneilDiagnostic for EvalError {
                 ErrorContext::Note(format!(
                     "expected because this expression is {expected_type}",
                 )),
-                Some(ErrorLocation::from_source_and_span(
-                    source,
-                    *expected_source_span,
-                )),
+                Some(ErrorLocation::from_span(expected_source_span)),
             )],
             Self::UnitMismatch {
                 expected_unit,
@@ -1526,10 +1523,7 @@ impl AsOneilDiagnostic for EvalError {
                 ErrorContext::Note(format!(
                     "expected because this expression has unit `{expected_unit}`",
                 )),
-                Some(ErrorLocation::from_source_and_span(
-                    source,
-                    *expected_source_span,
-                )),
+                Some(ErrorLocation::from_span(expected_source_span)),
             )],
             Self::NumberTypeMismatch {
                 expected_number_type,
@@ -1546,10 +1540,7 @@ impl AsOneilDiagnostic for EvalError {
                     ErrorContext::Note(format!(
                         "expected because this expression has number type `{expected_number_type}`",
                     )),
-                    Some(ErrorLocation::from_source_and_span(
-                        source,
-                        *expected_source_span,
-                    )),
+                    Some(ErrorLocation::from_span(expected_source_span)),
                 )]
             }
             Self::InvalidType {
@@ -1609,10 +1600,7 @@ impl AsOneilDiagnostic for EvalError {
                 param_unit: _,
             } => vec![(
                 ErrorContext::Note("expected unit defined here".to_string()),
-                Some(ErrorLocation::from_source_and_span(
-                    source,
-                    *param_unit_span,
-                )),
+                Some(ErrorLocation::from_span(param_unit_span)),
             )],
             Self::InvalidIfExpressionType {
                 expr_span: _,
@@ -1627,7 +1615,7 @@ impl AsOneilDiagnostic for EvalError {
                 .map(|branch_span| {
                     (
                         ErrorContext::Note("this condition evaluates to `true`".to_string()),
-                        Some(ErrorLocation::from_source_and_span(source, *branch_span)),
+                        Some(ErrorLocation::from_span(branch_span)),
                     )
                 })
                 .collect(),
@@ -1640,14 +1628,14 @@ impl AsOneilDiagnostic for EvalError {
                 unit_span: _,
             } => vec![(
                 ErrorContext::Note("this expression evaluates to a boolean value".to_string()),
-                Some(ErrorLocation::from_source_and_span(source, *expr_span)),
+                Some(ErrorLocation::from_span(expr_span)),
             )],
             Self::StringCannotHaveUnit {
                 expr_span,
                 unit_span: _,
             } => vec![(
                 ErrorContext::Note("this expression evaluates to a string value".to_string()),
-                Some(ErrorLocation::from_source_and_span(source, *expr_span)),
+                Some(ErrorLocation::from_span(expr_span)),
             )],
             Self::InvalidContinuousLimitMinType {
                 expr_span: _,
@@ -1664,7 +1652,7 @@ impl AsOneilDiagnostic for EvalError {
                 min_unit_span,
             } => vec![(
                 ErrorContext::Note(format!("min limit unit is `{min_unit}`")),
-                Some(ErrorLocation::from_source_and_span(source, *min_unit_span)),
+                Some(ErrorLocation::from_span(min_unit_span)),
             )],
             Self::BooleanCannotBeDiscreteLimitValue { expr_span: _ } => Vec::new(),
             Self::DuplicateStringLimit {
@@ -1673,10 +1661,7 @@ impl AsOneilDiagnostic for EvalError {
                 string_value,
             } => vec![(
                 ErrorContext::Note(format!("original value `{string_value}` is found here")),
-                Some(ErrorLocation::from_source_and_span(
-                    source,
-                    *original_expr_span,
-                )),
+                Some(ErrorLocation::from_span(original_expr_span)),
             )],
             Self::ExpectedStringLimit {
                 expr_span: _,
@@ -1693,7 +1678,7 @@ impl AsOneilDiagnostic for EvalError {
                 value_unit_span: _,
             } => vec![(
                 ErrorContext::Note("expected unit was derived from this expression".to_string()),
-                Some(ErrorLocation::from_source_and_span(source, *limit_span)),
+                Some(ErrorLocation::from_span(limit_span)),
             )],
             Self::ParameterValueBelowDefaultLimits {
                 param_expr_span: _,
@@ -1708,7 +1693,7 @@ impl AsOneilDiagnostic for EvalError {
                 ErrorContext::Note(format!(
                     "the limit minimum for this parameter is {min_value}"
                 )),
-                Some(ErrorLocation::from_source_and_span(source, *min_expr_span)),
+                Some(ErrorLocation::from_span(min_expr_span)),
             )],
             Self::ParameterValueAboveContinuousLimits {
                 param_expr_span: _,
@@ -1719,7 +1704,7 @@ impl AsOneilDiagnostic for EvalError {
                 ErrorContext::Note(format!(
                     "the limit maximum for this parameter is {max_value}"
                 )),
-                Some(ErrorLocation::from_source_and_span(source, *max_expr_span)),
+                Some(ErrorLocation::from_span(max_expr_span)),
             )],
             Self::ParameterValueNotInDiscreteLimits {
                 param_expr_span: _,
@@ -1736,10 +1721,7 @@ impl AsOneilDiagnostic for EvalError {
                     ErrorContext::Note(format!(
                         "the limit values for this parameter are [{limit_values}]"
                     )),
-                    Some(ErrorLocation::from_source_and_span(
-                        source,
-                        *limit_expr_span,
-                    )),
+                    Some(ErrorLocation::from_span(limit_expr_span)),
                 )]
             }
             Self::BooleanCannotHaveALimit {
@@ -1752,10 +1734,7 @@ impl AsOneilDiagnostic for EvalError {
                 limit_span: _,
             } => vec![(
                 ErrorContext::Note(format!("parameter value is {param_value}")),
-                Some(ErrorLocation::from_source_and_span(
-                    source,
-                    *param_expr_span,
-                )),
+                Some(ErrorLocation::from_span(param_expr_span)),
             )],
             Self::NumberCannotHaveStringLimit {
                 param_expr_span,
@@ -1763,10 +1742,7 @@ impl AsOneilDiagnostic for EvalError {
                 limit_span: _,
             } => vec![(
                 ErrorContext::Note(format!("parameter value is {param_value}")),
-                Some(ErrorLocation::from_source_and_span(
-                    source,
-                    *param_expr_span,
-                )),
+                Some(ErrorLocation::from_span(param_expr_span)),
             )],
             Self::UnitlessNumberCannotHaveLimitWithUnit {
                 param_expr_span: _,
@@ -1854,17 +1830,14 @@ impl AsOneilDiagnostic for EvalWarning {
         self.to_string()
     }
 
-    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
+    fn diagnostic_location(&self, _source: &str) -> Option<ErrorLocation> {
         match self {
             Self::UsedFallback {
                 function_name: _,
                 function_call_span,
                 message: _,
                 traceback: _,
-            } => Some(ErrorLocation::from_source_and_span(
-                source,
-                *function_call_span,
-            )),
+            } => Some(ErrorLocation::from_span(function_call_span)),
         }
     }
 

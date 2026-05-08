@@ -38,12 +38,12 @@ fn test_decl(input: InputSpan<'_>) -> Result<'_, TestNode, ParserError> {
     let (rest, trace_level_node) = opt(trace_level).parse(input)?;
 
     let (rest, test_keyword_token) = test_keyword
-        .convert_error_to(ParserError::expect_test)
+        .convert_error_to(|e| ParserError::expect_test(&e))
         .parse(rest)?;
 
     let (rest, colon_token) = colon
         .or_fail_with(ParserError::test_missing_colon(
-            test_keyword_token.lexeme_span,
+            test_keyword_token.lexeme_span.clone(),
         ))
         .parse(rest)?;
 
@@ -52,7 +52,9 @@ fn test_decl(input: InputSpan<'_>) -> Result<'_, TestNode, ParserError> {
         .parse(rest)?;
 
     let (rest, linebreak_token) = end_of_line
-        .or_fail_with(ParserError::test_missing_end_of_line(expr_node.span()))
+        .or_fail_with(ParserError::test_missing_end_of_line(
+            expr_node.span().clone(),
+        ))
         .parse(rest)?;
 
     let (rest, note_node) = opt(parse_note).parse(rest)?;
@@ -60,12 +62,17 @@ fn test_decl(input: InputSpan<'_>) -> Result<'_, TestNode, ParserError> {
     let test_start_span = trace_level_node
         .as_ref()
         .map_or(test_keyword_token.lexeme_span, |trace_level_node| {
-            trace_level_node.span()
+            trace_level_node.span().clone()
         });
 
     let (test_end_span, test_whitespace_span) = note_node.as_ref().map_or(
         (linebreak_token.lexeme_span, linebreak_token.whitespace_span),
-        |note_node| (note_node.span(), note_node.whitespace_span()),
+        |note_node| {
+            (
+                note_node.span().clone(),
+                note_node.whitespace_span().clone(),
+            )
+        },
     );
 
     let test_span = Span::from_start_and_end(&test_start_span, &test_end_span);

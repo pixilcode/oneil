@@ -103,11 +103,14 @@ impl ErrorLocation {
         Self::new(source, offset, None)
     }
 
-    /// Creates a new error location from source content and span
+    /// Creates a new error location from a span.
+    ///
+    /// The source text and position are taken from the span itself, so the
+    /// resulting location always corresponds to the file the span was parsed from.
     #[must_use]
-    pub fn from_source_and_span(source: &str, span: Span) -> Self {
+    pub fn from_span(span: &Span) -> Self {
         let length = span.end().offset - span.start().offset;
-        Self::new(source, span.start().offset, Some(length))
+        Self::new(span.source(), span.start().offset, Some(length))
     }
 
     /// Returns the character offset from the beginning of the source file

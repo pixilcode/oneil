@@ -140,7 +140,7 @@ impl<'external> ResolutionContextBuilder<'external> {
             for (name, import) in model.references() {
                 ctx.add_reference_to_active_model(
                     name.clone(),
-                    import.name_span,
+                    import.name_span.clone(),
                     import.path.clone(),
                 );
             }
@@ -148,7 +148,7 @@ impl<'external> ResolutionContextBuilder<'external> {
                 ctx.add_submodel_to_active_model(
                     alias.clone(),
                     import.name.clone(),
-                    import.name_span,
+                    import.name_span.clone(),
                     import.instance.path().clone(),
                 );
             }
@@ -170,7 +170,7 @@ impl<'external> ResolutionContextBuilder<'external> {
             for (name, import) in ref_model.references() {
                 ctx.add_reference_to_active_model(
                     name.clone(),
-                    import.name_span,
+                    import.name_span.clone(),
                     import.path.clone(),
                 );
             }
@@ -178,7 +178,7 @@ impl<'external> ResolutionContextBuilder<'external> {
                 ctx.add_submodel_to_active_model(
                     alias.clone(),
                     import.name.clone(),
-                    import.name_span,
+                    import.name_span.clone(),
                     import.instance.path().clone(),
                 );
             }

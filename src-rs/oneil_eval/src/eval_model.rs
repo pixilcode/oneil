@@ -103,7 +103,7 @@ fn eval_test<E: ExternalEvaluationContext>(
     let (test_result, expr_span) = eval_expr::eval_expr(test.expr(), context)?;
     let warnings = context.take_expression_warnings();
 
-    let expr_span = *expr_span;
+    let expr_span = expr_span.clone();
 
     match test_result {
         Value::Boolean(true) => Ok(output::Test {

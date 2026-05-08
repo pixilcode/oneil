@@ -66,7 +66,7 @@ pub enum SymbolAtPosition {
 impl SymbolAtPosition {
     /// Span of the matched symbol in the document containing the cursor.
     #[must_use]
-    pub const fn span(&self) -> Span {
+    pub fn span(&self) -> Span {
         match self {
             Self::ParameterDefinition { span, .. }
             | Self::ParameterReference { span, .. }
@@ -76,7 +76,7 @@ impl SymbolAtPosition {
             | Self::ModelImportReference { span, .. }
             | Self::PythonImport { span, .. }
             | Self::PythonFunctionReference { span, .. }
-            | Self::BuiltinFunctionReference { span, .. } => *span,
+            | Self::BuiltinFunctionReference { span, .. } => span.clone(),
         }
     }
 }
@@ -92,7 +92,7 @@ pub fn find_symbol_at_offset(
         if span_contains_offset(param.name_span(), offset) {
             return Some(SymbolAtPosition::ParameterDefinition {
                 name: param.name().clone(),
-                span: param.name_span(),
+                span: param.name_span().clone(),
             });
         }
 
@@ -111,34 +111,34 @@ pub fn find_symbol_at_offset(
     // by alias (= reference name); the underlying source-level model name
     // surfaced to the LSP comes from the `SubmodelImport.name()` field.
     for (_alias, submodel_import) in model.submodel_models() {
-        if span_contains_offset(*submodel_import.name_span(), offset) {
+        if span_contains_offset(submodel_import.name_span(), offset) {
             let submodel_path = submodel_import.path().clone();
 
             return Some(SymbolAtPosition::ModelImportDefinition {
                 name: ModelImportName::Submodel(submodel_import.name().clone()),
                 path: submodel_path,
-                span: *submodel_import.name_span(),
+                span: submodel_import.name_span().clone(),
             });
         }
     }
 
     // Check if cursor is on a reference import name
     for (reference_name, reference_import) in model.reference_models() {
-        if span_contains_offset(*reference_import.name_span(), offset) {
+        if span_contains_offset(reference_import.name_span(), offset) {
             return Some(SymbolAtPosition::ModelImportDefinition {
                 name: ModelImportName::Reference(reference_name.clone()),
                 path: reference_import.path().clone(),
-                span: *reference_import.name_span(),
+                span: reference_import.name_span().clone(),
             });
         }
     }
 
     // Check if cursor is on a python import
     for (python_path, python_import) in model.python_imports() {
-        if span_contains_offset(*python_import.import_path_span(), offset) {
+        if span_contains_offset(python_import.import_path_span(), offset) {
             return Some(SymbolAtPosition::PythonImport {
                 path: python_path.clone(),
-                span: *python_import.import_path_span(),
+                span: python_import.import_path_span().clone(),
             });
         }
     }
@@ -206,7 +206,7 @@ fn find_symbol_in_parameter_value(
 /// Recursively finds a symbol in an expression.
 fn find_symbol_in_expr(expr: &ir::Expr, offset: usize) -> Option<SymbolAtPosition> {
     match expr {
-        ir::Expr::Variable { span, variable } => find_symbol_in_variable(variable, *span, offset),
+        ir::Expr::Variable { span, variable } => find_symbol_in_variable(variable, span, offset),
         ir::Expr::ComparisonOp {
             left,
             right,
@@ -224,14 +224,14 @@ fn find_symbol_in_expr(expr: &ir::Expr, offset: usize) -> Option<SymbolAtPositio
             name,
             args,
             ..
-        } => find_symbol_in_function_call(name, *name_span, args, offset),
+        } => find_symbol_in_function_call(name, name_span, args, offset),
         ir::Expr::Literal { .. } => None,
     }
 }
 
 fn find_symbol_in_variable(
     variable: &ir::Variable,
-    outer_span: Span,
+    outer_span: &Span,
     offset: usize,
 ) -> Option<SymbolAtPosition> {
     if !span_contains_offset(outer_span, offset) {
@@ -242,10 +242,10 @@ fn find_symbol_in_variable(
         ir::Variable::Parameter {
             parameter_name,
             parameter_span,
-        } => span_contains_offset(*parameter_span, offset).then(|| {
+        } => span_contains_offset(parameter_span, offset).then(|| {
             SymbolAtPosition::ParameterReference {
                 name: parameter_name.clone(),
-                span: *parameter_span,
+                span: parameter_span.clone(),
             }
         }),
         ir::Variable::External {
@@ -255,15 +255,15 @@ fn find_symbol_in_variable(
             parameter_span,
         } => find_symbol_in_external_variable(
             reference_name,
-            *reference_span,
+            reference_span.clone(),
             parameter_name,
-            *parameter_span,
+            parameter_span.clone(),
             offset,
         ),
         ir::Variable::Builtin { ident, ident_span } => {
             Some(SymbolAtPosition::BuiltinValueReference {
                 name: ident.clone(),
-                span: *ident_span,
+                span: ident_span.clone(),
             })
         }
     }
@@ -276,12 +276,12 @@ fn find_symbol_in_external_variable(
     parameter_span: Span,
     offset: usize,
 ) -> Option<SymbolAtPosition> {
-    if span_contains_offset(reference_span, offset) {
+    if span_contains_offset(&reference_span, offset) {
         Some(SymbolAtPosition::ModelImportReference {
             reference_name: reference_name.clone(),
             span: reference_span,
         })
-    } else if span_contains_offset(parameter_span, offset) {
+    } else if span_contains_offset(&parameter_span, offset) {
         Some(SymbolAtPosition::ExternalParameterReference {
             reference_name: reference_name.clone(),
             parameter_name: parameter_name.clone(),
@@ -317,7 +317,7 @@ fn find_symbol_in_binary_op(
 
 fn find_symbol_in_function_call(
     name: &ir::FunctionName,
-    name_span: Span,
+    name_span: &Span,
     args: &[ir::Expr],
     offset: usize,
 ) -> Option<SymbolAtPosition> {
@@ -326,7 +326,7 @@ fn find_symbol_in_function_call(
             ir::FunctionName::Builtin(builtin_name, builtin_name_span) => {
                 Some(SymbolAtPosition::BuiltinFunctionReference {
                     name: builtin_name.clone(),
-                    span: *builtin_name_span,
+                    span: builtin_name_span.clone(),
                 })
             }
             ir::FunctionName::Imported {
@@ -336,7 +336,7 @@ fn find_symbol_in_function_call(
             } => Some(SymbolAtPosition::PythonFunctionReference {
                 python_path: python_path.clone(),
                 name: name.clone(),
-                span: *imported_name_span,
+                span: imported_name_span.clone(),
             }),
         };
     }
@@ -345,6 +345,6 @@ fn find_symbol_in_function_call(
 }
 
 /// Checks if a span contains a given byte offset
-const fn span_contains_offset(span: Span, offset: usize) -> bool {
+const fn span_contains_offset(span: &Span, offset: usize) -> bool {
     span.start().offset <= offset && offset < span.end().offset
 }

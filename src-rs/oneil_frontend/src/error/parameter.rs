@@ -99,7 +99,7 @@ impl AsOneilDiagnostic for ParameterResolutionError {
             Self::VariableResolution(error) => error.diagnostic_location(source),
             Self::UnitResolution(error) => error.diagnostic_location(source),
             Self::DuplicateParameter { duplicate_span, .. } => {
-                let location = ErrorLocation::from_source_and_span(source, *duplicate_span);
+                let location = ErrorLocation::from_span(duplicate_span);
                 Some(location)
             }
         }
@@ -110,7 +110,7 @@ impl AsOneilDiagnostic for ParameterResolutionError {
             Self::VariableResolution(error) => error.context_with_source(source),
             Self::UnitResolution(error) => error.context_with_source(source),
             Self::DuplicateParameter { original_span, .. } => {
-                let original_location = ErrorLocation::from_source_and_span(source, *original_span);
+                let original_location = ErrorLocation::from_span(original_span);
                 let context = Context::Note("original parameter found here".to_string());
                 vec![(context, Some(original_location))]
             }

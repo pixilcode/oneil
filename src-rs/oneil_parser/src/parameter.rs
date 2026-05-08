@@ -55,14 +55,14 @@ fn parameter_decl(input: InputSpan<'_>) -> Result<'_, ParameterNode, ParserError
     let (rest, trace_level_node) = opt(trace_level).parse(rest)?;
 
     let (rest, label_token) = label
-        .convert_error_to(ParserError::expect_parameter)
+        .convert_error_to(|e| ParserError::expect_parameter(&e))
         .parse(rest)?;
-    let label_node = ParameterLabelNode::from(label_token);
+    let label_node = ParameterLabelNode::from(label_token.clone());
 
     let (rest, limits_node) = opt(limits).parse(rest)?;
 
     let (rest, colon_token) = colon
-        .convert_error_to(ParserError::expect_parameter)
+        .convert_error_to(|e| ParserError::expect_parameter(&e))
         .parse(rest)?;
 
     let (rest, ident_token) = identifier
@@ -74,7 +74,7 @@ fn parameter_decl(input: InputSpan<'_>) -> Result<'_, ParameterNode, ParserError
 
     let (rest, equals_token) = equals
         .or_fail_with(ParserError::parameter_missing_equals_sign(
-            ident_node.span(),
+            ident_node.span().clone(),
         ))
         .parse(rest)?;
 
@@ -86,7 +86,7 @@ fn parameter_decl(input: InputSpan<'_>) -> Result<'_, ParameterNode, ParserError
 
     let (rest, linebreak_token) = end_of_line
         .or_fail_with(ParserError::parameter_missing_end_of_line(
-            value_node.span(),
+            value_node.span().clone(),
         ))
         .parse(rest)?;
 
@@ -95,15 +95,20 @@ fn parameter_decl(input: InputSpan<'_>) -> Result<'_, ParameterNode, ParserError
     let param_start_span = match (&performance_marker_node, &trace_level_node) {
         (Some(performance_marker_node), _) => performance_marker_node.span(),
         (None, Some(trace_level_node)) => trace_level_node.span(),
-        (None, None) => label_token.lexeme_span,
+        (None, None) => &label_token.lexeme_span,
     };
 
     let (param_end_span, param_whitespace_span) = note_node.as_ref().map_or(
         (linebreak_token.lexeme_span, linebreak_token.whitespace_span),
-        |note_node| (note_node.span(), note_node.whitespace_span()),
+        |note_node| {
+            (
+                note_node.span().clone(),
+                note_node.whitespace_span().clone(),
+            )
+        },
     );
 
-    let param_span = Span::from_start_and_end(&param_start_span, &param_end_span);
+    let param_span = Span::from_start_and_end(param_start_span, &param_end_span);
 
     let param = Parameter::new(
         label_node,
@@ -146,11 +151,13 @@ fn continuous_limits(input: InputSpan<'_>) -> Result<'_, LimitsNode, ParserError
     let (rest, paren_left_token) = paren_left.convert_errors().parse(input)?;
 
     let (rest, min_node) = parse_expr
-        .or_fail_with(ParserError::limit_missing_min(paren_left_token.lexeme_span))
+        .or_fail_with(ParserError::limit_missing_min(
+            paren_left_token.lexeme_span.clone(),
+        ))
         .parse(rest)?;
 
     let (rest, comma_token) = comma
-        .or_fail_with(ParserError::limit_missing_comma(min_node.span()))
+        .or_fail_with(ParserError::limit_missing_comma(min_node.span().clone()))
         .parse(rest)?;
 
     let (rest, max_node) = parse_expr
@@ -158,7 +165,9 @@ fn continuous_limits(input: InputSpan<'_>) -> Result<'_, LimitsNode, ParserError
         .parse(rest)?;
 
     let (rest, paren_right_token) = paren_right
-        .or_fail_with(ParserError::unclosed_paren(paren_left_token.lexeme_span))
+        .or_fail_with(ParserError::unclosed_paren(
+            paren_left_token.lexeme_span.clone(),
+        ))
         .parse(rest)?;
 
     let span = Span::from_start_and_end(
@@ -182,13 +191,13 @@ fn discrete_limits(input: InputSpan<'_>) -> Result<'_, LimitsNode, ParserError> 
 
     let (rest, value_nodes) = separated_list1(comma.convert_errors(), parse_expr)
         .or_fail_with(ParserError::limit_missing_values(
-            bracket_left_token.lexeme_span,
+            bracket_left_token.lexeme_span.clone(),
         ))
         .parse(rest)?;
 
     let (rest, bracket_right_token) = bracket_right
         .or_fail_with(ParserError::unclosed_bracket(
-            bracket_left_token.lexeme_span,
+            bracket_left_token.lexeme_span.clone(),
         ))
         .parse(rest)?;
 
@@ -223,13 +232,16 @@ fn simple_value(input: InputSpan<'_>) -> Result<'_, ParameterValueNode, ParserEr
     })
     .parse(rest)?;
 
-    let start_span = expr.span();
-    let end_span = unit.as_ref().map_or_else(|| expr.span(), Node::span);
+    let start_span = expr.span().clone();
+    let end_span: Span = unit
+        .as_ref()
+        .map_or_else(|| expr.span().clone(), |n| n.span().clone());
 
     let span = Span::from_start_and_end(&start_span, &end_span);
-    let whitespace_span = unit
-        .as_ref()
-        .map_or_else(|| expr.whitespace_span(), Node::whitespace_span);
+    let whitespace_span: Span = unit.clone().map_or_else(
+        || expr.whitespace_span().clone(),
+        |n| n.whitespace_span().clone(),
+    );
 
     let node = Node::new(ParameterValue::simple(expr, unit), span, whitespace_span);
 
@@ -258,11 +270,14 @@ fn piecewise_value(input: InputSpan<'_>) -> Result<'_, ParameterValueNode, Parse
     })
     .parse(rest)?;
 
-    let start_span = first_part.span();
-    let (end_span, whitespace_span) = match (rest_parts.last(), &unit) {
-        (Some(part), _) => (part.span(), part.whitespace_span()),
-        (None, Some(unit)) => (unit.span(), unit.whitespace_span()),
-        (None, None) => (first_part.span(), first_part.whitespace_span()),
+    let start_span = first_part.span().clone();
+    let (end_span, whitespace_span): (Span, Span) = match (rest_parts.last(), &unit) {
+        (Some(part), _) => (part.span().clone(), part.whitespace_span().clone()),
+        (None, Some(unit)) => (unit.span().clone(), unit.whitespace_span().clone()),
+        (None, None) => (
+            first_part.span().clone(),
+            first_part.whitespace_span().clone(),
+        ),
     };
     let span = Span::from_start_and_end(&start_span, &end_span);
 
@@ -285,12 +300,12 @@ fn piecewise_part(input: InputSpan<'_>) -> Result<'_, PiecewisePartNode, ParserE
 
     let (rest, expr_node) = parse_expr
         .or_fail_with(ParserError::piecewise_missing_expr(
-            brace_left_token.lexeme_span,
+            brace_left_token.lexeme_span.clone(),
         ))
         .parse(rest)?;
 
     let (rest, if_token) = if_
-        .or_fail_with(ParserError::piecewise_missing_if(expr_node.span()))
+        .or_fail_with(ParserError::piecewise_missing_if(expr_node.span().clone()))
         .parse(rest)?;
 
     let (rest, if_expr) = parse_expr
@@ -298,9 +313,9 @@ fn piecewise_part(input: InputSpan<'_>) -> Result<'_, PiecewisePartNode, ParserE
         .parse(rest)?;
 
     let start_span = brace_left_token.lexeme_span;
-    let end_span = if_expr.span();
+    let end_span = if_expr.span().clone();
     let span = Span::from_start_and_end(&start_span, &end_span);
-    let whitespace_span = if_expr.whitespace_span();
+    let whitespace_span = if_expr.whitespace_span().clone();
 
     let node = Node::new(
         PiecewisePart::new(expr_node, if_expr),

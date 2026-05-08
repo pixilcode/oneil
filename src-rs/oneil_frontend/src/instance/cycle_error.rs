@@ -89,8 +89,8 @@ impl CompilationCycleError {
     /// apply) declaration in [`Self::source_path`] that participates
     /// in the cycle.
     #[must_use]
-    pub const fn span(&self) -> Span {
-        self.span
+    pub fn span(&self) -> Span {
+        self.span.clone()
     }
 
     fn render_chain(&self) -> String {
@@ -117,8 +117,8 @@ impl AsOneilDiagnostic for CompilationCycleError {
         self.to_string()
     }
 
-    fn diagnostic_location(&self, source: &str) -> Option<ErrorLocation> {
-        Some(ErrorLocation::from_source_and_span(source, self.span))
+    fn diagnostic_location(&self, _source: &str) -> Option<ErrorLocation> {
+        Some(ErrorLocation::from_span(&self.span))
     }
 
     fn context(&self) -> Vec<Context> {

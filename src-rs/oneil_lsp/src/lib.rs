@@ -326,7 +326,7 @@ impl LanguageServer for Backend {
                 hover_markdown(&symbol, &mut runtime, &current_model_path, &workspace_roots);
 
             let has_contents = markdown.is_some();
-            let hover_range = Some(span_to_range(symbol.span()));
+            let hover_range = Some(span_to_range(&symbol.span()));
 
             let hover = markdown.map(|contents| Hover {
                 contents,

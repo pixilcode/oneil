@@ -37,7 +37,7 @@ pub fn parse_complete(input: InputSpan<'_>) -> Result<'_, NoteNode, ParserError>
 /// content is trimmed.
 fn note(input: InputSpan<'_>) -> Result<'_, NoteNode, ParserError> {
     let (rest, (token, kind)) = note_token
-        .convert_error_to(ParserError::expect_note)
+        .convert_error_to(|e| ParserError::expect_note(&e))
         .parse(input)?;
 
     let note_content = match kind {

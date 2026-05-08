@@ -411,7 +411,7 @@ pub trait ExprVisitor: Sized {
     #[must_use]
     fn visit_comparison_op(
         self,
-        span: Span,
+        span: &Span,
         left: &ExprNode,
         op: &ComparisonOpNode,
         right: &ExprNode,
@@ -424,7 +424,7 @@ pub trait ExprVisitor: Sized {
     #[must_use]
     fn visit_binary_op(
         self,
-        span: Span,
+        span: &Span,
         op: &BinaryOpNode,
         left: &ExprNode,
         right: &ExprNode,
@@ -434,43 +434,43 @@ pub trait ExprVisitor: Sized {
 
     /// Visits a fallback expression (`left ? right`)
     #[must_use]
-    fn visit_fallback(self, span: Span, left: &ExprNode, right: &ExprNode) -> Self {
+    fn visit_fallback(self, span: &Span, left: &ExprNode, right: &ExprNode) -> Self {
         self
     }
 
     /// Visits a unary operation expression
     #[must_use]
-    fn visit_unary_op(self, span: Span, op: &UnaryOpNode, expr: &ExprNode) -> Self {
+    fn visit_unary_op(self, span: &Span, op: &UnaryOpNode, expr: &ExprNode) -> Self {
         self
     }
 
     /// Visits a function call expression
     #[must_use]
-    fn visit_function_call(self, span: Span, name: &IdentifierNode, args: &[ExprNode]) -> Self {
+    fn visit_function_call(self, span: &Span, name: &IdentifierNode, args: &[ExprNode]) -> Self {
         self
     }
 
     /// Visits a unit casting expression
     #[must_use]
-    fn visit_unit_cast(self, span: Span, expr: &ExprNode, unit: &UnitExprNode) -> Self {
+    fn visit_unit_cast(self, span: &Span, expr: &ExprNode, unit: &UnitExprNode) -> Self {
         self
     }
 
     /// Visits a parenthesized expression
     #[must_use]
-    fn visit_parenthesized(self, span: Span, expr: &ExprNode) -> Self {
+    fn visit_parenthesized(self, span: &Span, expr: &ExprNode) -> Self {
         self
     }
 
     /// Visits a variable reference expression
     #[must_use]
-    fn visit_variable(self, span: Span, var: &VariableNode) -> Self {
+    fn visit_variable(self, span: &Span, var: &VariableNode) -> Self {
         self
     }
 
     /// Visits a literal value expression
     #[must_use]
-    fn visit_literal(self, span: Span, lit: &LiteralNode) -> Self {
+    fn visit_literal(self, span: &Span, lit: &LiteralNode) -> Self {
         self
     }
 }

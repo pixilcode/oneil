@@ -30,7 +30,8 @@ pub fn resolve_parameters<E>(
 ) where
     E: ExternalResolutionContext,
 {
-    let mut parameter_map = IndexMap::new();
+    let mut parameter_map: IndexMap<ParameterName, (Span, ParameterWithSection<'_>)> =
+        IndexMap::new();
 
     // collect all parameters and check for duplicates
     for decl in parameters {
@@ -43,12 +44,12 @@ pub fn resolve_parameters<E>(
                 ident.clone(),
                 ParameterResolutionError::duplicate_parameter(
                     ident,
-                    *original_ident_span,
-                    ident_span,
+                    original_ident_span.clone(),
+                    ident_span.clone(),
                 ),
             );
         } else {
-            parameter_map.insert(ident, (ident_span, decl));
+            parameter_map.insert(ident, (ident_span.clone(), decl));
         }
     }
 
@@ -237,8 +238,8 @@ fn try_resolve_identifier_as_parameter<E>(
             let parameter = ir::Parameter::new(
                 parameter_dependencies,
                 parameter_name.clone(),
-                parameter_identifier_span,
-                parameter_decl.parameter.span(),
+                parameter_identifier_span.clone(),
+                parameter_decl.parameter.span().clone(),
                 label,
                 section_label,
                 value,
@@ -324,7 +325,7 @@ where
 
             let (min, max) = error::combine_errors(min, max)?;
 
-            Ok(ir::Limits::continuous(min, max, span))
+            Ok(ir::Limits::continuous(min, max, span.clone()))
         }
         Some((ast::Limits::Discrete { values }, span)) => {
             let values = values.iter().map(|value| {
@@ -333,7 +334,7 @@ where
 
             let values = error::combine_error_list(values)?;
 
-            Ok(ir::Limits::discrete(values, span))
+            Ok(ir::Limits::discrete(values, span.clone()))
         }
         None => Ok(ir::Limits::default()),
     }

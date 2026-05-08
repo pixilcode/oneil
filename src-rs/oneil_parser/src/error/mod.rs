@@ -25,7 +25,7 @@ pub mod parser_trait;
 pub mod partial;
 
 /// An error that occurred during parsing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParserError {
     /// The location in the source where the error occurred
     pub error_offset: usize,
@@ -59,7 +59,7 @@ impl ParserError {
     ///
     /// This is used to convert token-level errors to parser-level errors
     #[must_use]
-    const fn new_from_token_error(error: TokenError, reason: ParserErrorReason) -> Self {
+    const fn new_from_token_error(error: &TokenError, reason: ParserErrorReason) -> Self {
         Self {
             reason,
             error_offset: error.offset,
@@ -77,17 +77,17 @@ impl ParserError {
     }
 
     /// Creates a new `ParserError` for an expected note
-    pub(crate) const fn expect_note(error: TokenError) -> Self {
+    pub(crate) const fn expect_note(error: &TokenError) -> Self {
         Self::new_from_token_error(error, ParserErrorReason::expect_note())
     }
 
     /// Creates a new `ParserError` for an expected parameter
-    pub(crate) const fn expect_parameter(error: TokenError) -> Self {
+    pub(crate) const fn expect_parameter(error: &TokenError) -> Self {
         Self::new_from_token_error(error, ParserErrorReason::expect_parameter())
     }
 
     /// Creates a new `ParserError` for an expected test
-    pub(crate) const fn expect_test(error: TokenError) -> Self {
+    pub(crate) const fn expect_test(error: &TokenError) -> Self {
         Self::new_from_token_error(error, ParserErrorReason::expect_test())
     }
 
@@ -99,7 +99,10 @@ impl ParserError {
     /// Creates a new `ParserError` for a missing path in an import declaration
     pub(crate) fn import_missing_path(import_span: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
-            Self::new_from_token_error(error, ParserErrorReason::import_missing_path(import_span))
+            Self::new_from_token_error(
+                &error,
+                ParserErrorReason::import_missing_path(import_span.clone()),
+            )
         }
     }
 
@@ -109,8 +112,8 @@ impl ParserError {
     ) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::import_missing_end_of_line(import_path_span),
+                &error,
+                ParserErrorReason::import_missing_end_of_line(import_path_span.clone()),
             )
         }
     }
@@ -122,7 +125,7 @@ impl ParserError {
     ) -> impl Fn(Self) -> Self {
         move |error| {
             error.convert_reason(ParserErrorReason::submodel_missing_model_info(
-                keyword_span,
+                keyword_span.clone(),
                 keyword,
             ))
         }
@@ -131,7 +134,10 @@ impl ParserError {
     /// Creates a new `ParserError` for a missing alias after `as`
     pub(crate) fn as_missing_alias(as_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
-            Self::new_from_token_error(error, ParserErrorReason::as_missing_alias(as_token))
+            Self::new_from_token_error(
+                &error,
+                ParserErrorReason::as_missing_alias(as_token.clone()),
+            )
         }
     }
 
@@ -139,8 +145,8 @@ impl ParserError {
     pub(crate) fn submodel_missing_end_of_line(alias_span: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::submodel_missing_end_of_line(alias_span),
+                &error,
+                ParserErrorReason::submodel_missing_end_of_line(alias_span.clone()),
             )
         }
     }
@@ -149,8 +155,8 @@ impl ParserError {
     pub(crate) fn design_missing_target(design_kw_span: Span) -> impl Fn(TokenError) -> Self {
         move |error: TokenError| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::design_missing_target(design_kw_span),
+                &error,
+                ParserErrorReason::design_missing_target(design_kw_span.clone()),
             )
         }
     }
@@ -158,14 +164,20 @@ impl ParserError {
     /// Missing design file identifier after `apply`.
     pub(crate) fn apply_missing_file(after_kw: Span) -> impl Fn(TokenError) -> Self {
         move |error: TokenError| {
-            Self::new_from_token_error(error, ParserErrorReason::apply_missing_file(after_kw))
+            Self::new_from_token_error(
+                &error,
+                ParserErrorReason::apply_missing_file(after_kw.clone()),
+            )
         }
     }
 
     /// Missing `to <target>` clause after `apply <file>`.
     pub(crate) fn apply_missing_target(file_span: Span) -> impl Fn(TokenError) -> Self {
         move |error: TokenError| {
-            Self::new_from_token_error(error, ParserErrorReason::apply_missing_target(file_span))
+            Self::new_from_token_error(
+                &error,
+                ParserErrorReason::apply_missing_target(file_span.clone()),
+            )
         }
     }
 
@@ -209,8 +221,8 @@ impl ParserError {
     pub(crate) fn model_path_missing_subcomponent(dot_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::model_path_missing_subcomponent(dot_token),
+                &error,
+                ParserErrorReason::model_path_missing_subcomponent(dot_token.clone()),
             )
         }
     }
@@ -220,7 +232,7 @@ impl ParserError {
         operator: &ComparisonOpNode,
     ) -> impl Fn(Self) -> Self {
         move |error| {
-            let operator_span = operator.span();
+            let operator_span = operator.span().clone();
             let operator = **operator;
             error.convert_reason(
                 ParserErrorReason::expr_comparison_op_missing_second_operand(
@@ -236,7 +248,7 @@ impl ParserError {
         operator: &BinaryOpNode,
     ) -> impl Fn(Self) -> Self {
         move |error| {
-            let operator_span = operator.span();
+            let operator_span = operator.span().clone();
             let operator = **operator;
             error.convert_reason(ParserErrorReason::expr_binary_op_missing_second_operand(
                 operator_span,
@@ -251,7 +263,7 @@ impl ParserError {
     ) -> impl Fn(Self) -> Self {
         move |error| {
             error.convert_reason(ParserErrorReason::expr_fallback_missing_second_operand(
-                question_span,
+                question_span.clone(),
             ))
         }
     }
@@ -259,7 +271,7 @@ impl ParserError {
     /// Creates a new `ParserError` for a unary operation missing its operand
     pub(crate) fn unary_op_missing_operand(operator: &UnaryOpNode) -> impl Fn(Self) -> Self {
         move |error| {
-            let operator_span = operator.span();
+            let operator_span = operator.span().clone();
             let operator = **operator;
             error.convert_reason(ParserErrorReason::expr_unary_op_missing_operand(
                 operator_span,
@@ -271,14 +283,18 @@ impl ParserError {
     /// Creates a new `ParserError` for a parenthesis missing its expression
     pub(crate) fn expr_paren_missing_expression(paren_left_token: Span) -> impl Fn(Self) -> Self {
         move |error| {
-            error.convert_reason(ParserErrorReason::expr_paren_missing_expr(paren_left_token))
+            error.convert_reason(ParserErrorReason::expr_paren_missing_expr(
+                paren_left_token.clone(),
+            ))
         }
     }
 
     /// Creates a new `ParserError` for a unit cast expression missing its unit after `:`
     pub(crate) fn expr_unit_cast_missing_unit(colon_span: Span) -> impl Fn(Self) -> Self {
         move |error| {
-            error.convert_reason(ParserErrorReason::expr_unit_cast_missing_unit(colon_span))
+            error.convert_reason(ParserErrorReason::expr_unit_cast_missing_unit(
+                colon_span.clone(),
+            ))
         }
     }
 
@@ -288,8 +304,8 @@ impl ParserError {
     ) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::expr_variable_missing_reference_model(dot_token),
+                &error,
+                ParserErrorReason::expr_variable_missing_reference_model(dot_token.clone()),
             )
         }
     }
@@ -298,8 +314,8 @@ impl ParserError {
     pub(crate) fn section_missing_label(section_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::section_missing_label(section_token),
+                &error,
+                ParserErrorReason::section_missing_label(section_token.clone()),
             )
         }
     }
@@ -310,8 +326,8 @@ impl ParserError {
     ) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::section_missing_end_of_line(section_label_span),
+                &error,
+                ParserErrorReason::section_missing_end_of_line(section_label_span.clone()),
             )
         }
     }
@@ -320,8 +336,8 @@ impl ParserError {
     pub(crate) fn parameter_missing_identifier(colon_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::parameter_missing_identifier(colon_token),
+                &error,
+                ParserErrorReason::parameter_missing_identifier(colon_token.clone()),
             )
         }
     }
@@ -330,8 +346,8 @@ impl ParserError {
     pub(crate) fn parameter_missing_equals_sign(ident_span: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::parameter_missing_equals_sign(ident_span),
+                &error,
+                ParserErrorReason::parameter_missing_equals_sign(ident_span.clone()),
             )
         }
     }
@@ -342,96 +358,122 @@ impl ParserError {
     ) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::parameter_missing_instance_path_segment(dot_span),
+                &error,
+                ParserErrorReason::parameter_missing_instance_path_segment(dot_span.clone()),
             )
         }
     }
 
     /// Creates a new `ParserError` for a missing value in a parameter
     pub(crate) fn parameter_missing_value(equals_token: Span) -> impl Fn(Self) -> Self {
-        move |error| error.convert_reason(ParserErrorReason::parameter_missing_value(equals_token))
+        move |error| {
+            error.convert_reason(ParserErrorReason::parameter_missing_value(
+                equals_token.clone(),
+            ))
+        }
     }
 
     /// Creates a new `ParserError` for a missing end of line in a parameter
     pub(crate) fn parameter_missing_end_of_line(value_span: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::parameter_missing_end_of_line(value_span),
+                &error,
+                ParserErrorReason::parameter_missing_end_of_line(value_span.clone()),
             )
         }
     }
 
     /// Creates a new `ParserError` for a missing unit in a parameter
     pub(crate) fn parameter_missing_unit(colon_token: Span) -> impl Fn(Self) -> Self {
-        move |error| error.convert_reason(ParserErrorReason::parameter_missing_unit(colon_token))
+        move |error| {
+            error.convert_reason(ParserErrorReason::parameter_missing_unit(
+                colon_token.clone(),
+            ))
+        }
     }
 
     /// Creates a new `ParserError` for a missing minimum value in limits
     pub(crate) fn limit_missing_min(paren_left_token: Span) -> impl Fn(Self) -> Self {
-        move |error| error.convert_reason(ParserErrorReason::limit_missing_min(paren_left_token))
+        move |error| {
+            error.convert_reason(ParserErrorReason::limit_missing_min(
+                paren_left_token.clone(),
+            ))
+        }
     }
 
     /// Creates a new `ParserError` for a missing comma in limits
     pub(crate) fn limit_missing_comma(min_span: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
-            Self::new_from_token_error(error, ParserErrorReason::limit_missing_comma(min_span))
+            Self::new_from_token_error(
+                &error,
+                ParserErrorReason::limit_missing_comma(min_span.clone()),
+            )
         }
     }
 
     /// Creates a new `ParserError` for a missing maximum value in limits
     pub(crate) fn limit_missing_max(comma_token: Span) -> impl Fn(Self) -> Self {
-        move |error| error.convert_reason(ParserErrorReason::limit_missing_max(comma_token))
+        move |error| error.convert_reason(ParserErrorReason::limit_missing_max(comma_token.clone()))
     }
 
     /// Creates a new `ParserError` for missing values in discrete limits
     pub(crate) fn limit_missing_values(bracket_left_token: Span) -> impl Fn(Self) -> Self {
         move |error| {
-            error.convert_reason(ParserErrorReason::limit_missing_values(bracket_left_token))
+            error.convert_reason(ParserErrorReason::limit_missing_values(
+                bracket_left_token.clone(),
+            ))
         }
     }
 
     /// Creates a new `ParserError` for a missing expression in piecewise
     pub(crate) fn piecewise_missing_expr(brace_left_token: Span) -> impl Fn(Self) -> Self {
         move |error| {
-            error.convert_reason(ParserErrorReason::piecewise_missing_expr(brace_left_token))
+            error.convert_reason(ParserErrorReason::piecewise_missing_expr(
+                brace_left_token.clone(),
+            ))
         }
     }
 
     /// Creates a new `ParserError` for a missing if keyword in piecewise
     pub(crate) fn piecewise_missing_if(expr_span: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
-            Self::new_from_token_error(error, ParserErrorReason::piecewise_missing_if(expr_span))
+            Self::new_from_token_error(
+                &error,
+                ParserErrorReason::piecewise_missing_if(expr_span.clone()),
+            )
         }
     }
 
     /// Creates a new `ParserError` for a missing if expression in piecewise
     pub(crate) fn piecewise_missing_if_expr(if_token: Span) -> impl Fn(Self) -> Self {
-        move |error| error.convert_reason(ParserErrorReason::piecewise_missing_if_expr(if_token))
+        move |error| {
+            error.convert_reason(ParserErrorReason::piecewise_missing_if_expr(
+                if_token.clone(),
+            ))
+        }
     }
 
     /// Creates a new `ParserError` for a missing colon in a test declaration
     pub(crate) fn test_missing_colon(test_kw_or_inputs_span: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::test_missing_colon(test_kw_or_inputs_span),
+                &error,
+                ParserErrorReason::test_missing_colon(test_kw_or_inputs_span.clone()),
             )
         }
     }
 
     /// Creates a new `ParserError` for a missing expression in a test declaration
     pub(crate) fn test_missing_expr(colon_token: Span) -> impl Fn(Self) -> Self {
-        move |error| error.convert_reason(ParserErrorReason::test_missing_expr(colon_token))
+        move |error| error.convert_reason(ParserErrorReason::test_missing_expr(colon_token.clone()))
     }
 
     /// Creates a new `ParserError` for a missing end of line in a test declaration
     pub(crate) fn test_missing_end_of_line(expr_span: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::test_missing_end_of_line(expr_span),
+                &error,
+                ParserErrorReason::test_missing_end_of_line(expr_span.clone()),
             )
         }
     }
@@ -439,7 +481,7 @@ impl ParserError {
     /// Creates a new `ParserError` for a missing second term in a unit expression
     pub(crate) fn unit_missing_second_term(operator_node: &UnitOpNode) -> impl Fn(Self) -> Self {
         move |error| {
-            let operator_span = operator_node.span();
+            let operator_span = operator_node.span().clone();
             let operator = **operator_node;
             error.convert_reason(ParserErrorReason::unit_missing_second_term(
                 operator_span,
@@ -451,14 +493,19 @@ impl ParserError {
     /// Creates a new `ParserError` for a missing exponent in a unit expression
     pub(crate) fn unit_missing_exponent(caret_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
-            Self::new_from_token_error(error, ParserErrorReason::unit_missing_exponent(caret_token))
+            Self::new_from_token_error(
+                &error,
+                ParserErrorReason::unit_missing_exponent(caret_token.clone()),
+            )
         }
     }
 
     /// Creates a new `ParserError` for a missing expression in parenthesized unit
     pub(crate) fn unit_paren_missing_expr(paren_left_token: Span) -> impl Fn(Self) -> Self {
         move |error| {
-            error.convert_reason(ParserErrorReason::unit_paren_missing_expr(paren_left_token))
+            error.convert_reason(ParserErrorReason::unit_paren_missing_expr(
+                paren_left_token.clone(),
+            ))
         }
     }
 
@@ -466,8 +513,8 @@ impl ParserError {
     pub(crate) fn unclosed_bracket(bracket_left_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
             Self::new_from_token_error(
-                error,
-                ParserErrorReason::unclosed_bracket(bracket_left_token),
+                &error,
+                ParserErrorReason::unclosed_bracket(bracket_left_token.clone()),
             )
         }
     }
@@ -475,7 +522,10 @@ impl ParserError {
     /// Creates a new `ParserError` for an unclosed parenthesis
     pub(crate) fn unclosed_paren(paren_left_token: Span) -> impl Fn(TokenError) -> Self {
         move |error| {
-            Self::new_from_token_error(error, ParserErrorReason::unclosed_paren(paren_left_token))
+            Self::new_from_token_error(
+                &error,
+                ParserErrorReason::unclosed_paren(paren_left_token.clone()),
+            )
         }
     }
 }

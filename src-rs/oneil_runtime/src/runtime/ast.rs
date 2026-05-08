@@ -1,5 +1,7 @@
 //! AST loading for the runtime.
 
+use std::sync::Arc;
+
 use oneil_parser::{self as parser, error::ParserError};
 use oneil_shared::{load_result::LoadResult, paths::ModelPath};
 
@@ -41,7 +43,13 @@ impl Runtime {
         };
 
         // parse the model and return an error if it fails
-        match parser::parse_model(source, Some(parser::Config::for_model_path(path))).into_result()
+        let rc_path: Arc<std::path::Path> = Arc::from(path.as_path());
+        let rc_source: Arc<str> = Arc::from(source);
+        match parser::parse_model(
+            &Arc::clone(&rc_source),
+            Some(parser::Config::for_model_path(path, rc_path, rc_source)),
+        )
+        .into_result()
         {
             Ok(ast) => {
                 self.ast_cache

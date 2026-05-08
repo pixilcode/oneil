@@ -132,7 +132,9 @@ fn span_of_parameter_on_model<E: ExternalResolutionContext>(
     fallback: Span,
 ) -> Span {
     match ctx.lookup_model(model_path) {
-        ModelResult::Found(m) => m.get_parameter(param).map_or(fallback, ir::Parameter::span),
+        ModelResult::Found(m) => m
+            .get_parameter(param)
+            .map_or(fallback, |p| p.span().clone()),
         ModelResult::HasError | ModelResult::NotFound => fallback,
     }
 }
@@ -164,20 +166,13 @@ fn register_design_local_scratch<E: ExternalResolutionContext>(
     name: ParameterName,
     resolution_context: &mut ResolutionContext<'_, E>,
 ) {
-    use oneil_shared::span::SourceLocation;
-
-    let scratch_loc = SourceLocation {
-        offset: 0,
-        line: 0,
-        column: 0,
-    };
-    let scratch_span = Span::empty(scratch_loc);
+    let scratch_span = Span::synthetic();
 
     let scratch = ir::Parameter::new(
         ir::Dependencies::new(),
         name.clone(),
-        scratch_span,
-        scratch_span,
+        scratch_span.clone(),
+        scratch_span.clone(),
         ParameterLabel::from(name.as_str()),
         None,
         ir::ParameterValue::simple(
@@ -308,7 +303,7 @@ fn handle_design_parameter<E: ExternalResolutionContext>(
     let Some(tgt) = explicit_target.cloned() else {
         resolution_context.add_design_resolution_error_to_active_model(
             "design parameter line requires a preceding `design <model>` declaration",
-            p.ident().span(),
+            p.ident().span().clone(),
         );
         return;
     };
@@ -358,8 +353,8 @@ fn handle_design_parameter<E: ExternalResolutionContext>(
         let local_param = ir::Parameter::new(
             dependencies,
             name.clone(),
-            design_span,
-            design_span,
+            design_span.clone(),
+            design_span.clone(),
             label,
             None,
             value,
@@ -373,10 +368,10 @@ fn handle_design_parameter<E: ExternalResolutionContext>(
     }
 
     let original_model_span =
-        span_of_parameter_on_model(resolution_context, &tgt, &name, design_span);
+        span_of_parameter_on_model(resolution_context, &tgt, &name, design_span.clone());
     let overlay_value = OverlayParameterValue {
         value,
-        design_span,
+        design_span: design_span.clone(),
         original_model_span,
     };
     match instance_path {
@@ -470,7 +465,8 @@ fn record_apply_recursive<E: ExternalResolutionContext>(
         let resolved = match resolve_segment_in(&current_model, seg.as_str(), resolution_context) {
             Ok(name) => name,
             Err(err) => {
-                resolution_context.add_design_resolution_error_to_active_model(err, seg.span());
+                resolution_context
+                    .add_design_resolution_error_to_active_model(err, seg.span().clone());
                 return;
             }
         };
@@ -492,7 +488,7 @@ fn record_apply_recursive<E: ExternalResolutionContext>(
                          its model path could not be determined",
                         seg.as_str(),
                     ),
-                    seg.span(),
+                    seg.span().clone(),
                 );
                 return;
             }
@@ -532,7 +528,7 @@ fn record_apply_recursive<E: ExternalResolutionContext>(
                     design_target = display_model_path(design_target.as_path()),
                     ref_target = display_model_path(final_model_path.as_path()),
                 ),
-                node.span(),
+                node.span().clone(),
             );
             return;
         }
@@ -541,7 +537,7 @@ fn record_apply_recursive<E: ExternalResolutionContext>(
     resolution_context.add_applied_design_to_active_model(ApplyDesign {
         design_path: dpath,
         target: target_path.clone(),
-        span: node.span(),
+        span: node.span().clone(),
     });
 
     // Nested applies (`apply X to a [ apply Y to b ]`) are validated against

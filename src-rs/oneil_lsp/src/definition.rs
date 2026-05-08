@@ -17,7 +17,7 @@ pub fn resolve_definition(
 ) -> Option<Location> {
     match symbol {
         SymbolAtPosition::ParameterDefinition { span, .. } => {
-            Some(span_to_location(current_model_path, *span))
+            Some(span_to_location(current_model_path, span))
         }
         SymbolAtPosition::ParameterReference { name, .. } => {
             let (model, _errors) = runtime.load_and_lower(current_model_path);
@@ -73,11 +73,11 @@ pub fn resolve_definition(
 
             let reference_imports = model.reference_imports();
             if let Some(reference) = reference_imports.get(reference_name) {
-                return Some(span_to_location(current_model_path, reference.name_span));
+                return Some(span_to_location(current_model_path, &reference.name_span));
             }
             let submodel_imports = model.submodel_imports();
             let submodel = submodel_imports.get(reference_name)?;
-            Some(span_to_location(current_model_path, submodel.name_span))
+            Some(span_to_location(current_model_path, &submodel.name_span))
         }
         SymbolAtPosition::PythonImport { path, .. } => {
             let uri = Uri::from_file_path(path.as_path())?;

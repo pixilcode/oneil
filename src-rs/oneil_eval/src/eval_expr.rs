@@ -80,7 +80,7 @@ pub fn eval_expr<'a, E: ExternalEvaluationContext>(
         }
         ir::Expr::UnaryOp { op, expr, span } => {
             let (expr_result, expr_result_span) = eval_expr(expr, context)?;
-            eval_unary_op(*op, expr_result, *expr_result_span).map(|result| (result, span))
+            eval_unary_op(*op, expr_result, expr_result_span.clone()).map(|result| (result, span))
         }
         ir::Expr::Fallback { left, right, span } => {
             eval_fallback(left, right, context).map(|result| (result, span))
@@ -92,7 +92,7 @@ pub fn eval_expr<'a, E: ExternalEvaluationContext>(
             name_span: _,
         } => {
             let args_results = eval_function_call_args(args, context)?;
-            eval_function_call(name, *function_call_span, args_results, context)
+            eval_function_call(name, function_call_span.clone(), args_results, context)
                 .map(|result| (result, function_call_span))
         }
         ir::Expr::UnitCast { span, expr, unit } => {
@@ -100,7 +100,7 @@ pub fn eval_expr<'a, E: ExternalEvaluationContext>(
             let (unit_result, unit_result_span) = eval_unit(unit, context);
             eval_unit_cast(
                 expr_result,
-                *expr_result_span,
+                expr_result_span.clone(),
                 unit_result,
                 unit_result_span,
             )
@@ -137,8 +137,9 @@ fn eval_comparison_subexpressions<E: ExternalEvaluationContext>(
             .iter()
             .map(|(op, right_operand)| (*op, right_operand)),
     ) {
-        rest_results
-            .push(eval_expr(right_operand, context).map(|(result, span)| (op, (result, *span))));
+        rest_results.push(
+            eval_expr(right_operand, context).map(|(result, span)| (op, (result, span.clone()))),
+        );
     }
 
     let (left_result, left_result_span, rest_results) = match left_result {
@@ -172,7 +173,7 @@ fn eval_comparison_subexpressions<E: ExternalEvaluationContext>(
             }
 
             // otherwise, everything was okay
-            (left_result, *left_result_span, ok_rest_results)
+            (left_result, left_result_span.clone(), ok_rest_results)
         }
     };
     Ok(ComparisonSubexpressionsResult {
@@ -210,7 +211,8 @@ fn eval_comparison_chain(
                 next_lhs: (lhs, lhs_span),
                 result,
             }) => {
-                let comparison_result = eval_comparison_op(&lhs, lhs_span, op, &rhs, rhs_span);
+                let comparison_result =
+                    eval_comparison_op(&lhs, lhs_span.clone(), op, &rhs, rhs_span.clone());
 
                 comparison_result
                     .map(|comparison_result| ComparisonSuccess {
@@ -230,7 +232,7 @@ fn eval_comparison_chain(
                 let (last_successful_lhs, last_successful_lhs_span) = *last_successful_lhs;
                 let result = eval_comparison_op(
                     &last_successful_lhs,
-                    last_successful_lhs_span,
+                    last_successful_lhs_span.clone(),
                     op,
                     &rhs,
                     rhs_span,
@@ -290,8 +292,8 @@ fn eval_binary_op_subexpressions<E: ExternalEvaluationContext>(
 ) -> Result<BinaryOpSubexpressionsResult, Vec<EvalError>> {
     // Sequentially evaluate each side; `&mut context` means we can't hold two
     // results tied to borrow-lifetimes at once, so copy out spans as we go.
-    let left_result = eval_expr(left, context).map(|(v, s)| (v, *s));
-    let right_result = eval_expr(right, context).map(|(v, s)| (v, *s));
+    let left_result = eval_expr(left, context).map(|(v, s)| (v, s.clone()));
+    let right_result = eval_expr(right, context).map(|(v, s)| (v, s.clone()));
 
     match (left_result, right_result) {
         (Ok((left_result, left_result_span)), Ok((right_result, right_result_span))) => {
@@ -409,7 +411,7 @@ fn eval_function_call_args<E: ExternalEvaluationContext>(
 
     for arg in args {
         match eval_expr(arg, context) {
-            Ok((value, value_span)) => out_args.push((value, *value_span)),
+            Ok((value, value_span)) => out_args.push((value, value_span.clone())),
             Err(arg_errors) => errors.extend(arg_errors),
         }
     }
@@ -429,7 +431,7 @@ fn eval_function_call<E: ExternalEvaluationContext>(
 ) -> Result<Value, Vec<EvalError>> {
     match name {
         ir::FunctionName::Builtin(fn_identifier, fn_identifier_span) => {
-            context.evaluate_builtin_function(fn_identifier, *fn_identifier_span, args)
+            context.evaluate_builtin_function(fn_identifier, fn_identifier_span.clone(), args)
         }
         ir::FunctionName::Imported {
             python_path,
@@ -483,15 +485,17 @@ fn eval_variable<E: ExternalEvaluationContext>(
         ir::Variable::Parameter {
             parameter_name,
             parameter_span,
-        } => context.lookup_parameter_value(parameter_name, *parameter_span),
+        } => context.lookup_parameter_value(parameter_name, parameter_span.clone()),
         ir::Variable::External {
             reference_name,
             parameter_name,
             parameter_span,
             ..
-        } => {
-            context.lookup_external_parameter_value(reference_name, parameter_name, *parameter_span)
-        }
+        } => context.lookup_external_parameter_value(
+            reference_name,
+            parameter_name,
+            parameter_span.clone(),
+        ),
     }
 }
 

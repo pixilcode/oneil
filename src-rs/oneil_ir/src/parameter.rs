@@ -173,14 +173,14 @@ impl Parameter {
 
     /// Returns the span of this parameter's identifier.
     #[must_use]
-    pub const fn name_span(&self) -> Span {
-        self.name_span
+    pub const fn name_span(&self) -> &Span {
+        &self.name_span
     }
 
     /// Returns the span covering the entire parameter definition.
     #[must_use]
-    pub const fn span(&self) -> Span {
-        self.span
+    pub const fn span(&self) -> &Span {
+        &self.span
     }
 
     /// Returns the label of this parameter.

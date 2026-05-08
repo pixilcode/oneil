@@ -51,7 +51,7 @@ fn comment(input: InputSpan<'_>) -> Result<'_, InputSpan<'_>, TokenError> {
 pub fn end_of_line(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     // because the end of line is whitespace, the lexeme is empty
     let lexeme_str = &input.fragment()[..0];
-    let lexeme_span = span_from(input, input);
+    let lexeme_span = span_from(&input, &input);
 
     // parse any whitespace, including the linebreak
     let (rest, whitespace) = recognize(|input| {
@@ -79,7 +79,7 @@ pub fn end_of_line(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     })
     .parse(input)?;
 
-    let whitespace_span = span_from(whitespace, rest);
+    let whitespace_span = span_from(&whitespace, &rest);
 
     Ok((
         rest,

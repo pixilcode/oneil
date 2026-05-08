@@ -369,7 +369,6 @@ fn chain_apply_unit_mismatch() {
 }
 
 #[test]
-#[ignore = "This test is broken because of a span/source mismatch"]
 fn chain_apply_validation_cycle() {
     // Two-hop apply chain: `parent` → `mid` (owns `apply cycle to l`) → `leaf`.
     // The `cycle` design turns the leaf's `x = 1; y = 2 * x` pair into an SCC.

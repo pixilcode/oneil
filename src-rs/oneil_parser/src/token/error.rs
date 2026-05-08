@@ -8,7 +8,7 @@ use super::InputSpan;
 /// An error that occurred during token parsing.
 ///
 /// Contains both the type of error and the location where it occurred.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenError {
     /// The specific kind of error that occurred
     pub kind: TokenErrorKind,
@@ -17,7 +17,7 @@ pub struct TokenError {
 }
 
 /// The different kinds of errors that can occur during token parsing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenErrorKind {
     /// Expected a specific token
     Expect(ExpectKind),
@@ -149,7 +149,7 @@ pub enum ExpectSymbol {
 }
 
 /// The different kinds of incomplete input that could have been expected
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IncompleteKind {
     /// Unclosed note
     UnclosedNote {
@@ -177,7 +177,7 @@ pub enum IncompleteKind {
 
 impl TokenError {
     /// Creates a new `TokenError`
-    fn new(kind: TokenErrorKind, span: InputSpan<'_>) -> Self {
+    fn new(kind: TokenErrorKind, span: &InputSpan<'_>) -> Self {
         Self {
             kind,
             offset: span.location_offset(),
@@ -185,76 +185,76 @@ impl TokenError {
     }
 
     /// Updates the error kind
-    const fn update_kind(self, kind: TokenErrorKind) -> Self {
+    fn update_kind(self, kind: TokenErrorKind) -> Self {
         Self { kind, ..self }
     }
 
     /// Creates a new `TokenError` instance for an expected end of line
-    pub const fn expected_end_of_line(error: Self) -> Self {
+    pub fn expected_end_of_line(error: Self) -> Self {
         error.update_kind(TokenErrorKind::Expect(ExpectKind::EndOfLine))
     }
 
     /// Creates a new `TokenError` instance for an expected identifier
-    pub const fn expected_identifier(error: Self) -> Self {
+    pub fn expected_identifier(error: Self) -> Self {
         error.update_kind(TokenErrorKind::Expect(ExpectKind::Identifier))
     }
 
     /// Creates a new `TokenError` instance for an expected keyword
-    pub const fn expected_keyword(keyword: ExpectKeyword) -> impl Fn(Self) -> Self {
+    pub fn expected_keyword(keyword: ExpectKeyword) -> impl Fn(Self) -> Self {
         move |error: Self| error.update_kind(TokenErrorKind::Expect(ExpectKind::Keyword(keyword)))
     }
 
     /// Creates a new `TokenError` instance for an expected label
-    pub const fn expected_label(error: Self) -> Self {
+    pub fn expected_label(error: Self) -> Self {
         error.update_kind(TokenErrorKind::Expect(ExpectKind::Label))
     }
 
     /// Creates a new `TokenError` instance for an expected note
-    pub const fn expected_note(error: Self) -> Self {
+    pub fn expected_note(error: Self) -> Self {
         error.update_kind(TokenErrorKind::Expect(ExpectKind::Note))
     }
 
     /// Creates a new `TokenError` instance for an expected note from a span
-    pub fn expected_note_from_span(span: InputSpan<'_>) -> Self {
+    pub fn expected_note_from_span(span: &InputSpan<'_>) -> Self {
         Self::new(TokenErrorKind::Expect(ExpectKind::Note), span)
     }
 
     /// Creates a new `TokenError` instance for an expected number
-    pub const fn expected_number(error: Self) -> Self {
+    pub fn expected_number(error: Self) -> Self {
         error.update_kind(TokenErrorKind::Expect(ExpectKind::Number))
     }
 
     /// Creates a new `TokenError` instance for an expected string
-    pub const fn expected_string(error: Self) -> Self {
+    pub fn expected_string(error: Self) -> Self {
         error.update_kind(TokenErrorKind::Expect(ExpectKind::String))
     }
 
     /// Creates a new `TokenError` instance for an expected symbol
-    pub const fn expected_symbol(symbol: ExpectSymbol) -> impl Fn(Self) -> Self {
+    pub fn expected_symbol(symbol: ExpectSymbol) -> impl Fn(Self) -> Self {
         move |error: Self| error.update_kind(TokenErrorKind::Expect(ExpectKind::Symbol(symbol)))
     }
 
     /// Creates a new `TokenError` instance for an expected unit identifier
-    pub const fn expected_unit_identifier(error: Self) -> Self {
+    pub fn expected_unit_identifier(error: Self) -> Self {
         error.update_kind(TokenErrorKind::Expect(ExpectKind::UnitIdentifier))
     }
 
     /// Creates a new `TokenError` instance for an expected unit one
-    pub const fn expected_unit_one(error: Self) -> Self {
+    pub fn expected_unit_one(error: Self) -> Self {
         error.update_kind(TokenErrorKind::Expect(ExpectKind::UnitOne))
     }
 
     /// Creates a new `TokenError` instance for an unclosed note
-    pub const fn unclosed_note(delimeter_span: Span) -> impl Fn(Self) -> Self {
+    pub fn unclosed_note(delimeter_span: Span) -> impl Fn(Self) -> Self {
         move |error: Self| {
             error.update_kind(TokenErrorKind::Incomplete(IncompleteKind::UnclosedNote {
-                delimeter_span,
+                delimeter_span: delimeter_span.clone(),
             }))
         }
     }
 
     /// Creates a new `TokenError` instance for an invalid closing delimiter
-    pub const fn invalid_closing_delimiter(error: Self) -> Self {
+    pub fn invalid_closing_delimiter(error: Self) -> Self {
         error.update_kind(TokenErrorKind::Incomplete(
             IncompleteKind::InvalidClosingDelimiter,
         ))
@@ -264,7 +264,7 @@ impl TokenError {
     pub fn unclosed_string(open_quote_span: Span) -> impl Fn(Self) -> Self {
         move |error: Self| {
             error.update_kind(TokenErrorKind::Incomplete(IncompleteKind::UnclosedString {
-                open_quote_span,
+                open_quote_span: open_quote_span.clone(),
             }))
         }
     }
@@ -273,7 +273,9 @@ impl TokenError {
     pub fn invalid_decimal_part(decimal_point_span: Span) -> impl Fn(Self) -> Self {
         move |error: Self| {
             error.update_kind(TokenErrorKind::Incomplete(
-                IncompleteKind::InvalidDecimalPart { decimal_point_span },
+                IncompleteKind::InvalidDecimalPart {
+                    decimal_point_span: decimal_point_span.clone(),
+                },
             ))
         }
     }
@@ -282,7 +284,9 @@ impl TokenError {
     pub fn invalid_exponent_part(e_span: Span) -> impl Fn(Self) -> Self {
         move |error: Self| {
             error.update_kind(TokenErrorKind::Incomplete(
-                IncompleteKind::InvalidExponentPart { e_span },
+                IncompleteKind::InvalidExponentPart {
+                    e_span: e_span.clone(),
+                },
             ))
         }
     }
