@@ -78,12 +78,9 @@ impl ErrorLocation {
         // (+ 1 because the line is 1-indexed)
         let line = source[..offset].chars().filter(|c| *c == '\n').count() + 1;
 
-        // The line is 1-indexed, so we need to subtract 1 to get the correct line
-        let line_source = source
-            .lines()
-            .nth(line - 1)
-            .expect("line must exist since it was derived from the string")
-            .to_string();
+        // The line is 1-indexed, so we need to subtract 1 to get the correct line.
+        // For empty source strings (e.g., synthetic spans), use an empty line source.
+        let line_source = source.lines().nth(line - 1).unwrap_or("").to_string();
 
         // Replace tabs with 4 spaces
         let line_source = line_source.replace('\t', "    ");
@@ -107,10 +104,15 @@ impl ErrorLocation {
     ///
     /// The source text and position are taken from the span itself, so the
     /// resulting location always corresponds to the file the span was parsed from.
+    ///
+    /// Zero-length spans (e.g., synthetic spans) are treated as having no length,
+    /// which defaults to highlighting a single character.
     #[must_use]
     pub fn from_span(span: &Span) -> Self {
-        let length = span.end().offset - span.start().offset;
-        Self::new(span.source(), span.start().offset, Some(length))
+        let length = span.end().offset.saturating_sub(span.start().offset);
+        // Pass None for zero-length spans to use the default single-character highlight
+        let length_opt = (length > 0).then_some(length);
+        Self::new(span.source(), span.start().offset, length_opt)
     }
 
     /// Returns the character offset from the beginning of the source file

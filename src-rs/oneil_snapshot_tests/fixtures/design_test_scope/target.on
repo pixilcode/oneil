@@ -1,0 +1,9 @@
+# Target model with two parameters
+Width: width = 10 :m
+Height: height = 5 :m
+
+# Derived parameter
+$ Ratio: ratio = width / height
+
+# Original test that passes (ratio = 10/5 = 2)
+test: ratio == 2

@@ -229,6 +229,17 @@ fn design_deep_apply_additions() {
 }
 
 #[test]
+fn design_test_scope() {
+    // A design file that only adds a test (no parameter overrides/additions).
+    // The test expression must be evaluated in the target model's scope, not
+    // the design file's scope, so that it can reference the target's parameters.
+    insta::assert_snapshot!(run_fixture_with_design(
+        "design_test_scope/target.on",
+        "design_test_scope/test_only.one",
+    ));
+}
+
+#[test]
 fn design_applies_design_model_level() {
     // A model (`parent`) applies `outer.one` to its `h` submodel. `outer.one`
     // itself applies `inner.one` to its `l` reference, adding `squared = base

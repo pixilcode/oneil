@@ -282,7 +282,7 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
         self.failed_ast_loads.contains(path)
     }
 
-    fn active_model(&self) -> &InstancedModel {
+    pub(crate) fn active_model(&self) -> &InstancedModel {
         let path = self.active_models.last().expect("no active model");
         self.model_results
             .get(path)
@@ -662,6 +662,20 @@ impl<'external, E: ExternalResolutionContext> ResolutionContext<'external, E> {
     #[must_use]
     pub(crate) fn get_design_export(&self, model_path: &ModelPath) -> Option<&Design> {
         self.model_results.get(model_path)?.design_export.as_ref()
+    }
+
+    /// Adds tests to the design export on the active model's resolution result.
+    ///
+    /// Tests from design files are added to the design export so they can be
+    /// applied to the target model at instance time. This must be called after
+    /// tests have been resolved.
+    pub(crate) fn add_tests_to_design_export(&mut self, tests: IndexMap<TestIndex, ir::Test>) {
+        let path = self.active_models.last().expect("no active model");
+        if let Some(result) = self.model_results.get_mut(path)
+            && let Some(design) = result.design_export.as_mut()
+        {
+            design.test_additions = tests;
+        }
     }
 }
 

@@ -10,7 +10,3 @@ error: unit mismatch: parameter `lng` declared as `m` but design applies value w
 
 error: submodel `m` has errors
   at fixtures/chain_apply_unit_mismatch/parent.on:14:10
----
-
-Model: fixtures/chain_apply_unit_mismatch/parent.on
-Tests: 0/0

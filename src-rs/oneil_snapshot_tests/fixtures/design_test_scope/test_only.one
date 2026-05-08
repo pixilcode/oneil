@@ -1,0 +1,11 @@
+# Design file that overrides a parameter and adds a test
+# The test verifies the NEW ratio after the override
+
+design target
+
+# Override width to 15 (was 10)
+width = 15 :m
+
+# Test that ratio reflects the override: 15/5 = 3
+# This test would FAIL if it saw the old width (10/5 = 2)
+test: ratio == 3

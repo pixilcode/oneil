@@ -5,9 +5,3 @@ expression: "run_fixture(\"compilation_cycle/a.on\")"
 error: compilation cycle detected: fixtures/compilation_cycle/a.on -> fixtures/compilation_cycle/b.on -> fixtures/compilation_cycle/a.on
   at fixtures/compilation_cycle/a.on:11:10
   help: break the cycle by removing one of the references along the chain
----
-
-Model: fixtures/compilation_cycle/a.on
-Tests: 0/0
-Parameters:
-  x = Number(Scalar(1.0))

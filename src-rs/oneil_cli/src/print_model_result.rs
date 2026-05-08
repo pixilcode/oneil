@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anstream::{eprintln, print, println};
 use indexmap::{IndexMap, IndexSet};
 use oneil_runtime::output::{
@@ -24,6 +26,9 @@ pub struct ModelPrintConfig {
     pub with_header: bool,
     pub with_test_report: bool,
     pub print_utils_config: PrintUtilsConfig,
+    /// Path to show in the "Run `oneil test <path>`" hint.
+    /// When running a design file, this should be the design path.
+    pub hint_path: Option<std::path::PathBuf>,
 }
 
 pub fn print_eval_result(
@@ -47,7 +52,13 @@ pub fn print_eval_result(
             println!("{divider_line}");
         } else {
             println!("{divider_line}");
-            print_test_failure_hint(model_result.path(), &test_info);
+            // Use hint_path if provided (e.g., when running a design file),
+            // otherwise fall back to the model path
+            let hint_path: &Path = model_config
+                .hint_path
+                .as_deref()
+                .unwrap_or(model_result.path().as_path());
+            print_test_failure_hint(hint_path, &test_info);
             println!("{divider_line}");
         }
     }
@@ -137,13 +148,13 @@ fn get_model_tests<'runtime>(
 }
 
 /// When the detailed test report is omitted, prints a short hint if any tests failed.
-fn print_test_failure_hint(model_path: &ModelPath, test_info: &TestInfo<'_>) {
+fn print_test_failure_hint(hint_path: &Path, test_info: &TestInfo<'_>) {
     let failed = test_info.test_count.saturating_sub(test_info.passed_count);
 
     let failed_message = format!(
         "{failed}/{} tests failed. Run `oneil test {}` to see results.",
         test_info.test_count,
-        model_path.as_path().display()
+        hint_path.display()
     );
     let styled_failed_message = stylesheet::TESTS_FAIL_COLOR.style(failed_message);
 

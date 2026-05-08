@@ -397,19 +397,29 @@ fn handle_eval_command(args: EvalArgs) {
         sig_figs: common.sig_figs,
     };
 
-    let model_print_config = ModelPrintConfig {
-        print_mode,
-        print_debug_info: display_partial_results, // for now, we use the same flag for both
-        variables,
-        recursive,
-        with_header,
-        with_test_report,
-        print_utils_config,
-    };
+    // Capture the original file path for the test failure hint.
+    // When running a design file directly (e.g., `oneil high_dv.one`),
+    // we want the hint to say "Run `oneil test high_dv.one`", not the target model.
+    let original_file_path = file.as_path().to_path_buf();
 
     if watch {
         let mut runtime = Runtime::new();
         let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
+
+        // Use original file path if it was a design file that got redirected
+        let hint_path = design.is_some().then(|| original_file_path.clone());
+
+        let model_print_config = ModelPrintConfig {
+            print_mode,
+            print_debug_info: display_partial_results,
+            variables,
+            recursive,
+            with_header,
+            with_test_report,
+            print_utils_config,
+            hint_path,
+        };
+
         watch_model(
             &file,
             design.as_ref(),
@@ -418,20 +428,35 @@ fn handle_eval_command(args: EvalArgs) {
             display_partial_results,
             &model_print_config,
         );
-    } else {
-        let mut runtime = Runtime::new();
-        let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
-
-        eval_and_print_model(
-            &file,
-            design.as_ref(),
-            &eval_expressions,
-            common.dev_show_internal_errors,
-            display_partial_results,
-            &model_print_config,
-            &mut runtime,
-        );
+        return;
     }
+
+    let mut runtime = Runtime::new();
+    let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
+
+    // Use original file path if it was a design file that got redirected
+    let hint_path = design.is_some().then_some(original_file_path);
+
+    let model_print_config = ModelPrintConfig {
+        print_mode,
+        print_debug_info: display_partial_results,
+        variables,
+        recursive,
+        with_header,
+        with_test_report,
+        print_utils_config,
+        hint_path,
+    };
+
+    eval_and_print_model(
+        &file,
+        design.as_ref(),
+        &eval_expressions,
+        common.dev_show_internal_errors,
+        display_partial_results,
+        &model_print_config,
+        &mut runtime,
+    );
 }
 
 fn eval_and_print_model(

@@ -49,7 +49,7 @@ use oneil_shared::{
     paths::{DesignPath, ModelPath},
     search::search,
     span::Span,
-    symbols::{ParameterName, ReferenceName},
+    symbols::{ParameterName, ReferenceName, TestIndex},
 };
 
 /// Returns the appropriate [`CompilationUnit`] for a submodel child path.
@@ -688,6 +688,23 @@ fn apply_design_at_host(
             contribution_errors,
             ctx,
         );
+
+        // Apply test additions from the design.
+        // Tests are evaluated in the target's scope (the host instance).
+        // We offset the test indices to avoid collisions with existing tests.
+        let test_offset = host.tests().len();
+        for (index, test) in &design.test_additions {
+            let new_index = TestIndex::new(test_offset + index.into_usize());
+            // Attach design provenance so validation errors are attributed to the design file.
+            let provenance = ir::DesignProvenance {
+                design_path: design_file.clone(),
+                assignment_span: test.span().clone(),
+                anchor_path: RelativePath::self_path(),
+                applied_via: applied_via.cloned(),
+            };
+            let test_with_provenance = test.clone().with_design_provenance(provenance);
+            host.add_test(new_index, test_with_provenance);
+        }
     }
 
     // Apply scoped contributions: each scoped path descends from the host.

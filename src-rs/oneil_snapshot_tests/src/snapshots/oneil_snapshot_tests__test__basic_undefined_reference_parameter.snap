@@ -4,10 +4,3 @@ expression: "run_fixture(\"ref_undefined_param/consumer.on\")"
 ---
 error: parameter `nosuchparam` is not defined on reference `planet` (model `fixtures/ref_undefined_param/../gravity_earth.on`)
   at fixtures/ref_undefined_param/consumer.on:13:12
----
-
-Model: fixtures/ref_undefined_param/consumer.on
-Tests: 0/0
-Parameters:
-  m = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(100.0)), unit: Unit { dimension_map: DimensionMap({Mass: 1.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "kg", exponent: 1.0 } } })
-  f = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(981.0)), unit: Unit { dimension_map: DimensionMap({Mass: 1.0, Distance: 1.0, Time: -2.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "N", exponent: 1.0 } } })

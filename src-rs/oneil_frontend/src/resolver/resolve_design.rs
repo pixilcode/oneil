@@ -28,6 +28,25 @@ use crate::{
     resolver::{resolve_parameter, resolve_trace_level::resolve_trace_level},
 };
 
+/// Adds resolved tests to the design export, if one exists.
+///
+/// This must be called AFTER tests have been resolved so that they can be
+/// collected from the active model and added to the design export. Tests
+/// from design files are applied to the design's target model, not evaluated
+/// in the design file's own scope.
+pub fn add_tests_to_design_export<E: ExternalResolutionContext>(
+    resolution_context: &mut ResolutionContext<'_, E>,
+) {
+    // Get tests from the active model (accessed via the active model's tests)
+    let tests = resolution_context.active_model().tests().clone();
+    if tests.is_empty() {
+        return;
+    }
+
+    // Add tests to the design export if one exists
+    resolution_context.add_tests_to_design_export(tests);
+}
+
 /// Loads sibling models referenced by `apply` declarations so their IR exists
 /// before resolution.
 pub fn preload_design_files<E: ExternalResolutionContext>(

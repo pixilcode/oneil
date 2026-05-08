@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use oneil_runtime::Runtime as OneilRuntime;
-use oneil_shared::paths::{ModelPath, SourcePath};
+use oneil_shared::paths::{DesignPath, ModelPath, SourcePath};
 use tower_lsp_server::ls_types::OneOf;
 use tower_lsp_server::{
     Client, LanguageServer, LspService, Server,
@@ -372,17 +372,30 @@ impl Backend {
             // The full evaluation path is reserved for explicit `oneil
             // eval`-style invocations; IDE feedback only needs static
             // diagnostics initially.
-            let (visited_paths, errors) = runtime.check_model(model_path, None);
+
+            // Redirect design files to their declared targets.
+            // When a .one file declares `design X`, validate X with the design applied
+            // so that tests in the design are evaluated in the correct scope.
+            let (check_path, design_path) =
+                resolve_design_file_redirect(model_path.clone(), &mut runtime);
+            let (visited_paths, errors) = runtime.check_model(&check_path, design_path.as_ref());
 
             // Mirror the prior `result.all_model_paths()` clear set:
             // every file the composition touched gets its existing
             // diagnostics cleared, so stale errors on now-clean files
             // don't linger after the user fixes them. Files that
             // re-acquire diagnostics get them re-published below.
-            let successful_models = visited_paths
+            //
+            // When a design file triggers the check, also include the design
+            // file path in the clear set so its diagnostics get refreshed.
+            let mut paths_to_clear: Vec<_> = visited_paths
                 .into_iter()
                 .map(ModelPath::into_path_buf)
-                .filter_map(Uri::from_file_path);
+                .collect();
+            if let Some(dp) = &design_path {
+                paths_to_clear.push(dp.as_path().to_path_buf());
+            }
+            let successful_models = paths_to_clear.into_iter().filter_map(Uri::from_file_path);
 
             let diagnostics = diagnostics_from_runtime_errors(&errors);
 
@@ -421,4 +434,22 @@ impl Backend {
                 .await;
         }
     }
+}
+
+/// Redirects a design file (.one) to its declared target model.
+///
+/// When the user opens a `.one` file that declares `design X`, this function
+/// returns `(X, Some(design_path))` so that validation runs on the target model
+/// with the design applied. This ensures tests in the design file are validated
+/// in the target's scope, not the design file's scope.
+fn resolve_design_file_redirect(
+    model_path: ModelPath,
+    runtime: &mut OneilRuntime,
+) -> (ModelPath, Option<DesignPath>) {
+    if let Ok(design_path) = DesignPath::try_from(model_path.clone())
+        && let Some(target) = runtime.get_design_target(&design_path)
+    {
+        return (target, Some(design_path));
+    }
+    (model_path, None)
 }

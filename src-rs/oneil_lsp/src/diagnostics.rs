@@ -9,25 +9,32 @@ use tower_lsp_server::ls_types::{
 
 /// Builds LSP diagnostics for the given URI from runtime errors.
 ///
-/// Only returns diagnostics for the specified path and filters out internal errors
-/// that are not useful to show in the editor.
+/// Groups diagnostics by their actual file path (from the diagnostic itself),
+/// not by the model they're associated with. This ensures that errors from
+/// design files are published to the design file's URI, not the target model.
 #[must_use]
 pub fn diagnostics_from_runtime_errors(errors: &RuntimeErrors) -> IndexMap<Uri, Vec<Diagnostic>> {
-    errors
-        .to_map()
-        .into_iter()
-        .filter_map(|(path, errors)| {
-            let uri = Uri::from_file_path(path)?;
-            Some((
-                uri,
-                errors
-                    .iter()
-                    .filter(|error| !error.is_internal_diagnostic())
-                    .map(oneil_diagnostic_to_lsp)
-                    .collect(),
-            ))
-        })
-        .collect()
+    let mut result: IndexMap<Uri, Vec<Diagnostic>> = IndexMap::new();
+
+    for (_model_path, model_errors) in errors.to_map() {
+        for error in model_errors {
+            if error.is_internal_diagnostic() {
+                continue;
+            }
+
+            // Use the diagnostic's own path, not the model path
+            let Some(uri) = Uri::from_file_path(error.path()) else {
+                continue;
+            };
+
+            result
+                .entry(uri)
+                .or_default()
+                .push(oneil_diagnostic_to_lsp(&error));
+        }
+    }
+
+    result
 }
 
 /// Converts a single [`OneilDiagnostic`] to an LSP [`Diagnostic`], if it has a valid location.

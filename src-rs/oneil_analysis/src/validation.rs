@@ -162,13 +162,18 @@ fn validate_instance(
     }
     for (test_index, test) in instance.tests() {
         let location = HostLocation::Test(*test_index);
+        // Use design provenance to attribute errors to the design file
+        // where the test was defined (if it came from a design).
+        let provenance = test.design_provenance();
+        let design_info =
+            provenance.map(|prov| (prov.design_path.clone(), prov.assignment_span.clone()));
         validate_expr(
             test.expr(),
             instance,
             instance,
             host_path,
             &location,
-            None,
+            design_info.as_ref(),
             pool,
             models_with_resolution_errors,
             errors,

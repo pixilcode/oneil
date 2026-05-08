@@ -229,20 +229,30 @@ impl Runtime {
         let mut graph = self.compose_root_graph(path, &runtime_designs);
         validate_instance_graph(&mut graph, &RuntimeBuiltinLookup { runtime: self });
 
-        // Evaluate the model and its dependencies
-        let eval_result = eval::eval_model_from_graph(&graph, self);
+        // Skip evaluation if there are validation errors. Validation errors
+        // indicate broken IR (e.g., undefined references) that would cause
+        // panics during evaluation. The errors are already collected on the
+        // graph and will be reported to the user.
+        let has_blocking_errors = !graph.validation_errors.is_empty()
+            || !graph.cycle_errors.is_empty()
+            || !graph.contribution_errors.is_empty();
 
-        for (instance_key, maybe_partial) in eval_result {
-            match maybe_partial.into_result() {
-                Ok(model) => {
-                    self.eval_cache
-                        .insert(instance_key.clone(), LoadResult::success(model));
-                }
-                Err(partial) => {
-                    self.eval_cache.insert(
-                        instance_key,
-                        LoadResult::partial(partial.partial_result, partial.error_collection),
-                    );
+        if !has_blocking_errors {
+            // Evaluate the model and its dependencies
+            let eval_result = eval::eval_model_from_graph(&graph, self);
+
+            for (instance_key, maybe_partial) in eval_result {
+                match maybe_partial.into_result() {
+                    Ok(model) => {
+                        self.eval_cache
+                            .insert(instance_key.clone(), LoadResult::success(model));
+                    }
+                    Err(partial) => {
+                        self.eval_cache.insert(
+                            instance_key,
+                            LoadResult::partial(partial.partial_result, partial.error_collection),
+                        );
+                    }
                 }
             }
         }

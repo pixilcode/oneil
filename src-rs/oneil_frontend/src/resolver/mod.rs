@@ -114,6 +114,9 @@ where
     // resolve tests
     resolve_test::resolve_tests(tests, resolution_context);
 
+    // add tests to design export (if this is a design file with tests)
+    resolve_design::add_tests_to_design_export(resolution_context);
+
     // pop the model from the active models stack
     resolution_context.pop_active_model(model_path);
 }

@@ -2,7 +2,7 @@
 
 use oneil_shared::{labels::SectionLabel, span::Span};
 
-use crate::{Dependencies, debug_info::TraceLevel, expr::Expr};
+use crate::{Dependencies, DesignProvenance, debug_info::TraceLevel, expr::Expr};
 
 /// A test within a model.
 #[derive(Debug, Clone, PartialEq)]
@@ -12,10 +12,17 @@ pub struct Test {
     expr: Expr,
     dependencies: Dependencies,
     section_label: Option<SectionLabel>,
+    /// Set when this test was added by a design file.
+    /// `None` for tests defined in the model file itself.
+    design_provenance: Option<DesignProvenance>,
 }
 
 impl Test {
     /// Creates a new test with the specified properties.
+    ///
+    /// `design_provenance` starts as `None`; use
+    /// [`with_design_provenance`](Self::with_design_provenance) to attach
+    /// provenance when a design adds this test to a target model.
     #[must_use]
     pub const fn new(
         span: Span,
@@ -30,7 +37,17 @@ impl Test {
             expr,
             dependencies,
             section_label,
+            design_provenance: None,
         }
+    }
+
+    /// Returns this test with design provenance attached.
+    ///
+    /// Called when a design file adds a test to a target model.
+    #[must_use]
+    pub fn with_design_provenance(mut self, provenance: DesignProvenance) -> Self {
+        self.design_provenance = Some(provenance);
+        self
     }
 
     /// Returns the span of the entire test definition.
@@ -66,5 +83,13 @@ impl Test {
     #[must_use]
     pub const fn section_label(&self) -> Option<&SectionLabel> {
         self.section_label.as_ref()
+    }
+
+    /// Returns the design provenance for this test, if it was added by a design.
+    ///
+    /// `None` for tests defined in the model file itself.
+    #[must_use]
+    pub const fn design_provenance(&self) -> Option<&DesignProvenance> {
+        self.design_provenance.as_ref()
     }
 }
