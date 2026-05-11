@@ -42,6 +42,14 @@ fn basic_syntax_error() {
 }
 
 #[test]
+fn submodel_syntax_error() {
+    // When a submodel has a syntax error, the parent model should report a
+    // "submodel X has errors" diagnostic at the import site and the submodel's
+    // own parse errors should also be collected.
+    insta::assert_snapshot!(run_fixture("submodel_syntax_error/parent.on"));
+}
+
+#[test]
 fn basic_failing_test() {
     insta::assert_snapshot!(run_fixture("basic/failing_test.on"));
 }

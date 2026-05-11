@@ -1,0 +1,5 @@
+# Parent model importing a child with a syntax error
+submodel child as c
+
+Scale: scale = 2.0
+Result: r = scale * m.c :kg

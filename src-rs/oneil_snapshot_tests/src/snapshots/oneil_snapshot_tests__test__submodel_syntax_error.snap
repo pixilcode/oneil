@@ -1,0 +1,17 @@
+---
+source: src-rs/oneil_snapshot_tests/src/test.rs
+assertion_line: 49
+expression: "run_fixture(\"submodel_syntax_error/parent.on\")"
+---
+error: expected parameter or test
+  at fixtures/submodel_syntax_error/child.on:3:18
+
+error: submodel `c` has errors
+  at fixtures/submodel_syntax_error/parent.on:2:10
+---
+
+Model: fixtures/submodel_syntax_error/parent.on
+Tests: 0/0
+Parameters:
+  scale = Number(Scalar(2.0))
+  r = MeasuredNumber(MeasuredNumber { normalized_value: NormalizedNumber(Scalar(20.0)), unit: Unit { dimension_map: DimensionMap({Mass: 1.0}), magnitude: 1.0, is_db: false, display_unit: Unit { name: "kg", exponent: 1.0 } } })

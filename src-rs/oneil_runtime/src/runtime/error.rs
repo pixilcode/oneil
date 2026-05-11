@@ -20,7 +20,7 @@ use oneil_shared::{
     symbols::{ParameterName, ReferenceName, TestIndex},
 };
 
-use crate::cache::SourceCache;
+use crate::cache::{AstCache, SourceCache};
 
 use super::Runtime;
 #[cfg(feature = "python")]
@@ -220,14 +220,18 @@ impl Runtime {
             // Emit a generic "submodel/reference has errors" notification at
             // the import site in the root model so the user sees a squiggle
             // there in the language server and knows to navigate to the child
-            // file for the detailed diagnostics.
+            // file for the detailed diagnostics. Also adds any submodel /
+            // reference paths that have parse errors to `models_with_errors`
+            // so the recursion below collects their diagnostics.
             if model_path == graph.root.path() {
                 emit_submodel_import_notifications(
                     graph,
                     &graph.root,
                     &path_buf,
                     source,
+                    &self.ast_cache,
                     &mut design_resolution_errors,
+                    &mut models_with_errors,
                 );
             }
         }
@@ -629,11 +633,17 @@ fn collect_graph_contribution_errors(
 /// diagnostic at the import declaration site for each direct submodel or reference of
 /// `model` that has errors **independently** — i.e. before the parent incorporates it.
 ///
-/// "Independent errors" means the model appears as `hop.applied_in` in at least one
-/// `ContributionDiagnostic`: its own `apply X to Y` statement failed.  This deliberately
-/// excludes cases where a child model merely appears as a *target* of a validation error
-/// emitted by the parent (e.g. `UndefinedReferenceParameter` on a parameter that does not
-/// exist on an otherwise-healthy reference model).
+/// "Independent errors" means either:
+/// - The model appears as `hop.applied_in` in at least one `ContributionDiagnostic` (its
+///   own `apply X to Y` statement failed), or
+/// - The model's AST entry in `ast_cache` is [`LoadResult::Partial`] (it has syntax errors).
+///
+/// This deliberately excludes cases where a child model merely appears as a *target* of a
+/// validation error emitted by the parent (e.g. `UndefinedReferenceParameter` on a parameter
+/// that does not exist on an otherwise-healthy reference model).
+///
+/// When a submodel or reference has parse errors, its path is also added to
+/// `models_with_errors` so the recursive `get_model_diagnostics` pass collects those errors.
 ///
 /// Only called for the root of a composed graph (the model directly queried by the user),
 /// so the import spans always belong to the current `source`.
@@ -642,7 +652,9 @@ fn emit_submodel_import_notifications(
     model: &InstancedModel,
     path_buf: &std::path::Path,
     source: &str,
+    ast_cache: &AstCache,
     out: &mut Vec<OneilDiagnostic>,
+    models_with_errors: &mut IndexSet<EvalInstanceKey>,
 ) {
     // Build the set of model paths that independently own at least one failing
     // apply statement — either a contribution-time error (unit mismatch, missing
@@ -686,7 +698,12 @@ fn emit_submodel_import_notifications(
     }
 
     for (ref_name, submodel) in model.submodels() {
-        if independently_errored.contains(submodel.instance.path()) {
+        let path = submodel.instance.path();
+        let has_parse_errors = ast_cache
+            .get_entry(path)
+            .is_some_and(LoadResult::is_partial);
+
+        if independently_errored.contains(path) || has_parse_errors {
             let message = format!("submodel `{}` has errors", ref_name.as_str());
             let synthetic = DesignResolutionError::new(message, submodel.name_span.clone());
             out.push(OneilDiagnostic::from_error_with_source(
@@ -695,9 +712,19 @@ fn emit_submodel_import_notifications(
                 source,
             ));
         }
+
+        // Ensure parse-only errors are collected by the recursion pass.
+        if has_parse_errors {
+            models_with_errors.insert(EvalInstanceKey::root(path.clone()));
+        }
     }
     for (ref_name, ref_import) in model.references() {
-        if independently_errored.contains(&ref_import.path) {
+        let path = &ref_import.path;
+        let has_parse_errors = ast_cache
+            .get_entry(path)
+            .is_some_and(LoadResult::is_partial);
+
+        if independently_errored.contains(path) || has_parse_errors {
             let message = format!("reference `{}` has errors", ref_name.as_str());
             let synthetic = DesignResolutionError::new(message, ref_import.name_span.clone());
             out.push(OneilDiagnostic::from_error_with_source(
@@ -705,6 +732,11 @@ fn emit_submodel_import_notifications(
                 path_buf.to_path_buf(),
                 source,
             ));
+        }
+
+        // Ensure parse-only errors are collected by the recursion pass.
+        if has_parse_errors {
+            models_with_errors.insert(EvalInstanceKey::root(path.clone()));
         }
     }
 }
