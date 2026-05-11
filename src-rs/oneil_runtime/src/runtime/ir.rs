@@ -123,14 +123,32 @@ impl Runtime {
     /// Returns the target [`ModelPath`] declared by a `design <target>` line in
     /// `design_path`, or `None` if the file has no such declaration or could
     /// not be parsed.
-    ///
-    /// Useful for transparently running a `.one` design file as if the user
-    /// had passed the target model with the design applied.
-    pub fn get_design_target(&mut self, design_path: &DesignPath) -> Option<ModelPath> {
+    fn get_design_target(&mut self, design_path: &DesignPath) -> Option<ModelPath> {
         let model_path = design_path.to_model_path();
         let ast = self.load_ast_internal(&model_path);
         let ast = ast.value()?;
         collect_design_target_path(&model_path, ast)
+    }
+
+    /// Resolves a path that may be a design file to its target model and design.
+    ///
+    /// If `path` is a `.one` design file that declares `design <target>`, returns
+    /// `(target_model_path, Some(design_path))` so the design will be applied.
+    /// Otherwise returns `(path, None)` unchanged.
+    ///
+    /// This is the single source of truth for design file detection, used by
+    /// all entry points (`eval_model`, `check_model`, etc.) to ensure consistent
+    /// handling of design files across CLI, LSP, and other consumers.
+    pub(super) fn resolve_design_redirect(
+        &mut self,
+        path: ModelPath,
+    ) -> (ModelPath, Option<DesignPath>) {
+        if let Ok(design_path) = DesignPath::try_from(path.clone())
+            && let Some(target) = self.get_design_target(&design_path)
+        {
+            return (target, Some(design_path));
+        }
+        (path, None)
     }
 
     /// Resolves an expression as if it were in the context of the given model.

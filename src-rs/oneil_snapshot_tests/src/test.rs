@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use crate::util::{run_model_and_format, run_model_and_format_with_design};
+use crate::util::run_model_and_format;
 
 fn fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -20,18 +20,11 @@ fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Evaluates a single fixture model and returns formatted output for snapshotting.
+/// Evaluates a single fixture model or design file and returns formatted output
+/// for snapshotting. If a design file is provided, the runtime automatically
+/// detects it and applies it to the declared target model.
 fn run_fixture(name: &str) -> String {
     run_model_and_format(&fixture_path(name), Some(manifest_dir().as_path()))
-}
-
-/// Evaluates a fixture model with a CLI design applied and returns formatted output.
-fn run_fixture_with_design(model: &str, design: &str) -> String {
-    run_model_and_format_with_design(
-        &fixture_path(model),
-        Some(&fixture_path(design)),
-        Some(manifest_dir().as_path()),
-    )
 }
 
 // =============================================================================
@@ -105,10 +98,10 @@ fn overlay_wrong_target_for_ref() {
 #[test]
 fn overlay_nested_parameter() {
     // `param.instance = value` syntax overrides a parameter on a nested
-    // reference instance.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "design_overlay/nested_param/nested_param_parent.on",
-        "design_overlay/nested_param/nested_param_design.one",
+    // reference instance. Running the design file automatically applies it
+    // to its declared target model.
+    insta::assert_snapshot!(run_fixture(
+        "design_overlay/nested_param/nested_param_design.one"
     ));
 }
 
@@ -118,9 +111,8 @@ fn overlay_scoped_reference_override() {
     // shared reference instance (not just a submodel hop). This verifies
     // that scoped overrides work across reference boundaries, not only
     // submodel ones.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "design_overlay/scoped_ref_override/budget.on",
-        "design_overlay/scoped_ref_override/far_distance.one",
+    insta::assert_snapshot!(run_fixture(
+        "design_overlay/scoped_ref_override/far_distance.one"
     ));
 }
 
@@ -136,10 +128,7 @@ fn extract_overlay_propagation() {
     // shared instance so every path that reaches `inner` — direct
     // (`value.inner`), indirect via mid (`value.mid.inner`), and mid's own
     // computed result — all observe the overridden value.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "with_overlay_propagation/parent.on",
-        "with_overlay_propagation/overlay.one",
-    ));
+    insta::assert_snapshot!(run_fixture("with_overlay_propagation/overlay.one"));
 }
 
 #[test]
@@ -149,10 +138,7 @@ fn extract_with_partial_overlay() {
     // gravity-dependent parameters (`result`, `g_ref`) while constants
     // defined inside the intermediate (`thrust_out`, `mass_out`) stay fixed,
     // confirming that the overlay reaches only what it targets.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "with_clause/with_extract_through_mid.on",
-        "with_clause/mars_override.one",
-    ));
+    insta::assert_snapshot!(run_fixture("with_clause/mars_override.one"));
 }
 
 // =============================================================================
@@ -164,10 +150,7 @@ fn design_local_augmentation() {
     // A design file adds new parameters that don't exist on the target model
     // and overrides an existing one.  New parameters can cross-reference each
     // other and the target's own parameters.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "design_local/target.on",
-        "design_local/augment.one",
-    ));
+    insta::assert_snapshot!(run_fixture("design_local/augment.one"));
 }
 
 #[test]
@@ -175,10 +158,7 @@ fn design_local_augmentation_flagged() {
     // A design file adds new parameters with `$` (output) and `*` (trace)
     // flags.  The flags should be accepted by the parser and threaded through
     // the resolver without affecting the evaluated values.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "design_local/target.on",
-        "design_local/augment_flagged.one",
-    ));
+    insta::assert_snapshot!(run_fixture("design_local/augment_flagged.one"));
 }
 
 #[test]
@@ -186,10 +166,7 @@ fn design_local_augmentation_labeled() {
     // A design file uses the full `Label: id = value` syntax for both overrides
     // and new parameter additions.  Labels are preserved through the resolver and
     // the evaluated values must match the shorthand-equivalent.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "design_local/target.on",
-        "design_local/augment_labeled.one",
-    ));
+    insta::assert_snapshot!(run_fixture("design_local/augment_labeled.one"));
 }
 
 #[test]
@@ -202,13 +179,10 @@ fn design_augmented_reference_params() {
 
 #[test]
 fn design_augmented_override() {
-    // A CLI design overrides a parameter that was itself added by an earlier
+    // A design overrides a parameter that was itself added by an earlier
     // inline `apply`.  Scoped override syntax (`doubled.c = 100`) must reach
     // the design-augmented parameter on the child instance.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "augmented_refs/parent.on",
-        "augmented_refs/override_augmented.one",
-    ));
+    insta::assert_snapshot!(run_fixture("augmented_refs/override_augmented.one"));
 }
 
 #[test]
@@ -233,10 +207,7 @@ fn design_test_scope() {
     // A design file that only adds a test (no parameter overrides/additions).
     // The test expression must be evaluated in the target model's scope, not
     // the design file's scope, so that it can reference the target's parameters.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "design_test_scope/target.on",
-        "design_test_scope/test_only.one",
-    ));
+    insta::assert_snapshot!(run_fixture("design_test_scope/test_only.one"));
 }
 
 #[test]
@@ -252,13 +223,9 @@ fn design_applies_design_model_level() {
 #[test]
 fn design_applies_design_runtime() {
     // Same scenario as `design_applies_design_model_level` but the outer
-    // design is applied at the CLI level (runtime design) rather than
-    // declared in the model file. Tests the `apply_designs` →
-    // `apply_design_recursive` path.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "design_applies_design/host.on",
-        "design_applies_design/outer.one",
-    ));
+    // design is run directly rather than declared in a model file. Tests
+    // the `apply_designs` → `apply_design_recursive` path.
+    insta::assert_snapshot!(run_fixture("design_applies_design/outer.one"));
 }
 
 #[test]
@@ -290,10 +257,7 @@ fn overlay_anchor_scope() {
     // scope (the anchor), not in the ref's instance scope.  A parameter that
     // lives on the design's target and not on the child ref must still resolve
     // correctly in the override's RHS.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "overlay_anchor_scope/parent.on",
-        "overlay_anchor_scope/anchor_scope.one",
-    ));
+    insta::assert_snapshot!(run_fixture("overlay_anchor_scope/anchor_scope.one"));
 }
 
 #[test]
@@ -303,9 +267,8 @@ fn overlay_anchor_scope_transitive() {
     // dependency on demand when the overlay scope is set up — the
     // anchor-scope push must not assume the parent's parameter is already
     // evaluated.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "overlay_anchor_scope/parent_transitive.on",
-        "overlay_anchor_scope/anchor_scope_transitive.one",
+    insta::assert_snapshot!(run_fixture(
+        "overlay_anchor_scope/anchor_scope_transitive.one"
     ));
 }
 
@@ -327,10 +290,7 @@ fn overlay_introduces_cycle() {
     // pass in `oneil_analysis::validate_instance_graph` catches it and emits one
     // `ParameterCycle` per member; the eval-time `InProgress` backstop is
     // suppressed so the user sees one diagnostic per member, not duplicates.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "cycle_via_overlay/parent.on",
-        "cycle_via_overlay/cycle.one",
-    ));
+    insta::assert_snapshot!(run_fixture("cycle_via_overlay/cycle.one"));
 }
 
 #[test]
@@ -351,20 +311,14 @@ fn overlay_unit_mismatch() {
     // A unit-incompatible override is rejected by the apply pass.  The host
     // parameter retains its pre-overlay value; a single diagnostic is emitted
     // against the design file's assignment span, not the host model.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "unit_mismatch_overlay/parent.on",
-        "unit_mismatch_overlay/mismatch.one",
-    ));
+    insta::assert_snapshot!(run_fixture("unit_mismatch_overlay/mismatch.one"));
 }
 
 #[test]
 fn overlay_target_missing() {
     // An override targeting a parameter that doesn't exist on the host emits a
     // single diagnostic against the design file with a best-match suggestion.
-    insta::assert_snapshot!(run_fixture_with_design(
-        "overlay_target_missing/parent.on",
-        "overlay_target_missing/typo.one",
-    ));
+    insta::assert_snapshot!(run_fixture("overlay_target_missing/typo.one"));
 }
 
 #[test]

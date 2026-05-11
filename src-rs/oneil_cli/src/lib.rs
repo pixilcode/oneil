@@ -22,7 +22,7 @@ use oneil_runtime::{
 #[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
 use oneil_shared::{
-    paths::{DesignPath, ModelPath, SourcePath},
+    paths::{ModelPath, SourcePath},
     symbols::ParameterName,
 };
 
@@ -345,7 +345,7 @@ fn handle_print_model_result(
     };
 
     let mut runtime = Runtime::new();
-    let (model_opt, errors) = runtime.eval_model(file, None);
+    let (model_opt, errors) = runtime.eval_model(file);
 
     let print_result = print_error::print_all(errors.to_vec(), show_internal_errors);
     if print_result.saw_error_diagnostic() && !display_partial_results {
@@ -357,29 +357,9 @@ fn handle_print_model_result(
     }
 }
 
-/// If `file` is a `.one` design file and no explicit `design` was provided,
-/// resolve the design's declared target and return `(target_model, Some(design))`.
-/// Otherwise returns `(file, design)` unchanged.
-fn resolve_design_file_redirect(
-    file: ModelPath,
-    design: Option<DesignPath>,
-    runtime: &mut Runtime,
-) -> (ModelPath, Option<DesignPath>) {
-    if design.is_some() {
-        return (file, design);
-    }
-    if let Ok(design_path) = DesignPath::try_from(file.clone())
-        && let Some(target) = runtime.get_design_target(&design_path)
-    {
-        return (target, Some(design_path));
-    }
-    (file, design)
-}
-
 fn handle_eval_command(args: EvalArgs) {
     let EvalArgs {
         file,
-        design,
         params: variables,
         print: print_mode,
         debug: display_partial_results,
@@ -397,45 +377,10 @@ fn handle_eval_command(args: EvalArgs) {
         sig_figs: common.sig_figs,
     };
 
-    // Capture the original file path for the test failure hint.
     // When running a design file directly (e.g., `oneil high_dv.one`),
     // we want the hint to say "Run `oneil test high_dv.one`", not the target model.
-    let original_file_path = file.as_path().to_path_buf();
-
-    if watch {
-        let mut runtime = Runtime::new();
-        let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
-
-        // Use original file path if it was a design file that got redirected
-        let hint_path = design.is_some().then(|| original_file_path.clone());
-
-        let model_print_config = ModelPrintConfig {
-            print_mode,
-            print_debug_info: display_partial_results,
-            variables,
-            recursive,
-            with_header,
-            with_test_report,
-            print_utils_config,
-            hint_path,
-        };
-
-        watch_model(
-            &file,
-            design.as_ref(),
-            &eval_expressions,
-            common.dev_show_internal_errors,
-            display_partial_results,
-            &model_print_config,
-        );
-        return;
-    }
-
-    let mut runtime = Runtime::new();
-    let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
-
-    // Use original file path if it was a design file that got redirected
-    let hint_path = design.is_some().then_some(original_file_path);
+    // Check if the file is a design file based on extension.
+    let hint_path = file.is_design_file().then(|| file.as_path().to_path_buf());
 
     let model_print_config = ModelPrintConfig {
         print_mode,
@@ -448,9 +393,20 @@ fn handle_eval_command(args: EvalArgs) {
         hint_path,
     };
 
+    if watch {
+        watch_model(
+            &file,
+            &eval_expressions,
+            common.dev_show_internal_errors,
+            display_partial_results,
+            &model_print_config,
+        );
+        return;
+    }
+
+    let mut runtime = Runtime::new();
     eval_and_print_model(
         &file,
-        design.as_ref(),
         &eval_expressions,
         common.dev_show_internal_errors,
         display_partial_results,
@@ -461,7 +417,6 @@ fn handle_eval_command(args: EvalArgs) {
 
 fn eval_and_print_model(
     file: &ModelPath,
-    design: Option<&DesignPath>,
     eval_expressions: &[String],
     show_internal_errors: bool,
     display_partial_results: bool,
@@ -469,7 +424,7 @@ fn eval_and_print_model(
     runtime: &mut Runtime,
 ) {
     let (result, model_errors, expr_errors) =
-        runtime.eval_model_and_expressions(file, design, eval_expressions);
+        runtime.eval_model_and_expressions(file, eval_expressions);
 
     let model_print_result = print_error::print_all(model_errors.to_vec(), show_internal_errors);
     if model_print_result.saw_error_diagnostic() && !display_partial_results {
@@ -488,7 +443,6 @@ fn eval_and_print_model(
 
 fn watch_model(
     file: &ModelPath,
-    design: Option<&DesignPath>,
     eval_expressions: &[String],
     show_internal_errors: bool,
     display_partial_results: bool,
@@ -516,7 +470,6 @@ fn watch_model(
 
     eval_and_print_model(
         file,
-        design,
         eval_expressions,
         show_internal_errors,
         display_partial_results,
@@ -538,7 +491,6 @@ fn watch_model(
 
                     eval_and_print_model(
                         file,
-                        design,
                         eval_expressions,
                         show_internal_errors,
                         display_partial_results,
@@ -633,7 +585,6 @@ fn clear_screen() {
 fn handle_test_command(args: TestArgs) {
     let TestArgs {
         file,
-        design,
         recursive,
         debug: display_partial_results,
         with_header,
@@ -651,8 +602,7 @@ fn handle_test_command(args: TestArgs) {
     };
 
     let mut runtime = Runtime::new();
-    let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
-    let (model_opt, errors) = runtime.eval_model(&file, design.as_ref());
+    let (model_opt, errors) = runtime.eval_model(&file);
 
     let print_result = print_error::print_all(errors.to_vec(), common.dev_show_internal_errors);
     if print_result.saw_error_diagnostic() && !display_partial_results {
@@ -692,7 +642,6 @@ fn handle_tree_command(args: TreeArgs) {
     };
 
     let mut runtime = Runtime::new();
-    let (file, _design) = resolve_design_file_redirect(file, None, &mut runtime);
 
     let (trees, errors) = if up {
         let mut trees = Vec::new();
@@ -842,15 +791,10 @@ fn handle_builtins_command(command: BuiltinsCommand) {
     reason = "scriptable diagnostic surface for CI; exit 1 on any diagnostic so wrappers can short-circuit without parsing stderr"
 )]
 fn handle_check_command(args: CheckArgs) {
-    let CheckArgs {
-        file,
-        design,
-        common,
-    } = args;
+    let CheckArgs { file, common } = args;
 
     let mut runtime = Runtime::new();
-    let (file, design) = resolve_design_file_redirect(file, design, &mut runtime);
-    let (_visited_paths, errors) = runtime.check_model(&file, design.as_ref());
+    let (_visited_paths, errors) = runtime.check_model(&file);
 
     for error in errors.to_vec() {
         print_error::print(error, common.dev_show_internal_errors);

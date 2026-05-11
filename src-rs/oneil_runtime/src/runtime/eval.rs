@@ -34,35 +34,36 @@ type EvalModelAndExpressionsResult<'runtime, 'expr> = (
 );
 
 impl Runtime {
-    /// Evaluates a model with an optional design file applied.
+    /// Evaluates a model or design file.
     ///
-    /// When a design path is provided, the design from that file is applied
-    /// to the model being evaluated. The design file must target the model being
-    /// evaluated (i.e., contain `design <model_name>`).
+    /// If `path` is a `.one` design file that declares `design <target>`, the
+    /// target model is evaluated with the design applied. Otherwise the model
+    /// at `path` is evaluated directly.
     ///
     /// # Errors
     ///
-    /// Returns [`RuntimeErrors`]  if the model or design file could not be evaluated.
+    /// Returns [`RuntimeErrors`] if the model or design file could not be evaluated.
     pub fn eval_model(
         &mut self,
         path: &ModelPath,
-        design_path: Option<&DesignPath>,
     ) -> (Option<output::reference::ModelReference<'_>>, RuntimeErrors) {
+        let (eval_path, design_path) = self.resolve_design_redirect(path.clone());
+
         // Evaluate the model (with optional design) - populates caches
-        self.eval_model_internal(path, design_path);
+        self.eval_model_internal(&eval_path, design_path.as_ref());
 
         // Look up the model reference from cache
         let model_opt = self
             .eval_cache
-            .get_entry(path)
+            .get_entry(&eval_path)
             .and_then(LoadResult::value)
             .map(|model| output::reference::ModelReference::new(model, &self.eval_cache));
 
         let include_indirect_errors = true;
-        let mut errors = self.get_model_diagnostics(path, include_indirect_errors);
+        let mut errors = self.get_model_diagnostics(&eval_path, include_indirect_errors);
 
         // Also include design file errors if present
-        if let Some(design_path) = design_path {
+        if let Some(design_path) = &design_path {
             let design_errors =
                 self.get_model_diagnostics(&design_path.to_model_path(), include_indirect_errors);
             errors.extend(design_errors);
@@ -71,8 +72,12 @@ impl Runtime {
         (model_opt, errors)
     }
 
-    /// Evaluates a model (with optional design) and a list of expressions in the context of
-    /// the given model and returns the result.
+    /// Evaluates a model or design file and a list of expressions in the context of
+    /// the model.
+    ///
+    /// If `path` is a `.one` design file that declares `design <target>`, the
+    /// target model is evaluated with the design applied. Otherwise the model
+    /// at `path` is evaluated directly.
     ///
     /// # Errors
     ///
@@ -81,29 +86,30 @@ impl Runtime {
     pub fn eval_model_and_expressions<'runtime, 'expr>(
         &'runtime mut self,
         path: &ModelPath,
-        design_path: Option<&DesignPath>,
         expressions: &'expr [String],
     ) -> EvalModelAndExpressionsResult<'runtime, 'expr> {
+        let (eval_path, design_path) = self.resolve_design_redirect(path.clone());
+
         // Evaluate the model (with optional design) - populates caches
-        self.eval_model_internal(path, design_path);
+        self.eval_model_internal(&eval_path, design_path.as_ref());
 
         // Evaluate the expressions
-        let (expr_results, expr_errors) = self.eval_expressions_internal(expressions, path);
+        let (expr_results, expr_errors) = self.eval_expressions_internal(expressions, &eval_path);
 
         // Look up the model reference from cache
         let model_opt = self
             .eval_cache
-            .get_entry(path)
+            .get_entry(&eval_path)
             .and_then(LoadResult::value)
             .map(|model| output::reference::ModelReference::new(model, &self.eval_cache));
 
         let result = model_opt.map(|model| (model, expr_results));
 
         let include_indirect_errors = true;
-        let mut model_errors = self.get_model_diagnostics(path, include_indirect_errors);
+        let mut model_errors = self.get_model_diagnostics(&eval_path, include_indirect_errors);
 
         // Also include design file errors if present
-        if let Some(design_path) = design_path {
+        if let Some(design_path) = &design_path {
             let design_errors =
                 self.get_model_diagnostics(&design_path.to_model_path(), include_indirect_errors);
             model_errors.extend(design_errors);
@@ -112,17 +118,20 @@ impl Runtime {
         (result, model_errors, expr_errors)
     }
 
-    /// Checks a model without evaluating its parameters.
+    /// Checks a model or design file without evaluating its parameters.
+    ///
+    /// If `path` is a `.one` design file that declares `design <target>`, the
+    /// target model is checked with the design applied. Otherwise the model
+    /// at `path` is checked directly.
     ///
     /// This is the cheap diagnostic-only entry point used by IDE / CLI
     /// surfaces that want to surface parse, IR, composition, and
     /// post-build validation errors without paying for the lazy eval
     /// pass (or the panicking failure modes it has on broken IR).
     ///
-    /// Goes through the same compose path as
-    /// [`Self::eval_model`] (loads IR, applies the optional runtime
-    /// design at the root, splices through the per-unit graph cache,
-    /// runs `validate_instance_graph`), stashes the composed graph on
+    /// Goes through the same compose path as [`Self::eval_model`] (loads IR,
+    /// applies any design at the root, splices through the per-unit graph
+    /// cache, runs `validate_instance_graph`), stashes the composed graph on
     /// `self` so [`Self::get_model_diagnostics`] can pull per-instance
     /// diagnostics off it, and returns:
     ///
@@ -132,19 +141,17 @@ impl Runtime {
     ///   `result.all_model_paths()`).
     /// - The aggregated `RuntimeErrors` for the queried path,
     ///   including indirect / chain-walked errors and (if a design
-    ///   path was provided) the design file's own errors.
+    ///   file was involved) the design file's own errors.
     ///
     /// Eval-time errors (numeric overflow, piecewise miss, runtime
     /// cycles via Python) are *not* surfaced here — those still
     /// require a full [`Self::eval_model`] run.
-    pub fn check_model(
-        &mut self,
-        path: &ModelPath,
-        design_path: Option<&DesignPath>,
-    ) -> (Vec<ModelPath>, RuntimeErrors) {
-        self.check_model_internal(path, design_path);
+    pub fn check_model(&mut self, path: &ModelPath) -> (Vec<ModelPath>, RuntimeErrors) {
+        let (check_path, design_path) = self.resolve_design_redirect(path.clone());
 
-        let visited_paths: Vec<ModelPath> = self
+        self.check_model_internal(&check_path, design_path.as_ref());
+
+        let mut visited_paths: Vec<ModelPath> = self
             .composed_graph
             .as_ref()
             .map(|graph| {
@@ -157,14 +164,21 @@ impl Runtime {
             })
             .unwrap_or_default();
 
-        let include_indirect_errors = true;
-        let mut errors = self.get_model_diagnostics(path, include_indirect_errors);
+        // Include the design file path in visited paths so its diagnostics get cleared
+        if let Some(design_path) = &design_path {
+            let design_model_path = design_path.to_model_path();
+            if !visited_paths.contains(&design_model_path) {
+                visited_paths.push(design_model_path);
+            }
+        }
 
-        // Mirror `eval_model`'s design-error merge: design files are
-        // their own model-path keyed bucket in the IR / source
-        // caches, so their diagnostics aren't reachable through the
-        // root model's recursive walk.
-        if let Some(design_path) = design_path {
+        let include_indirect_errors = true;
+        let mut errors = self.get_model_diagnostics(&check_path, include_indirect_errors);
+
+        // Include design file errors - design files are their own model-path
+        // keyed bucket in the IR / source caches, so their diagnostics aren't
+        // reachable through the root model's recursive walk.
+        if let Some(design_path) = &design_path {
             let design_errors =
                 self.get_model_diagnostics(&design_path.to_model_path(), include_indirect_errors);
             errors.extend(design_errors);

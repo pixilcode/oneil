@@ -4,7 +4,7 @@ use clap::{Args, Parser, Subcommand};
 #[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
 use oneil_shared::{
-    paths::{DesignPath, ModelPath},
+    paths::ModelPath,
     symbols::{BuiltinFunctionName, BuiltinValueName, ParameterName, UnitBaseName, UnitPrefix},
 };
 #[cfg(feature = "python")]
@@ -131,17 +131,12 @@ pub struct LspArgs {
 /// Arguments for `oneil check`.
 #[derive(Args, Clone)]
 pub struct CheckArgs {
-    /// Path to the Oneil model file to check
+    /// Path to the Oneil model or design file to check
+    ///
+    /// If a design file (.one) is provided that declares `design <target>`,
+    /// the target model is checked with the design applied.
     #[arg(value_name = "FILE", value_parser = parse_model_path)]
     pub file: ModelPath,
-
-    /// Path to a design file (.one) to apply to the model
-    ///
-    /// When provided, the design file's diagnostics are also reported
-    /// alongside the model's. Mirrors `oneil eval --design <…>` for
-    /// the diagnostic-only flow.
-    #[arg(long, short = 'd', value_name = "DESIGN", value_parser = parse_design_path)]
-    pub design: Option<DesignPath>,
 
     #[command(flatten)]
     pub common: CommonArgs,
@@ -153,7 +148,10 @@ pub struct CheckArgs {
 )]
 #[derive(Args, Clone)]
 pub struct EvalArgs {
-    /// Path to the Oneil model file to evaluate
+    /// Path to the Oneil model or design file to evaluate
+    ///
+    /// If a design file (.one) is provided that declares `design <target>`,
+    /// the target model is evaluated with the design applied.
     //
     // This needs to be an `Option` and marked as required
     // because it is the default when no subcommand is given,
@@ -164,15 +162,6 @@ pub struct EvalArgs {
     // for more information.
     #[arg(value_name = "FILE", value_parser = parse_model_path, required = true)]
     pub file: Option<ModelPath>,
-
-    /// Path to a design file (.one) to apply to the model
-    ///
-    /// When provided, the design file's parameter overrides and reference
-    /// replacements are applied to the model being evaluated. The design
-    /// file must target the model being evaluated (i.e., contain
-    /// `design <model_name>`).
-    #[arg(long, short = 'd', value_name = "DESIGN", value_parser = parse_design_path)]
-    pub design: Option<DesignPath>,
 
     /// When provided, selects which parameters to print
     ///
@@ -252,18 +241,12 @@ pub struct EvalArgs {
 
 #[derive(Args, Clone)]
 pub struct TestArgs {
-    /// Path to the Oneil model file to run tests in
+    /// Path to the Oneil model or design file to run tests in
+    ///
+    /// If a design file (.one) is provided that declares `design <target>`,
+    /// the target model is tested with the design applied.
     #[arg(value_name = "FILE", value_parser = parse_model_path)]
     pub file: ModelPath,
-
-    /// Path to a design file (.one) to apply to the model
-    ///
-    /// When provided, the design file's parameter overrides and reference
-    /// replacements are applied to the model being tested. The design
-    /// file must target the model being tested (i.e., contain
-    /// `design <model_name>`).
-    #[arg(long, short = 'd', value_name = "DESIGN", value_parser = parse_design_path)]
-    pub design: Option<DesignPath>,
 
     /// Print submodel test results recursively
     ///
@@ -731,18 +714,6 @@ fn parse_model_path(s: &str) -> Result<ModelPath, String> {
             path.display()
         )),
     }
-}
-
-/// Parses a CLI argument into a [`DesignPath`].
-/// Accepts a path with `.one` extension only.
-fn parse_design_path(s: &str) -> Result<DesignPath, String> {
-    let path = Path::new(s);
-    DesignPath::try_from(path).map_err(|()| {
-        format!(
-            "design file must have `.one` extension, got {}",
-            path.display()
-        )
-    })
 }
 
 #[cfg(feature = "python")]

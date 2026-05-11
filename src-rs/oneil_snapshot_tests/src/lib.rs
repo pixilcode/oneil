@@ -15,14 +15,18 @@ mod util {
         Runtime,
         output::{self, OneilDiagnostic},
     };
-    use oneil_shared::paths::{DesignPath, ModelPath};
+    use oneil_shared::paths::ModelPath;
 
-    /// Runs the full evaluation pipeline on an Oneil model file and returns
-    /// a formatted string containing any errors and the evaluation output.
+    /// Runs the full evaluation pipeline on an Oneil model or design file and
+    /// returns a formatted string containing any errors and the evaluation output.
     ///
     /// The output format is deterministic and suitable for snapshot testing:
     /// errors are listed first (if any), then a separator, then the model
     /// output (tests and parameters).
+    ///
+    /// If the path is a `.one` design file that declares `design <target>`, the
+    /// target model is evaluated with the design applied. Otherwise the model
+    /// at the given path is evaluated directly.
     ///
     /// Paths in the output are normalized by stripping `path_prefix` when present,
     /// so that snapshots are portable (e.g. use `CARGO_MANIFEST_DIR` as the prefix).
@@ -31,29 +35,13 @@ mod util {
     ///
     /// This function does not return a `Result`; parse, resolution, and
     /// evaluation errors are included in the returned string.
-    #[must_use]
-    pub fn run_model_and_format(path: &Path, path_prefix: Option<&Path>) -> String {
-        run_model_and_format_with_design(path, None, path_prefix)
-    }
-
-    /// Runs the full evaluation pipeline on an Oneil model file with an optional
-    /// design file applied, and returns a formatted string containing any errors
-    /// and the evaluation output.
-    ///
-    /// When a design path is provided, the design file's parameter overrides are
-    /// applied to the model being evaluated (simulating the CLI `--design` flag).
     #[expect(clippy::unwrap_used, reason = "writing to a String is infallible")]
     #[must_use]
-    pub fn run_model_and_format_with_design(
-        path: &Path,
-        design_path: Option<&Path>,
-        path_prefix: Option<&Path>,
-    ) -> String {
+    pub fn run_model_and_format(path: &Path, path_prefix: Option<&Path>) -> String {
         let path = ModelPath::from_path_with_ext(path);
-        let design_path = design_path.map(DesignPath::from_path_with_ext);
 
         let mut runtime = Runtime::new();
-        let (model_opt, errors) = runtime.eval_model(&path, design_path.as_ref());
+        let (model_opt, errors) = runtime.eval_model(&path);
 
         let mut out = String::new();
 
