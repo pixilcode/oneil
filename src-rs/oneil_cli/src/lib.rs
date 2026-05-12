@@ -13,7 +13,7 @@ use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
 use notify::Watcher;
 #[cfg(feature = "python")]
-use oneil_runtime::output::PythonModule;
+use oneil_runtime::{PythonCacheReadStrategy, PythonCacheStrategy, output::PythonModule};
 use oneil_runtime::{
     Runtime,
     output::{
@@ -71,7 +71,9 @@ pub fn main() {
         Commands::Eval(eval_args) => handle_eval_command(eval_args),
         Commands::Test(test_args) => handle_test_command(test_args),
         Commands::Tree(tree_args) => handle_tree_command(tree_args),
-        Commands::Builtins(builtins_args) => handle_builtins_command(builtins_args.get_command()),
+        Commands::Builtins(builtins_args) => {
+            handle_builtins_command(builtins_args.get_command(), builtins_args.get_common_args());
+        }
         Commands::Independent(independent_args) => handle_independent_command(independent_args),
         Commands::Lsp(lsp_args) => handle_lsp_command(lsp_args),
         Commands::Dev(dev_command) => handle_dev_command(dev_command),
@@ -91,7 +93,7 @@ fn handle_dev_command(command: DevCommand) {
             files,
             debug: display_partial,
             common,
-        } => handle_print_ast(&files, display_partial, common.dev_show_internal_errors),
+        } => handle_print_ast(&files, display_partial, &common),
         DevCommand::PrintIr {
             file,
             debug: display_partial,
@@ -107,7 +109,7 @@ fn handle_dev_command(command: DevCommand) {
                 recursive,
                 &sections,
                 no_values,
-                common.dev_show_internal_errors,
+                &common,
             );
         }
         DevCommand::PrintModelResult {
@@ -125,12 +127,12 @@ fn handle_dev_command(command: DevCommand) {
                 recursive,
                 &sections,
                 no_values,
-                common.dev_show_internal_errors,
+                &common,
             );
         }
         #[cfg(feature = "python")]
         DevCommand::PrintPythonImports { files, common } => {
-            handle_print_python_imports(&files, common.dev_show_internal_errors);
+            handle_print_python_imports(&files, &common);
         }
     }
 }
@@ -144,8 +146,8 @@ fn apply_common_side_effects(common_args: &CommonArgs) {
 
 /// Handles the `dev print-python-imports` command.
 #[cfg(feature = "python")]
-fn handle_print_python_imports(files: &[PythonPath], show_internal_errors: bool) {
-    let mut runtime = Runtime::new();
+fn handle_print_python_imports(files: &[PythonPath], common_args: &CommonArgs) {
+    let mut runtime = build_runtime_from(common_args);
 
     let mut imports: IndexMap<PythonPath, PythonModule> = IndexMap::new();
     let mut errors = Vec::new();
@@ -165,7 +167,7 @@ fn handle_print_python_imports(files: &[PythonPath], show_internal_errors: bool)
         }
     }
 
-    let print_result = print_error::print_all(errors, show_internal_errors);
+    let print_result = print_error::print_all(errors, common_args.dev_show_internal_errors);
     if print_result.saw_error_diagnostic() {
         return;
     }
@@ -225,10 +227,10 @@ fn handle_print_python_imports(files: &[PythonPath], show_internal_errors: bool)
 }
 
 /// Handles the `dev print-ast` command.
-fn handle_print_ast(files: &[ModelPath], display_partial: bool, show_internal_errors: bool) {
+fn handle_print_ast(files: &[ModelPath], display_partial: bool, common_args: &CommonArgs) {
     let ast_print_config = AstPrintConfig {};
 
-    let mut runtime = Runtime::new();
+    let mut runtime = build_runtime_from(common_args);
 
     let mut asts = IndexMap::new();
     let mut errors = RuntimeErrors::new();
@@ -243,7 +245,8 @@ fn handle_print_ast(files: &[ModelPath], display_partial: bool, show_internal_er
         errors.extend(runtime_errors);
     }
 
-    let print_result = print_error::print_all(errors.to_vec(), show_internal_errors);
+    let print_result =
+        print_error::print_all(errors.to_vec(), common_args.dev_show_internal_errors);
     if print_result.saw_error_diagnostic() && !display_partial {
         return;
     }
@@ -293,17 +296,13 @@ fn ir_sections_from_include(include: Option<&[IrIncludeSection]>) -> print_debug
 }
 
 /// Handles the `dev print-ir` command.
-#[expect(
-    clippy::fn_params_excessive_bools,
-    reason = "this is just passing in all the arguments from the CLI"
-)]
 fn handle_print_ir(
     file: &ModelPath,
     display_partial: bool,
     recursive: bool,
     sections: &print_debug_ir::IrSections,
     no_values: bool,
-    show_internal_errors: bool,
+    common_args: &CommonArgs,
 ) {
     let ir_print_config = IrPrintConfig {
         recursive,
@@ -311,11 +310,12 @@ fn handle_print_ir(
         print_values: !no_values,
     };
 
-    let mut runtime = Runtime::new();
+    let mut runtime = build_runtime_from(common_args);
 
     let (ir_result, errors) = runtime.load_ir(file);
 
-    let print_result = print_error::print_all(errors.to_vec(), show_internal_errors);
+    let print_result =
+        print_error::print_all(errors.to_vec(), common_args.dev_show_internal_errors);
     if print_result.saw_error_diagnostic() && !display_partial {
         return;
     }
@@ -358,17 +358,13 @@ fn model_result_sections_from_include(
 }
 
 /// Handles the `dev print-model-result` command.
-#[expect(
-    clippy::fn_params_excessive_bools,
-    reason = "this is just passing in all the arguments from the CLI"
-)]
 fn handle_print_model_result(
     file: &ModelPath,
     display_partial_results: bool,
     recursive: bool,
     sections: &print_debug_model_result::ModelResultSections,
     no_values: bool,
-    show_internal_errors: bool,
+    common_args: &CommonArgs,
 ) {
     let config = print_debug_model_result::DebugModelResultPrintConfig {
         recursive,
@@ -376,10 +372,11 @@ fn handle_print_model_result(
         print_values: !no_values,
     };
 
-    let mut runtime = Runtime::new();
+    let mut runtime = build_runtime_from(common_args);
     let (model_opt, errors) = runtime.eval_model(file);
 
-    let print_result = print_error::print_all(errors.to_vec(), show_internal_errors);
+    let print_result =
+        print_error::print_all(errors.to_vec(), common_args.dev_show_internal_errors);
     if print_result.saw_error_diagnostic() && !display_partial_results {
         return;
     }
@@ -423,12 +420,12 @@ fn handle_eval_command(args: EvalArgs) {
         watch_model(
             &file,
             &eval_expressions,
-            common.dev_show_internal_errors,
             display_partial_results,
             &model_print_config,
+            &common,
         );
     } else {
-        let mut runtime = Runtime::new();
+        let mut runtime = build_runtime_from(&common);
 
         eval_and_print_model(
             &file,
@@ -470,11 +467,11 @@ fn eval_and_print_model(
 fn watch_model(
     file: &ModelPath,
     eval_expressions: &[String],
-    show_internal_errors: bool,
     display_partial_results: bool,
     model_print_config: &ModelPrintConfig,
+    common_args: &CommonArgs,
 ) {
-    let mut runtime = Runtime::new();
+    let mut runtime = build_runtime_from(common_args);
 
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
 
@@ -497,7 +494,7 @@ fn watch_model(
     eval_and_print_model(
         file,
         eval_expressions,
-        show_internal_errors,
+        common_args.dev_show_internal_errors,
         display_partial_results,
         model_print_config,
         &mut runtime,
@@ -518,7 +515,7 @@ fn watch_model(
                     eval_and_print_model(
                         file,
                         eval_expressions,
-                        show_internal_errors,
+                        common_args.dev_show_internal_errors,
                         display_partial_results,
                         model_print_config,
                         &mut runtime,
@@ -627,7 +624,7 @@ fn handle_test_command(args: TestArgs) {
         print_utils_config,
     };
 
-    let mut runtime = Runtime::new();
+    let mut runtime = build_runtime_from(&common);
     let (model_opt, errors) = runtime.eval_model(&file);
 
     let print_result = print_error::print_all(errors.to_vec(), common.dev_show_internal_errors);
@@ -667,7 +664,7 @@ fn handle_tree_command(args: TreeArgs) {
         print_utils_config,
     };
 
-    let mut runtime = Runtime::new();
+    let mut runtime = build_runtime_from(&common);
 
     let (trees, errors) = if up {
         let mut trees = Vec::new();
@@ -748,8 +745,8 @@ fn print_param_not_found(param: &ParameterName) {
     eprintln!("{error_label} parameter \"{param_name}\" not found in model");
 }
 
-fn handle_builtins_command(command: BuiltinsCommand) {
-    let runtime = Runtime::new();
+fn handle_builtins_command(command: BuiltinsCommand, common_args: &CommonArgs) {
+    let runtime = build_runtime_from(common_args);
     match command {
         BuiltinsCommand::All { common } => {
             let print_utils_config = PrintUtilsConfig {
@@ -823,7 +820,7 @@ fn handle_independent_command(args: IndependentArgs) {
         print_utils_config,
     };
 
-    let mut runtime = Runtime::new();
+    let mut runtime = build_runtime_from(&common);
     let (independents, errors) = runtime.get_independents(&file);
 
     let print_result = print_error::print_all(errors.to_vec(), common.dev_show_internal_errors);
@@ -832,4 +829,28 @@ fn handle_independent_command(args: IndependentArgs) {
     }
 
     print_independents::print(&file, &independents, &independent_print_config);
+}
+
+fn build_runtime_from(common_args: &CommonArgs) -> Runtime {
+    #[cfg(feature = "python")]
+    {
+        let cache_strategy = if common_args.cache {
+            PythonCacheStrategy::AlwaysCache
+        } else {
+            PythonCacheStrategy::NeverCache
+        };
+
+        let cache_read_strategy = if common_args.ignore_cache {
+            PythonCacheReadStrategy::NeverRead
+        } else {
+            PythonCacheReadStrategy::AlwaysRead
+        };
+
+        Runtime::new_with_strategies(cache_strategy, cache_read_strategy)
+    }
+
+    #[cfg(not(feature = "python"))]
+    {
+        Runtime::new()
+    }
 }

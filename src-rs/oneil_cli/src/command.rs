@@ -50,6 +50,7 @@ impl CliCommand {
 }
 
 /// Flags shared by every top-level CLI subcommand.
+#[expect(clippy::struct_excessive_bools, reason = "this is a CLI argument list")]
 #[derive(Args, Clone, Debug, PartialEq, Eq)]
 pub struct CommonArgs {
     /// Number of significant figures to print
@@ -71,6 +72,16 @@ pub struct CommonArgs {
     #[cfg(feature = "python")]
     #[arg(long, value_name = "VENV")]
     pub venv_path: Option<PathBuf>,
+
+    /// Whether to cache calls to python
+    #[cfg(feature = "python")]
+    #[arg(long)]
+    pub cache: bool,
+
+    /// Whether to ignore the python call cache (if it exists)
+    #[cfg(feature = "python")]
+    #[arg(long)]
+    pub ignore_cache: bool,
 
     /// Show internal errors
     #[arg(long, hide = true)]
