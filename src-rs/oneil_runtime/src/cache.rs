@@ -200,7 +200,9 @@ impl<T, E> ModelCache<T, E> {
 }
 
 #[cfg(feature = "python")]
-pub use python::{PythonCallCache, PythonImportCache};
+pub use python::{
+    PythonCacheReadStrategy, PythonCacheStrategy, PythonCallCache, PythonImportCache,
+};
 
 #[cfg(feature = "python")]
 mod python {
@@ -276,15 +278,23 @@ mod python {
         cache_dir: PathBuf,
         entries: IndexMap<PythonPath, FileCache>,
         updated_root_models: IndexSet<ModelPath>,
+        cache_strategy: PythonCacheStrategy,
+        cache_read_strategy: PythonCacheReadStrategy,
     }
 
     impl PythonCallCache {
         /// Creates a new Python call cache in the given directory.
-        pub fn new(cache_dir: PathBuf) -> Self {
+        pub fn new(
+            cache_dir: PathBuf,
+            cache_strategy: PythonCacheStrategy,
+            cache_read_strategy: PythonCacheReadStrategy,
+        ) -> Self {
             Self {
                 cache_dir,
                 entries: IndexMap::new(),
                 updated_root_models: IndexSet::new(),
+                cache_strategy,
+                cache_read_strategy,
             }
         }
 
@@ -538,5 +548,29 @@ mod python {
         }
 
         path
+    }
+
+    /// An enum representing the strategy that should be used
+    /// for python calls
+    #[cfg(feature = "python")]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+    pub enum PythonCacheStrategy {
+        /// Always cache python calls
+        AlwaysCache,
+        /// Never cache python calls
+        #[default]
+        NeverCache,
+    }
+
+    /// An enum representing the strategy that should be used
+    /// for reading from the python call cache
+    #[cfg(feature = "python")]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+    pub enum PythonCacheReadStrategy {
+        /// Always try to read from the cache
+        #[default]
+        AlwaysRead,
+        /// Never read from the cache
+        NeverRead,
     }
 }
