@@ -94,14 +94,15 @@ impl Runtime {
         let _ir_results = self.load_ir_internal(path);
 
         #[cfg(feature = "python")]
-        self.python_call_cache.begin_evaluation();
+        self.py_features.python_call_cache.begin_evaluation();
 
         // evaluate the model and its dependencies
         let eval_result = eval::eval_model(path, self);
 
         #[cfg(feature = "python")]
         // panic on error for now, we'll handle it in the future
-        self.python_call_cache
+        self.py_features
+            .python_call_cache
             .end_evaluation()
             .expect("failed to save Python call cache");
 

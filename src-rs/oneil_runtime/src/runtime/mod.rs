@@ -35,9 +35,15 @@ pub struct Runtime {
     ast_cache: AstCache,
     ir_cache: IrCache,
     eval_cache: EvalCache,
-    #[cfg(feature = "python")]
-    python_import_cache: PythonImportCache,
-    #[cfg(feature = "python")]
-    python_call_cache: PythonCallCache,
     builtins: BuiltinRef,
+    #[cfg(feature = "python")]
+    py_features: PyFeatures,
+}
+
+/// Python features for the runtime
+#[cfg(feature = "python")]
+#[derive(Debug)]
+pub struct PyFeatures {
+    python_import_cache: PythonImportCache,
+    python_call_cache: PythonCallCache,
 }

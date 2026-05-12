@@ -19,18 +19,24 @@ impl Runtime {
     #[must_use]
     pub fn new() -> Self {
         #[cfg(feature = "python")]
-        let cache_dir = PathBuf::from("__oncache__");
+        let py_features = {
+            use crate::runtime::PyFeatures;
+
+            let cache_dir = PathBuf::from("__oncache__");
+            PyFeatures {
+                python_import_cache: PythonImportCache::new(),
+                python_call_cache: PythonCallCache::new(cache_dir),
+            }
+        };
 
         Self {
             source_cache: SourceCache::new(),
             ast_cache: AstCache::new(),
             ir_cache: IrCache::new(),
             eval_cache: EvalCache::new(),
-            #[cfg(feature = "python")]
-            python_import_cache: PythonImportCache::new(),
-            #[cfg(feature = "python")]
-            python_call_cache: PythonCallCache::new(cache_dir),
             builtins: BuiltinRef::new(),
+            #[cfg(feature = "python")]
+            py_features,
         }
     }
 
@@ -49,7 +55,7 @@ impl Runtime {
 
         #[cfg(feature = "python")]
         if let Ok(python_path) = PythonPath::try_from(path.clone()) {
-            self.python_import_cache.remove(&python_path);
+            self.py_features.python_import_cache.remove(&python_path);
         }
     }
 

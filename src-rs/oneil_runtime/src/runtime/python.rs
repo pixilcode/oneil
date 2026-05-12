@@ -13,7 +13,8 @@ impl Runtime {
     /// Looks up the documentation string for a Python import.
     #[must_use]
     pub fn lookup_python_import_docs(&self, path: &PythonPath) -> Option<&str> {
-        self.python_import_cache
+        self.py_features
+            .python_import_cache
             .get_entry(path)?
             .as_ref()
             .ok()?
@@ -27,7 +28,8 @@ impl Runtime {
         python_path: &PythonPath,
         name: &PyFunctionName,
     ) -> Option<&PythonFunction> {
-        self.python_import_cache
+        self.py_features
+            .python_import_cache
             .get_entry(python_path)?
             .as_ref()
             .ok()?
@@ -49,6 +51,7 @@ impl Runtime {
         self.load_python_import_internal(path);
 
         let names_opt = self
+            .py_features
             .python_import_cache
             .get_entry(path)
             .and_then(|result| result.as_ref().ok());
@@ -64,10 +67,12 @@ impl Runtime {
     ) -> &Result<PythonModule, PythonImportError> {
         // load the source code from the file
         let Ok(source) = self.load_source_internal(&path.into()) else {
-            self.python_import_cache
+            self.py_features
+                .python_import_cache
                 .insert(path.clone(), Err(PythonImportError::HasSourceError));
 
             return self
+                .py_features
                 .python_import_cache
                 .get_entry(path)
                 .expect("it was just inserted");
@@ -78,15 +83,20 @@ impl Runtime {
 
         // insert the result into the cache
         match functions_result {
-            Ok(functions) => self.python_import_cache.insert(path.clone(), Ok(functions)),
+            Ok(functions) => self
+                .py_features
+                .python_import_cache
+                .insert(path.clone(), Ok(functions)),
 
             Err(e) => self
+                .py_features
                 .python_import_cache
                 .insert(path.clone(), Err(PythonImportError::LoadFailed(e))),
         }
 
         // return the cached result
-        self.python_import_cache
+        self.py_features
+            .python_import_cache
             .get_entry(path)
             .expect("entry was inserted in this function for the requested path")
     }
@@ -102,6 +112,7 @@ impl Runtime {
     ) -> Option<Result<output::Value, Box<EvalError>>> {
         // get the Python module and function
         let python_module = self
+            .py_features
             .python_import_cache
             .get_entry(python_path)?
             .as_ref()
@@ -113,7 +124,7 @@ impl Runtime {
         let arg_values: Vec<_> = args.iter().map(|(value, _span)| value.clone()).collect();
 
         // check the cache for a cached result
-        let cached_result = self.python_call_cache.get(
+        let cached_result = self.py_features.python_call_cache.get(
             python_path,
             identifier,
             &arg_values,
@@ -128,7 +139,7 @@ impl Runtime {
         //
         // this happens regardless of whether the result was cached or not
         // since the root model needs to be added to the cache entry
-        self.python_call_cache.insert(
+        self.py_features.python_call_cache.insert(
             python_path,
             identifier,
             &arg_values,
