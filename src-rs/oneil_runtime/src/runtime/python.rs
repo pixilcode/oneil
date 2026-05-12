@@ -4,7 +4,7 @@ use oneil_eval::CallsiteInfo;
 use oneil_output::EvalError;
 use oneil_python::{PythonEvalError, PythonFunction, function::PythonModule};
 
-use crate::error::PythonImportError;
+use crate::{PythonCacheReadStrategy, PythonCacheStrategy, error::PythonImportError};
 use oneil_shared::{
     paths::{ModelPath, PythonPath},
     span::Span,
@@ -198,6 +198,11 @@ impl Runtime {
         function_name: &PyFunctionName,
         args: &[output::Value],
     ) -> Option<Result<output::Value, PythonEvalError>> {
+        match self.py_features.cache_read_strategy {
+            PythonCacheReadStrategy::NeverRead => return None,
+            PythonCacheReadStrategy::AlwaysRead => (),
+        }
+
         let python_module = self
             .py_features
             .python_import_cache
@@ -228,6 +233,11 @@ impl Runtime {
         function_name: &PyFunctionName,
         args: &[output::Value],
     ) -> Option<Result<output::Value, PythonEvalError>> {
+        match self.py_features.cache_read_strategy {
+            PythonCacheReadStrategy::NeverRead => return None,
+            PythonCacheReadStrategy::AlwaysRead => (),
+        }
+
         let python_module = self
             .py_features
             .python_import_cache
@@ -259,6 +269,11 @@ impl Runtime {
         args: &[output::Value],
         eval_result: Result<output::Value, PythonEvalError>,
     ) {
+        match self.py_features.cache_strategy {
+            PythonCacheStrategy::NeverCache => return,
+            PythonCacheStrategy::AlwaysCache => (),
+        }
+
         let python_module = self
             .py_features
             .python_import_cache
@@ -290,6 +305,11 @@ impl Runtime {
         args: &[output::Value],
         eval_result: Result<output::Value, PythonEvalError>,
     ) {
+        match self.py_features.cache_strategy {
+            PythonCacheStrategy::NeverCache => return,
+            PythonCacheStrategy::AlwaysCache => (),
+        }
+
         let python_module = self
             .py_features
             .python_import_cache
