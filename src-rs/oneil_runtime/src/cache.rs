@@ -328,6 +328,12 @@ mod python {
             args: &[output::Value],
             module_hash: u64,
         ) -> Option<Result<output::Value, PythonEvalError>> {
+            match self.cache_read_strategy {
+                PythonCacheReadStrategy::NeverRead => return None,
+                PythonCacheReadStrategy::AlwaysRead => (),
+            }
+
+            // ignore the error for now
             let _ = self.load(python_path);
 
             let cache = self
@@ -351,6 +357,11 @@ mod python {
             root_model: &ModelPath,
             python_module: &PythonModule,
         ) {
+            match self.cache_strategy {
+                PythonCacheStrategy::NeverCache => return,
+                PythonCacheStrategy::AlwaysCache => (),
+            }
+
             let module_hash = python_module.get_hash();
             let module_dependencies: BTreeSet<_> =
                 python_module.get_imports().iter().cloned().collect();
@@ -445,6 +456,11 @@ mod python {
         ///
         /// Returns [`ReadCacheError`] if the cache file cannot be read.
         fn load(&mut self, python_path: &PythonPath) -> Result<(), ReadCacheError> {
+            match self.cache_read_strategy {
+                PythonCacheReadStrategy::NeverRead => return Ok(()),
+                PythonCacheReadStrategy::AlwaysRead => (),
+            }
+
             if self.entries.contains_key(python_path) {
                 return Ok(());
             }
@@ -461,6 +477,11 @@ mod python {
         ///
         /// Returns a vector of [`WriteCacheError`] if the cache files cannot be written.
         fn save_all(&self) -> Result<(), Vec<WriteCacheError>> {
+            match self.cache_strategy {
+                PythonCacheStrategy::NeverCache => return Ok(()),
+                PythonCacheStrategy::AlwaysCache => (),
+            }
+
             let mut errors = Vec::new();
             for (model_path, cache) in &self.entries {
                 let cache_path = self.get_cache_path(model_path);
