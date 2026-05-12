@@ -19,7 +19,8 @@ impl Runtime {
     /// Looks up the documentation string for a Python import.
     #[must_use]
     pub fn lookup_python_import_docs(&self, path: &PythonPath) -> Option<&str> {
-        self.python_import_cache
+        self.py_features
+            .python_import_cache
             .get_entry(path)?
             .as_ref()
             .ok()?
@@ -33,7 +34,8 @@ impl Runtime {
         python_path: &PythonPath,
         name: &PyFunctionName,
     ) -> Option<&PythonFunction> {
-        self.python_import_cache
+        self.py_features
+            .python_import_cache
             .get_entry(python_path)?
             .as_ref()
             .ok()?
@@ -55,6 +57,7 @@ impl Runtime {
         self.load_python_import_internal(path);
 
         let names_opt = self
+            .py_features
             .python_import_cache
             .get_entry(path)
             .and_then(|result| result.as_ref().ok());
@@ -70,10 +73,12 @@ impl Runtime {
     ) -> &Result<PythonModule, PythonImportError> {
         // load the source code from the file
         let Ok(source) = self.load_source_internal(&path.into()) else {
-            self.python_import_cache
+            self.py_features
+                .python_import_cache
                 .insert(path.clone(), Err(PythonImportError::HasSourceError));
 
             return self
+                .py_features
                 .python_import_cache
                 .get_entry(path)
                 .expect("it was just inserted");
@@ -84,15 +89,20 @@ impl Runtime {
 
         // insert the result into the cache
         match functions_result {
-            Ok(functions) => self.python_import_cache.insert(path.clone(), Ok(functions)),
+            Ok(functions) => self
+                .py_features
+                .python_import_cache
+                .insert(path.clone(), Ok(functions)),
 
             Err(e) => self
+                .py_features
                 .python_import_cache
                 .insert(path.clone(), Err(PythonImportError::LoadFailed(e))),
         }
 
         // return the cached result
-        self.python_import_cache
+        self.py_features
+            .python_import_cache
             .get_entry(path)
             .expect("entry was inserted in this function for the requested path")
     }
@@ -128,6 +138,7 @@ impl Runtime {
         };
 
         let python_functions = self
+            .py_features
             .python_import_cache
             .get_entry(python_path)?
             .as_ref()
@@ -188,18 +199,18 @@ impl Runtime {
         args: &[output::Value],
     ) -> Option<Result<output::Value, PythonEvalError>> {
         let python_module = self
+            .py_features
             .python_import_cache
             .get_entry(python_path)
             .and_then(|result| result.as_ref().ok())
             .expect("should not be trying to load a parameter cache entry if the import failed");
 
-        self.python_call_cache.validate_or_clear_python_import(
-            model_path,
-            python_path,
-            python_module.get_hash(),
-        );
+        self.py_features
+            .python_call_cache
+            .validate_or_clear_python_import(model_path, python_path, python_module.get_hash());
 
         let calls = &self
+            .py_features
             .python_call_cache
             .get_parameter_entry(model_path, parameter_name)?;
 
@@ -218,18 +229,18 @@ impl Runtime {
         args: &[output::Value],
     ) -> Option<Result<output::Value, PythonEvalError>> {
         let python_module = self
+            .py_features
             .python_import_cache
             .get_entry(python_path)
             .and_then(|result| result.as_ref().ok())
             .expect("should not be trying to load a test cache entry if the import failed");
 
-        self.python_call_cache.validate_or_clear_python_import(
-            model_path,
-            python_path,
-            python_module.get_hash(),
-        );
+        self.py_features
+            .python_call_cache
+            .validate_or_clear_python_import(model_path, python_path, python_module.get_hash());
 
         let calls = &self
+            .py_features
             .python_call_cache
             .get_test_entry(model_path, test_index)?;
 
@@ -249,22 +260,25 @@ impl Runtime {
         eval_result: Result<output::Value, PythonEvalError>,
     ) {
         let python_module = self
+            .py_features
             .python_import_cache
             .get_entry(python_path)
             .and_then(|result| result.as_ref().ok())
             .expect("should not be trying to add a parameter cache entry if the import failed");
 
-        self.python_call_replacement_cache.add_parameter_entry(
-            PythonCallCacheRecord {
-                model_path,
-                python_path,
-                function_name,
-                args,
-                eval_result,
-                python_module,
-            },
-            parameter_name,
-        );
+        self.py_features
+            .python_call_replacement_cache
+            .add_parameter_entry(
+                PythonCallCacheRecord {
+                    model_path,
+                    python_path,
+                    function_name,
+                    args,
+                    eval_result,
+                    python_module,
+                },
+                parameter_name,
+            );
     }
 
     fn add_test_cache_entry(
@@ -277,21 +291,24 @@ impl Runtime {
         eval_result: Result<output::Value, PythonEvalError>,
     ) {
         let python_module = self
+            .py_features
             .python_import_cache
             .get_entry(python_path)
             .and_then(|result| result.as_ref().ok())
             .expect("should not be trying to add a test cache entry if the import failed");
 
-        self.python_call_replacement_cache.add_test_entry(
-            PythonCallCacheRecord {
-                model_path,
-                python_path,
-                function_name,
-                args,
-                eval_result,
-                python_module,
-            },
-            test_index,
-        );
+        self.py_features
+            .python_call_replacement_cache
+            .add_test_entry(
+                PythonCallCacheRecord {
+                    model_path,
+                    python_path,
+                    function_name,
+                    args,
+                    eval_result,
+                    python_module,
+                },
+                test_index,
+            );
     }
 }

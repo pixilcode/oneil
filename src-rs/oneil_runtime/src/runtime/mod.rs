@@ -34,17 +34,21 @@ use oneil_builtins::BuiltinRef;
 /// methods to load and process Oneil models.
 #[derive(Debug)]
 pub struct Runtime {
-    #[cfg(feature = "python")]
-    cache_dir: PathBuf,
     source_cache: SourceCache,
     ast_cache: AstCache,
     ir_cache: IrCache,
     eval_cache: EvalCache,
-    #[cfg(feature = "python")]
-    python_import_cache: PythonImportCache,
-    #[cfg(feature = "python")]
-    python_call_cache: PythonCallCache,
-    #[cfg(feature = "python")]
-    python_call_replacement_cache: PythonCallCache,
     builtins: BuiltinRef,
+    #[cfg(feature = "python")]
+    py_features: PyFeatures,
+}
+
+/// Python features for the runtime
+#[cfg(feature = "python")]
+#[derive(Debug)]
+pub struct PyFeatures {
+    cache_dir: PathBuf,
+    python_import_cache: PythonImportCache,
+    python_call_cache: PythonCallCache,
+    python_call_replacement_cache: PythonCallCache,
 }

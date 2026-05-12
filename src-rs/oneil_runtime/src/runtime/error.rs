@@ -191,7 +191,10 @@ impl Runtime {
             );
         }
 
-        if let Some(Err(load_err)) = self.python_import_cache.get_entry(python_import_path)
+        if let Some(Err(load_err)) = self
+            .py_features
+            .python_import_cache
+            .get_entry(python_import_path)
             && let PythonImportError::LoadFailed(load_err) = load_err
         {
             errors.add_python_import_error(

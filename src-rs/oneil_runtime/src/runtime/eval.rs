@@ -99,7 +99,7 @@ impl Runtime {
 
         // make sure the replacement cache is empty
         #[cfg(feature = "python")]
-        self.python_call_replacement_cache.clear();
+        self.py_features.python_call_replacement_cache.clear();
 
         // evaluate the model and its dependencies
         let eval_result = eval::eval_model(path, self);
@@ -108,16 +108,17 @@ impl Runtime {
         {
             // save the updated call cache
             // TODO: handle errors from saving the replacement cache
-            self.python_call_replacement_cache
+            self.py_features
+                .python_call_replacement_cache
                 .save_all()
                 .expect("should be able to save the replacement cache");
 
             // merge the replacement cache into the call cache
             let replacement_cache = std::mem::replace(
-                &mut self.python_call_replacement_cache,
-                PythonCallCache::new(self.cache_dir.clone()),
+                &mut self.py_features.python_call_replacement_cache,
+                PythonCallCache::new(self.py_features.cache_dir.clone()),
             );
-            self.python_call_cache.merge(replacement_cache);
+            self.py_features.python_call_cache.merge(replacement_cache);
         }
 
         for (model_path, maybe_partial) in eval_result {
