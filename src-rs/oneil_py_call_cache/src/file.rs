@@ -33,6 +33,13 @@ impl FileCache {
         }
     }
 
+    /// Checks if the cache is empty. It is empty if it contains no imports, parameters,
+    /// or tests.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.imports.is_empty() && self.parameters.is_empty() && self.tests.is_empty()
+    }
+
     /// Writes this cache as pretty-printed JSON to `path`, creating or truncating the file.
     ///
     /// # Errors

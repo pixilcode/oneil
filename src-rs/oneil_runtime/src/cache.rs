@@ -446,9 +446,17 @@ mod python {
         /// Returns a vector of [`WriteCacheError`] if the cache files cannot be written.
         pub fn save_all(&self) -> Result<(), Vec<WriteCacheError>> {
             let mut errors = Vec::new();
+
             for (model_path, cache) in &self.entries {
                 let cache_relative_path = get_cache_relative_path(model_path);
                 let cache_path = self.cache_dir.join(cache_relative_path);
+
+                // if the cache file doesn't exist and the cache is empty,
+                // don't write it to disk
+                if !cache_path.exists() && cache.is_empty() {
+                    continue;
+                }
+
                 match cache.write_to_path(cache_path) {
                     Ok(()) => (),
                     Err(e) => errors.push(e),
