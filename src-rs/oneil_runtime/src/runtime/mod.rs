@@ -51,4 +51,30 @@ pub struct PyFeatures {
     python_import_cache: PythonImportCache,
     python_call_cache: PythonCallCache,
     python_call_replacement_cache: PythonCallCache,
+    cache_strategy: PythonCacheStrategy,
+    cache_read_strategy: PythonCacheReadStrategy,
+}
+
+/// An enum representing the strategy that should be used
+/// for python calls
+#[cfg(feature = "python")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub enum PythonCacheStrategy {
+    /// Always cache python calls
+    AlwaysCache,
+    /// Never cache python calls
+    #[default]
+    NeverCache,
+}
+
+/// An enum representing the strategy that should be used
+/// for reading from the python call cache
+#[cfg(feature = "python")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub enum PythonCacheReadStrategy {
+    /// Always try to read from the cache
+    #[default]
+    AlwaysRead,
+    /// Never read from the cache
+    NeverRead,
 }
