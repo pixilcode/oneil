@@ -225,10 +225,7 @@ fn cache_unit_to_output(unit: &Unit) -> Result<OutputUnit, CacheValueConversionE
         dimension_map: DimensionMap::new(map),
         magnitude: unit.magnitude,
         is_db: unit.is_db,
-        display_unit: DisplayUnit::Unit {
-            name: unit.display_unit.clone(),
-            exponent: 1.0,
-        },
+        display_unit: DisplayUnit::Opaque(unit.display_unit.clone()),
     })
 }
 
