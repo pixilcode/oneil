@@ -321,6 +321,8 @@ pub enum DisplayUnit {
         /// The exponent of the power unit
         exponent: f64,
     },
+    /// A unit that is unparsed or comes from an unknown source
+    Opaque(String),
 }
 
 impl DisplayUnit {
@@ -333,7 +335,7 @@ impl DisplayUnit {
                 name,
                 exponent: exponent * pow_exponent,
             },
-            Self::Multiply(_, _) | Self::Divide(_, _) => Self::Power {
+            Self::Multiply(_, _) | Self::Divide(_, _) | Self::Opaque(_) => Self::Power {
                 base: Box::new(self),
                 exponent: pow_exponent,
             },
@@ -375,7 +377,9 @@ impl fmt::Display for DisplayUnit {
             Self::Multiply(left, right) if **right == Self::One => write!(f, "{left}")?,
             Self::Multiply(left, right) => write!(f, "{left}*{right}")?,
             Self::Divide(left, right) => match **right {
-                Self::Multiply(_, _) | Self::Divide(_, _) => write!(f, "{left}/({right})")?,
+                Self::Multiply(_, _) | Self::Divide(_, _) | Self::Opaque(_) => {
+                    write!(f, "{left}/({right})")?;
+                }
                 Self::One => write!(f, "{left}")?,
                 Self::Unit { .. } | Self::Power { .. } => {
                     write!(f, "{left}/{right}")?;
@@ -390,10 +394,12 @@ impl fmt::Display for DisplayUnit {
                 Self::Unit { .. }
                 | Self::Multiply(_, _)
                 | Self::Divide(_, _)
-                | Self::Power { .. } => {
+                | Self::Power { .. }
+                | Self::Opaque(_) => {
                     write!(f, "({base})^{exponent}")?;
                 }
             },
+            Self::Opaque(contents) => write!(f, "{contents}")?,
         }
 
         Ok(())
