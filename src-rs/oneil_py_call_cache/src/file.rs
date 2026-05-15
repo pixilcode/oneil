@@ -1,35 +1,41 @@
 //! On-disk cache file: [`FileCache`] and JSON load/save.
 
-use std::collections::BTreeMap;
-use std::fs::File;
-use std::path::Path;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+use std::{collections::BTreeMap, fs::File};
 
-use serde::{Deserialize, Serialize};
+use oneil_shared::paths::PythonPath;
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
-use crate::FunctionCall;
-use crate::error::{ReadCacheError, WriteCacheError};
-use crate::identifiers::{CachedParameterName, CachedPythonPath, CachedTestIndex};
-use crate::imports::ImportEntry;
+use crate::{CachedFunctionName, CachedPythonPath, FunctionCall, ReadCacheError, WriteCacheError};
 
-/// On-disk cache for one source file: imported modules, parameter calls, and test calls.
+const ONEIL_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// On-disk cache for one python module.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileCache {
-    /// Imported Python modules and their invalidation metadata.
-    pub imports: BTreeMap<CachedPythonPath, ImportEntry>,
-    /// Function calls originating from named parameters.
-    pub parameters: BTreeMap<CachedParameterName, Vec<FunctionCall>>,
-    /// Function calls originating from tests, keyed by test index.
-    pub tests: BTreeMap<CachedTestIndex, Vec<FunctionCall>>,
+    /// The version of Oneil that created the cache.
+    pub oneil_version: String,
+    /// The path of the python module that was cached.
+    pub module_path: CachedPythonPath,
+    /// The hash of the python module and its dependencies.
+    pub hash: ImportHash,
+    /// The local dependencies included in the combined hash.
+    pub dependencies: BTreeSet<PathBuf>,
+    /// The function calls that are cached for this module.
+    pub function_calls: BTreeMap<CachedFunctionName, Vec<FunctionCall>>,
 }
 
 impl FileCache {
     /// Creates a new empty file cache.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new(module_path: PythonPath, hash: ImportHash, dependencies: BTreeSet<PathBuf>) -> Self {
         Self {
-            imports: BTreeMap::new(),
-            parameters: BTreeMap::new(),
-            tests: BTreeMap::new(),
+            oneil_version: ONEIL_VERSION.to_owned(),
+            module_path: module_path.into(),
+            hash,
+            dependencies,
+            function_calls: BTreeMap::new(),
         }
     }
 
@@ -38,21 +44,6 @@ impl FileCache {
     /// # Errors
     ///
     /// Returns [`WriteCacheError`] if the file cannot be created or JSON serialization fails.
-    ///
-    /// ```
-    /// use oneil_py_call_cache::FileCache;
-    ///
-    /// let dir = std::env::temp_dir();
-    /// let path = dir.join(format!("oneil_cache_doc_{}.json", std::process::id()));
-    /// let cache = FileCache {
-    ///     imports: Default::default(),
-    ///     parameters: Default::default(),
-    ///     tests: Default::default(),
-    /// };
-    /// cache.write_to_path(&path).expect("write cache file");
-    /// assert!(path.exists());
-    /// # std::fs::remove_file(&path).expect("remove temp cache file");
-    /// ```
     pub fn write_to_path(&self, path: impl AsRef<Path>) -> Result<(), WriteCacheError> {
         if let Some(dir) = path.as_ref().parent()
             && !dir.exists()
@@ -70,30 +61,64 @@ impl FileCache {
     /// # Errors
     ///
     /// Returns [`ReadCacheError`] if the file cannot be opened/read or JSON deserialization fails.
-    ///
-    /// ```
-    /// use oneil_py_call_cache::FileCache;
-    ///
-    /// let dir = std::env::temp_dir();
-    /// let path = dir.join(format!("oneil_cache_read_doc_{}.json", std::process::id()));
-    /// let cache = FileCache {
-    ///     imports: Default::default(),
-    ///     parameters: Default::default(),
-    ///     tests: Default::default(),
-    /// };
-    /// cache.write_to_path(&path).expect("write cache file");
-    /// let loaded = FileCache::read_from_path(&path).expect("read cache file");
-    /// assert_eq!(loaded, cache);
-    /// # std::fs::remove_file(&path).expect("remove temp cache file");
-    /// ```
     pub fn read_from_path(path: impl AsRef<Path>) -> Result<Self, ReadCacheError> {
         let file = File::open(path.as_ref()).map_err(ReadCacheError::Io)?;
         serde_json::from_reader(file).map_err(ReadCacheError::Serde)
     }
 }
 
-impl Default for FileCache {
-    fn default() -> Self {
-        Self::new()
+/// Fingerprint for a python module's sources (stored as raw `u64`, serialized as hex).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ImportHash(u64);
+
+impl Serialize for ImportHash {
+    /// Writes this hash as a 16-digit lowercase hexadecimal string (JSON string).
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("{:016x}", self.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for ImportHash {
+    /// Parses a base-16 string into a hash (no `0x` prefix).
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+
+        if s.is_empty() {
+            return Err(de::Error::custom("empty hexadecimal string"));
+        }
+
+        u64::from_str_radix(&s, 16)
+            .map(ImportHash)
+            .map_err(de::Error::custom)
+    }
+}
+
+impl PartialEq<u64> for ImportHash {
+    fn eq(&self, other: &u64) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<ImportHash> for u64 {
+    fn eq(&self, other: &ImportHash) -> bool {
+        *self == other.0
+    }
+}
+
+impl From<u64> for ImportHash {
+    fn from(hash: u64) -> Self {
+        Self(hash)
+    }
+}
+
+impl From<ImportHash> for u64 {
+    fn from(hash: ImportHash) -> Self {
+        hash.0
     }
 }

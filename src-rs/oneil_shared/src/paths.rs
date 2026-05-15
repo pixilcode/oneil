@@ -10,7 +10,7 @@ const ON_EXTENSION: &str = "on";
 const PYTHON_EXTENSION: &str = "py";
 
 /// A path to an Oneil model file.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ModelPath(PathBuf);
 
 impl ModelPath {

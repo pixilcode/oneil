@@ -5,12 +5,12 @@ mod error;
 mod file;
 mod function_call;
 mod identifiers;
-mod imports;
 mod value;
 
 pub use error::{ReadCacheError, WriteCacheError};
 pub use file::FileCache;
 pub use function_call::{FunctionCall, FunctionCallError, FunctionCallResult};
-pub use identifiers::{CachedFunctionName, CachedParameterName, CachedPythonPath, CachedTestIndex};
-pub use imports::{ImportEntry, ImportHash};
+pub use identifiers::{
+    CachedFunctionName, CachedModelPath, CachedParameterName, CachedPythonPath, CachedTestIndex,
+};
 pub use value::{CacheValue, CacheValueConversionError, Interval, Unit};

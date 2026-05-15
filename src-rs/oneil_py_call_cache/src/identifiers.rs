@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 use std::path::PathBuf;
 
 use oneil_shared::{
-    paths::PythonPath,
+    paths::{ModelPath, PythonPath},
     symbols::{ParameterName, PyFunctionName, TestIndex},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -70,6 +70,68 @@ impl PartialEq<CachedPythonPath> for PythonPath {
     }
 }
 
+/// A path to an Oneil model file.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CachedModelPath(ModelPath);
+
+impl Borrow<ModelPath> for CachedModelPath {
+    fn borrow(&self) -> &ModelPath {
+        &self.0
+    }
+}
+
+impl Serialize for CachedModelPath {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.as_path().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for CachedModelPath {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let path = PathBuf::deserialize(deserializer)?;
+        if path.extension().map(|ext| ext.to_string_lossy()) != Some("on".into()) {
+            return Err(serde::de::Error::custom(format!(
+                "model path must have .on extension, got {}",
+                path.display()
+            )));
+        }
+        Ok(Self(ModelPath::from_path_with_ext(&path)))
+    }
+}
+
+impl From<ModelPath> for CachedModelPath {
+    fn from(value: ModelPath) -> Self {
+        Self(value)
+    }
+}
+
+impl From<CachedModelPath> for ModelPath {
+    fn from(value: CachedModelPath) -> Self {
+        value.0
+    }
+}
+
+/// Compares to a [`ModelPath`] without wrapping it in [`CachedModelPath`].
+impl PartialEq<ModelPath> for CachedModelPath {
+    /// Returns whether the inner path equals `other`.
+    fn eq(&self, other: &ModelPath) -> bool {
+        self.0 == *other
+    }
+}
+
+/// Compares to a [`CachedModelPath`] by comparing inner paths.
+impl PartialEq<CachedModelPath> for ModelPath {
+    /// Returns whether this path equals the inner path of `other`.
+    fn eq(&self, other: &CachedModelPath) -> bool {
+        *self == other.0
+    }
+}
 /// A name for a parameter in a model.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CachedParameterName(ParameterName);
