@@ -23,12 +23,18 @@ oneil_parser = { path = "../oneil_parser" }
 oneil_python = { path = "../oneil_python", features = [
 	"rust-lib",
 ], optional = true }
+oneil_py_call_cache = { path = "../oneil_py_call_cache", optional = true }
 oneil_shared = { path = "../oneil_shared" }
 indexmap = { workspace = true }
 
 [features]
 default = ["python"]
-python = ["oneil_python", "oneil_resolver/python", "oneil_eval/python"]
+python = [
+	"oneil_python",
+	"oneil_resolver/python",
+	"oneil_eval/python",
+	"oneil_py_call_cache",
+]
 
 [lints]
 workspace = true
