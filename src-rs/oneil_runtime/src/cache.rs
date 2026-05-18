@@ -296,6 +296,27 @@ mod python {
             self.save_all()
         }
 
+        /// Gets a cached result for a function call.
+        pub fn get(
+            &mut self,
+            python_path: &PythonPath,
+            identifier: &PyFunctionName,
+            args: &[output::Value],
+            module_hash: u64,
+        ) -> Option<Result<output::Value, PythonEvalError>> {
+            let _ = self.load(python_path);
+
+            let cache = self
+                .entries
+                .get(python_path)
+                .filter(|cache| cache.hash == module_hash)?;
+
+            let function_calls = cache.function_calls.get(identifier)?;
+            let function_call = function_calls.iter().find(|call| call.inputs == args)?;
+
+            Some(function_call.output.clone().into())
+        }
+
         /// Inserts a result for a function call.
         pub fn insert(
             &mut self,
