@@ -70,7 +70,8 @@ impl ExternalEvaluationContext for TestExternalContext {
 
     #[cfg(feature = "python")]
     fn evaluate_imported_function(
-        &self,
+        &mut self,
+        _root_model: &ModelPath,
         _python_path: &oneil_shared::paths::PythonPath,
         _identifier: &oneil_shared::symbols::PyFunctionName,
         _function_call_span: Span,

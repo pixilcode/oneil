@@ -48,7 +48,8 @@ pub trait ExternalEvaluationContext {
     /// Returns an error if there was an error evaluating the imported function.
     #[cfg(feature = "python")]
     fn evaluate_imported_function(
-        &self,
+        &mut self,
+        root_model: &ModelPath,
         python_path: &PythonPath,
         identifier: &PyFunctionName,
         function_call_span: Span,
@@ -383,7 +384,7 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
 
     /// Evaluates an imported function with the given arguments.
     pub fn evaluate_imported_function(
-        &self,
+        &mut self,
         python_path: &PythonPath,
         name: &PyFunctionName,
         function_call_span: Span,
@@ -391,8 +392,13 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
     ) -> Result<output::Value, Box<EvalError>> {
         #[cfg(feature = "python")]
         {
+            let root_model = self
+                .active_models
+                .last()
+                .expect("root model should be set when evaluating imported Python functions");
+
             self.external_context
-                .evaluate_imported_function(python_path, name, function_call_span, args)
+                .evaluate_imported_function(root_model, python_path, name, function_call_span, args)
                 .expect("imported function should be defined (checked during resolution)")
         }
 
