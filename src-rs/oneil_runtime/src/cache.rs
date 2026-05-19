@@ -209,7 +209,7 @@ mod python {
         path::{Component, PathBuf},
     };
 
-    use indexmap::IndexMap;
+    use indexmap::{IndexMap, IndexSet};
     use oneil_py_call_cache::{
         FileCache, FunctionCall, FunctionCallResult, ImportHash, ReadCacheError, WriteCacheError,
     };
@@ -275,6 +275,7 @@ mod python {
     pub struct PythonCallCache {
         cache_dir: PathBuf,
         entries: IndexMap<PythonPath, FileCache>,
+        updated_root_models: IndexSet<ModelPath>,
     }
 
     impl PythonCallCache {
@@ -283,16 +284,29 @@ mod python {
             Self {
                 cache_dir,
                 entries: IndexMap::new(),
+                updated_root_models: IndexSet::new(),
             }
         }
 
         /// Begins a new evaluation.
-        pub const fn begin_evaluation(&self) {
-            // nothing to do here yet
+        pub fn begin_evaluation(&mut self) {
+            self.updated_root_models.clear();
         }
 
         /// Ends the current evaluation.
-        pub fn end_evaluation(&self) -> Result<(), Vec<WriteCacheError>> {
+        pub fn end_evaluation(&mut self) -> Result<(), Vec<WriteCacheError>> {
+            // clear all stale cached function call
+            let stale_caches = self.clear_stale_entries();
+
+            // remove the stale cache files
+            for python_path in stale_caches {
+                let cache_path = self.get_cache_path(&python_path);
+                if cache_path.exists() {
+                    std::fs::remove_file(cache_path).expect("failed to remove stale cache file");
+                }
+            }
+
+            // save all the cache entries to disk
             self.save_all()
         }
 
@@ -342,6 +356,19 @@ mod python {
             // the weeds on the first draft, we simply overwrite the existing
             // cache with a new one.
             let _ = self.load(python_path);
+
+            // If the root model is not in the updated root models set, remove
+            // all references to the root model, then add it to the updated
+            // root models
+            //
+            // This potentially invalidates all cached function calls for the
+            // root model. If the entries aren't referenced during the current
+            // evaluation of the root model, they will be cleared when
+            // `end_evaluation` is called.
+            if !self.updated_root_models.contains(root_model) {
+                self.clear_root_model(root_model);
+                self.updated_root_models.insert(root_model.clone());
+            }
 
             let cache = self
                 .entries
@@ -412,8 +439,7 @@ mod python {
                 return Ok(());
             }
 
-            let cache_relative_path = get_cache_relative_path(python_path);
-            let cache_path = self.cache_dir.join(cache_relative_path);
+            let cache_path = self.get_cache_path(python_path);
             let cache = FileCache::read_from_path(cache_path)?;
             self.entries.insert(python_path.clone(), cache);
             Ok(())
@@ -427,8 +453,7 @@ mod python {
         fn save_all(&self) -> Result<(), Vec<WriteCacheError>> {
             let mut errors = Vec::new();
             for (model_path, cache) in &self.entries {
-                let cache_relative_path = get_cache_relative_path(model_path);
-                let cache_path = self.cache_dir.join(cache_relative_path);
+                let cache_path = self.get_cache_path(model_path);
                 match cache.write_to_path(cache_path) {
                     Ok(()) => (),
                     Err(e) => errors.push(e),
@@ -441,15 +466,50 @@ mod python {
                 Err(errors)
             }
         }
-    }
 
-    fn get_cache_relative_path(module_path: &PythonPath) -> PathBuf {
-        module_path
-            .as_path()
-            .with_extension("json")
-            .components()
-            // convert to a path that can be used in the cache directory
-            .fold(PathBuf::new(), append_normalized_component)
+        /// Removes all references to a root model from all cached function calls.
+        fn clear_root_model(&mut self, root_model: &ModelPath) {
+            for cache in self.entries.values_mut() {
+                for function_calls in cache.function_calls.values_mut() {
+                    for function_call in function_calls.iter_mut() {
+                        function_call.root_models.remove(root_model);
+                    }
+                }
+            }
+        }
+
+        /// Clear all entries that are no longer referenced by any root models.
+        fn clear_stale_entries(&mut self) -> IndexSet<PythonPath> {
+            for cache in self.entries.values_mut() {
+                // clear all cached function calls that are no longer
+                // referenced by any root models
+                for function_calls in cache.function_calls.values_mut() {
+                    function_calls.retain(|call| !call.root_models.is_empty());
+                }
+
+                // clear all functions that have no cached function calls
+                cache
+                    .function_calls
+                    .retain(|_function_name, function_calls| !function_calls.is_empty());
+            }
+
+            // clear all the caches that have no function calls
+            self.entries
+                .extract_if(.., |_python_path, cache| cache.function_calls.is_empty())
+                .map(|(python_path, _cache)| python_path)
+                .collect()
+        }
+
+        fn get_cache_path(&self, python_path: &PythonPath) -> PathBuf {
+            let cache_relative_path = python_path
+                .as_path()
+                .with_extension("json")
+                .components()
+                // convert to a path that can be used in the cache directory
+                .fold(PathBuf::new(), append_normalized_component);
+
+            self.cache_dir.join(cache_relative_path)
+        }
     }
 
     fn append_normalized_component(mut path: PathBuf, component: Component<'_>) -> PathBuf {
