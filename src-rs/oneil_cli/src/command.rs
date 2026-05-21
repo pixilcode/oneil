@@ -1,15 +1,15 @@
 //! Command-line interface definitions for the Oneil CLI
 
 use clap::{Args, Parser, Subcommand};
-#[cfg(feature = "python")]
-use oneil_shared::paths::PythonPath;
 use oneil_shared::{
-    paths::ModelPath,
+    paths::{ModelPath, PythonPath},
     symbols::{BuiltinFunctionName, BuiltinValueName, ParameterName, UnitBaseName, UnitPrefix},
 };
-#[cfg(feature = "python")]
-use std::path::PathBuf;
-use std::{fmt, path::Path, str};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+    str,
+};
 
 /// Oneil language CLI - Main command-line interface structure
 #[derive(Parser)]
@@ -69,17 +69,14 @@ pub struct CommonArgs {
     /// When set, the venv's `bin` (or `Scripts` on Windows) directory is prepended to
     /// `PATH`. If not set and `VIRTUAL_ENV` is unset, the CLI searches upward for a
     /// `venv` or `.venv` directory and uses the first one found.
-    #[cfg(feature = "python")]
     #[arg(long, value_name = "VENV")]
     pub venv_path: Option<PathBuf>,
 
     /// Whether to cache calls to python
-    #[cfg(feature = "python")]
     #[arg(long)]
     pub cache: bool,
 
     /// Whether to ignore the python call cache (if it exists)
-    #[cfg(feature = "python")]
     #[arg(long)]
     pub ignore_cache: bool,
 
@@ -511,7 +508,6 @@ pub enum DevCommand {
         common: CommonArgs,
     },
     /// Print Python imports from Oneil source file(s)
-    #[cfg(feature = "python")]
     PrintPythonImports {
         /// Path(s) to the Oneil source file(s) to inspect
         #[arg(value_name = "FILE", num_args = 1.., value_parser = parse_python_path)]
@@ -527,9 +523,8 @@ impl DevCommand {
         match self {
             Self::PrintAst { common, .. }
             | Self::PrintIr { common, .. }
-            | Self::PrintModelResult { common, .. } => common,
-            #[cfg(feature = "python")]
-            Self::PrintPythonImports { common, .. } => common,
+            | Self::PrintModelResult { common, .. }
+            | Self::PrintPythonImports { common, .. } => common,
         }
     }
 }
@@ -692,8 +687,6 @@ fn parse_model_path(s: &str) -> Result<ModelPath, String> {
         )),
     }
 }
-
-#[cfg(feature = "python")]
 /// Parses a CLI argument into a [`PythonPath`].
 /// Accepts either a path with `.py` extension or a path with no extension.
 fn parse_python_path(s: &str) -> Result<PythonPath, String> {

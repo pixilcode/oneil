@@ -46,7 +46,6 @@ pub trait ExternalEvaluationContext {
     /// # Errors
     ///
     /// Returns an error if there was an error evaluating the imported function.
-    #[cfg(feature = "python")]
     fn evaluate_imported_function(
         &mut self,
         root_model: &ModelPath,
@@ -390,25 +389,14 @@ impl<'external, E: ExternalEvaluationContext> EvalContext<'external, E> {
         function_call_span: Span,
         args: Vec<(output::Value, Span)>,
     ) -> Result<output::Value, Box<EvalError>> {
-        #[cfg(feature = "python")]
-        {
-            let root_model = self
-                .active_models
-                .last()
-                .expect("root model should be set when evaluating imported Python functions");
+        let root_model = self
+            .active_models
+            .last()
+            .expect("root model should be set when evaluating imported Python functions");
 
-            self.external_context
-                .evaluate_imported_function(root_model, python_path, name, function_call_span, args)
-                .expect("imported function should be defined (checked during resolution)")
-        }
-
-        #[cfg(not(feature = "python"))]
-        {
-            let _ = (self, python_path, name, args);
-            Err(Box::new(EvalError::PythonNotEnabled {
-                relevant_span: function_call_span,
-            }))
-        }
+        self.external_context
+            .evaluate_imported_function(root_model, python_path, name, function_call_span, args)
+            .expect("imported function should be defined (checked during resolution)")
     }
 
     /// Looks up a unit by name.

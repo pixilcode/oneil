@@ -18,7 +18,6 @@ use oneil_shared::{
 };
 
 use super::Runtime;
-#[cfg(feature = "python")]
 use crate::error::PythonImportError;
 use crate::output::error::{ModelError, RuntimeErrors};
 
@@ -113,9 +112,6 @@ impl Runtime {
             test_errors,
         } = merged;
 
-        #[cfg(not(feature = "python"))]
-        let _ = python_imports_with_errors;
-
         // add the errors for models that are referenced
         //
         // this includes both models that have errors and models
@@ -142,7 +138,6 @@ impl Runtime {
         }
 
         // add the errors for Python imports that are referenced
-        #[cfg(feature = "python")]
         for python_import_path in python_imports_with_errors {
             let python_import_errors = self.get_python_import_errors(&python_import_path);
             errors.extend(python_import_errors);
@@ -176,7 +171,6 @@ impl Runtime {
     /// If the source failed to load or the Python module failed to load (e.g. file not found or load error),
     /// returns a [`RuntimeErrors`] with [`ModelError::FileError`] entries for each.
     #[must_use]
-    #[cfg(feature = "python")]
     pub(super) fn get_python_import_errors(
         &self,
         python_import_path: &PythonPath,
@@ -590,7 +584,6 @@ fn get_python_path_from_python_import_error(
             Some(python_path.clone())
         }
 
-        PythonImportResolutionError::DuplicateImport { .. }
-        | PythonImportResolutionError::PythonNotEnabled { .. } => None,
+        PythonImportResolutionError::DuplicateImport { .. } => None,
     }
 }

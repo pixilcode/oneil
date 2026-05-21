@@ -199,12 +199,10 @@ impl<T, E> ModelCache<T, E> {
     }
 }
 
-#[cfg(feature = "python")]
 pub use python::{
     PythonCacheReadStrategy, PythonCacheStrategy, PythonCallCache, PythonImportCache,
 };
 
-#[cfg(feature = "python")]
 mod python {
     use std::{
         collections::BTreeSet,
@@ -573,7 +571,6 @@ mod python {
 
     /// An enum representing the strategy that should be used
     /// for python calls
-    #[cfg(feature = "python")]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
     pub enum PythonCacheStrategy {
         /// Always cache python calls
@@ -585,7 +582,6 @@ mod python {
 
     /// An enum representing the strategy that should be used
     /// for reading from the python call cache
-    #[cfg(feature = "python")]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
     pub enum PythonCacheReadStrategy {
         /// Always try to read from the cache

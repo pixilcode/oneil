@@ -17,11 +17,9 @@ mod ir;
 mod source;
 mod util;
 
-#[cfg(feature = "python")]
 mod python;
 
 use crate::cache::{AstCache, EvalCache, IrCache, SourceCache};
-#[cfg(feature = "python")]
 use crate::cache::{PythonCallCache, PythonImportCache};
 use oneil_builtins::BuiltinRef;
 
@@ -36,12 +34,10 @@ pub struct Runtime {
     ir_cache: IrCache,
     eval_cache: EvalCache,
     builtins: BuiltinRef,
-    #[cfg(feature = "python")]
     py_features: PyFeatures,
 }
 
 /// Python features for the runtime
-#[cfg(feature = "python")]
 #[derive(Debug)]
 pub struct PyFeatures {
     python_import_cache: PythonImportCache,

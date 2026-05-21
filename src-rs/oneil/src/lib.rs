@@ -21,12 +21,10 @@ mod rust_lib {
     pub use oneil_lsp as lsp;
     pub use oneil_output as output;
     pub use oneil_parser as parser;
+    pub use oneil_python as python;
     pub use oneil_resolver as resolver;
     pub use oneil_runtime as runtime;
     pub use oneil_shared as shared;
-
-    #[cfg(feature = "python-imports")]
-    pub use oneil_python as python;
 }
 
 #[cfg(feature = "python-lib")]

@@ -7,6 +7,5 @@ mod runtime;
 
 pub mod output;
 
-#[cfg(feature = "python")]
 pub use cache::{PythonCacheReadStrategy, PythonCacheStrategy};
 pub use runtime::Runtime;

@@ -68,7 +68,6 @@ impl ExternalEvaluationContext for TestExternalContext {
         panic!("this is unused and causes errors because of circular dependencies")
     }
 
-    #[cfg(feature = "python")]
     fn evaluate_imported_function(
         &mut self,
         _root_model: &ModelPath,

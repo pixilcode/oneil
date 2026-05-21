@@ -1,16 +1,13 @@
 //! Utility methods for the runtime.
 
-#[cfg(feature = "python")]
 use std::path::PathBuf;
 
 use indexmap::IndexSet;
-#[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
 use oneil_shared::paths::{ModelPath, SourcePath};
 
 use super::Runtime;
 use crate::cache::{AstCache, EvalCache, IrCache, SourceCache};
-#[cfg(feature = "python")]
 use crate::{
     PythonCacheReadStrategy, PythonCacheStrategy,
     cache::{PythonCallCache, PythonImportCache},
@@ -26,7 +23,6 @@ impl Runtime {
     /// Creates a new runtime instance with empty caches.
     #[must_use]
     pub fn new() -> Self {
-        #[cfg(feature = "python")]
         let py_features = {
             let cache_dir = default_cache_dir();
             PyFeatures {
@@ -45,14 +41,12 @@ impl Runtime {
             ir_cache: IrCache::new(),
             eval_cache: EvalCache::new(),
             builtins: BuiltinRef::new(),
-            #[cfg(feature = "python")]
             py_features,
         }
     }
 
     /// Creates a new runtime instance with empty caches that uses the
     /// provided caching strategies
-    #[cfg(feature = "python")]
     #[must_use]
     pub fn new_with_strategies(
         cache_strategy: PythonCacheStrategy,
@@ -70,7 +64,6 @@ impl Runtime {
             ir_cache: IrCache::new(),
             eval_cache: EvalCache::new(),
             builtins: BuiltinRef::new(),
-            #[cfg(feature = "python")]
             py_features,
         }
     }
@@ -88,7 +81,6 @@ impl Runtime {
             self.eval_cache.remove(&model_path);
         }
 
-        #[cfg(feature = "python")]
         if let Ok(python_path) = PythonPath::try_from(path.clone()) {
             self.py_features.python_import_cache.remove(&python_path);
         }

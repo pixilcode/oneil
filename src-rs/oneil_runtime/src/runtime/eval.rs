@@ -12,7 +12,6 @@ use oneil_shared::{
     span::Span,
     symbols::{BuiltinFunctionName, BuiltinValueName, UnitBaseName, UnitPrefix},
 };
-#[cfg(feature = "python")]
 use oneil_shared::{paths::PythonPath, symbols::PyFunctionName};
 
 use super::Runtime;
@@ -93,13 +92,11 @@ impl Runtime {
         // TODO: once caching works, evaluating the model should load the IR as it goes
         let _ir_results = self.load_ir_internal(path);
 
-        #[cfg(feature = "python")]
         self.py_features.python_call_cache.begin_evaluation();
 
         // evaluate the model and its dependencies
         let eval_result = eval::eval_model(path, self);
 
-        #[cfg(feature = "python")]
         // panic on error for now, we'll handle it in the future
         self.py_features
             .python_call_cache
@@ -227,7 +224,6 @@ impl eval::ExternalEvaluationContext for Runtime {
         Some(builtin.call(name_span, args))
     }
 
-    #[cfg(feature = "python")]
     fn evaluate_imported_function(
         &mut self,
         root_model: &ModelPath,

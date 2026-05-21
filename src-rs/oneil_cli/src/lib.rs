@@ -12,7 +12,6 @@ use anstream::{ColorChoice, eprintln, print, println};
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
 use notify::Watcher;
-#[cfg(feature = "python")]
 use oneil_runtime::{PythonCacheReadStrategy, PythonCacheStrategy, output::PythonModule};
 use oneil_runtime::{
     Runtime,
@@ -21,7 +20,6 @@ use oneil_runtime::{
         tree::{DependencyTreeValue, ReferenceTreeValue, Tree},
     },
 };
-#[cfg(feature = "python")]
 use oneil_shared::paths::PythonPath;
 use oneil_shared::{
     paths::{ModelPath, SourcePath},
@@ -54,7 +52,6 @@ mod print_tree;
 mod print_utils;
 mod stylesheet;
 
-#[cfg(feature = "python")]
 mod load_python_venv;
 
 /// Main entry point for the Oneil CLI application.
@@ -130,7 +127,6 @@ fn handle_dev_command(command: DevCommand) {
                 &common,
             );
         }
-        #[cfg(feature = "python")]
         DevCommand::PrintPythonImports { files, common } => {
             handle_print_python_imports(&files, &common);
         }
@@ -140,12 +136,10 @@ fn handle_dev_command(command: DevCommand) {
 fn apply_common_side_effects(common_args: &CommonArgs) {
     set_color_choice(common_args.no_colors);
 
-    #[cfg(feature = "python")]
     load_python_venv::try_load_venv(common_args.venv_path.as_deref());
 }
 
 /// Handles the `dev print-python-imports` command.
-#[cfg(feature = "python")]
 fn handle_print_python_imports(files: &[PythonPath], common_args: &CommonArgs) {
     let mut runtime = build_runtime_from(common_args);
 
@@ -832,25 +826,17 @@ fn handle_independent_command(args: IndependentArgs) {
 }
 
 fn build_runtime_from(common_args: &CommonArgs) -> Runtime {
-    #[cfg(feature = "python")]
-    {
-        let cache_strategy = if common_args.cache {
-            PythonCacheStrategy::AlwaysCache
-        } else {
-            PythonCacheStrategy::NeverCache
-        };
+    let cache_strategy = if common_args.cache {
+        PythonCacheStrategy::AlwaysCache
+    } else {
+        PythonCacheStrategy::NeverCache
+    };
 
-        let cache_read_strategy = if common_args.ignore_cache {
-            PythonCacheReadStrategy::NeverRead
-        } else {
-            PythonCacheReadStrategy::AlwaysRead
-        };
+    let cache_read_strategy = if common_args.ignore_cache {
+        PythonCacheReadStrategy::NeverRead
+    } else {
+        PythonCacheReadStrategy::AlwaysRead
+    };
 
-        Runtime::new_with_strategies(cache_strategy, cache_read_strategy)
-    }
-
-    #[cfg(not(feature = "python"))]
-    {
-        Runtime::new()
-    }
+    Runtime::new_with_strategies(cache_strategy, cache_read_strategy)
 }
