@@ -30,4 +30,4 @@ editable-profile = "dev"
 features = ["python-lib"]
 all-features = false
 no-default-features = true
-manifest-path = "src-rs/oneil/Cargo.toml"
+manifest-path = "src/oneil/Cargo.toml"

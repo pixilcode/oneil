@@ -77,7 +77,7 @@ EOF
 	exit 1
 fi
 
-ONEIL_PKG="$SCRIPT_DIR/src-rs/oneil"
+ONEIL_PKG="$SCRIPT_DIR/src/oneil"
 if [[ ! -f "$ONEIL_PKG/Cargo.toml" ]]; then
 	echo "Error: expected Cargo.toml at $ONEIL_PKG" >&2
 	exit 1

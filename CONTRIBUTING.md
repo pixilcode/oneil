@@ -85,7 +85,7 @@ Test Oneil files are found in [the `test` directory](./test). These files are ma
 
 ## System Architecture
 
-The architecture of the system is described in [`docs/architecture/README.md`](docs/architecture/README.md). The code itself is found in [`src-rs/`](src-rs/).
+The architecture of the system is described in [`docs/architecture/README.md`](docs/architecture/README.md). The code itself is found in [`src/`](src/).
 
 ## Coding Standards
 

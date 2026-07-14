@@ -356,7 +356,7 @@ is easy to observe visually. It allows a reviewer to quickly see what has
 changed.
 
 For snapshot testing in Rust, Oneil uses the `insta` crate. Snapshot tests are
-found in [`oneil_snapshot_tests`](../src-rs/oneil_snapshot_tests/).
+found in [`oneil_snapshot_tests`](../src/oneil_snapshot_tests/).
 
 When writing a snapshot test, make the output easy to read. Don't use default
 `Debug` output. For example,

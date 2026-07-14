@@ -88,7 +88,7 @@ Use this if you want the latest development version or need to customize the bui
 2. Build and install the `oneil` binary (requires Rust):
 
    ```sh
-   cargo install --path src-rs/oneil
+   cargo install --path src/oneil
    ```
 
    This places the `oneil` executable in `~/.cargo/bin` (or `%USERPROFILE%\.cargo\bin` on Windows). Ensure that directory is on your `PATH`.
@@ -96,7 +96,7 @@ Use this if you want the latest development version or need to customize the bui
    _Optional: build without Python support (avoids Python/pyo3 dependencies, makes smaller binary):_
 
    ```sh
-   cargo install --path src-rs/oneil --no-default-features --features rust-lib
+   cargo install --path src/oneil --no-default-features --features rust-lib
    ```
 
 3. Confirm:
@@ -141,7 +141,7 @@ pip install .
 After installation you can `import oneil` in Python.
 
 > [!NOTE]
-> `pip install .` alone does not install the CLI. Use **Option 2** (`./install.sh`) or **Option 3** (`cargo install --path src-rs/oneil`) if you want both the CLI and the library.
+> `pip install .` alone does not install the CLI. Use **Option 2** (`./install.sh`) or **Option 3** (`cargo install --path src/oneil`) if you want both the CLI and the library.
 
 ## Uninstalling Oneil
 

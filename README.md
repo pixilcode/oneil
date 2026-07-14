@@ -130,32 +130,7 @@ The Rust version of Oneil has syntax updates from the Python version.
 
 ### Toolchain
 
-Oneil has the several tools available for working with Oneil code.
-
-#### Vim Support
-
-Oneil supports syntax highlighting in vim. Oneil is already designed for readability, but syntax highlighting makes it even better.
-
-*This highlighting has not been updated since the updates to the syntax have been released, so it might have some problems highlighting*.
-
-Create a `~/.vim` directory with subdirectories `syntax` and `ftdetect` if they don't exist yet. From this directory create soft links to the files in the `vim` directory of the Oneil repository.
-
-``` { .sh }
-mkdir ~/.vim
-cd ~/.vim
-mkdir syntax
-mkdir ftdetect
-cd ~/.vim/syntax
-ln -s path/to/oneil/vim/syntax/oneil.vim
-cd ../ftdetect
-ln -s path/to/oneil/vim/ftdetect/oneil.vim
-```
-
-If you don't have a `~\.vim` directory, you can just symlink the directory itself.
-
-``` { .sh }
-ln -s $CAREWEATHER/oneil/vim ~/.vim
-```
+Oneil has support for working with Oneil code in VS Code support.
 
 #### VS Code Support
 
@@ -498,7 +473,7 @@ In the Oneil file, give the python function on the right hand of the equation, i
 Temperature: T = temperature(D) :K
 ```
 
-##### Fallback Calculations
+#### Fallback Calculations
 
 Python functions may have dependencies that aren't always available. You can specify a fallback calculation using the `?` operator. If the Python function fails (e.g., missing dependencies, runtime errors), Oneil will use the fallback and warn the user:
 
@@ -510,10 +485,9 @@ In this example, if `expensive_simulation` fails, Oneil will calculate `D * 0.5 
 
 This is particularly useful for:
 
-- Sharing models with users who may not have all Python dependencies installed
-- Providing quick approximations during iterative design
-- Graceful degradation when simulations fail
-
+* Sharing models with users who may not have all Python dependencies installed
+* Providing quick approximations during iterative design
+* Graceful degradation when simulations fail
 
 ### References and Submodels
 
@@ -774,13 +748,6 @@ Adhere to the following best practices in Oneil:
 - Oneil supports built-in interval arithmetic, never make separate minimum and maximum parameters when you can make one parameter and specify the minimum and maximum edge cases.
 ```
 
-## Known Issues and Limitations
-
-* The Vim syntax highlighter gets *really* slow if you try to paste large amounts of LaTeX in. For now, make sure to paste large blocks of LaTeX using a different text editor or temporarily remove the ".on" file extension while you do.
-* The Vim syntax highlighter breaks for the rest of the file after a LaTeX syntax error in a note. As a result, the rest of the file will be highlighted as a note.
-
-And many more. These will be ported to GitHub issues for planning and visibility in coming months. If you find an issue that isn't listed in GitHub, please post it.
-
 ## Troubleshooting
 
 ### Something funny is happening with angular frequencies and frequencies
@@ -788,10 +755,6 @@ And many more. These will be ported to GitHub issues for planning and visibility
 The funny thing about Hz and rad/s is that `1 Hz != 1 rad/s` even though `1 Hz = 1/s` and `1 rad/s = 1/s`. You can [thank the International System of Units for this madness](https://iopscience.iop.org/article/10.1088/1681-7575/ac0240). To escape this, Oneil doesn't recognize the SI definition of Hz. If you specify Hz as a unit, Oneil will internally convert it to rad/s by multiplying by 2 pi. If you want to use a frequency in an equation that expects Hz, you need to make sure the equation converts your frequency (rad/s) to Hz. For example, instead of `c=lambda*f` for the speed of light, you would use `c=lambda*f/(2*pi)`.
 
 > As a side note, some people have suggested that this problem is solved if you use `cycles` as a base unit and let `Hz = 1 cycle/s`, but this quickly becomes messy as cycles will get propagated throughout your model where you don't want it. It's much cleaner to convert rad/s to Hz in equations that expect it.
-
-### Oneil has a bug
-
-You can report bugs using the issues section on Github. If you want to try and fix a bug yourself, see [`CONTRIBUTING.md`](CONTRIBUTING.md) for help.
 
 ### TexMaker works, but VS Code doesn't
 

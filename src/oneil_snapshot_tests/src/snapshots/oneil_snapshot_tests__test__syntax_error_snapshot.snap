@@ -1,5 +1,5 @@
 ---
-source: src-rs/oneil_snapshot_tests/src/test.rs
+source: src/oneil_snapshot_tests/src/test.rs
 expression: output
 ---
 error: expected parameter or test

@@ -1,6 +1,6 @@
 # Oneil Architecture
 
-The Rust code lives under `src-rs/` as a single workspace. The **frontend** is what you use directly—the command-line app and editor support. The **backend** is what parses, resolves, and runs Oneil. The **`oneil_runtime`** crate ties the backend together: it loads files, keeps results in memory, and is what the CLI and language server call into.
+The Rust code lives under `src/` as a single workspace. The **frontend** is what you use directly—the command-line app and editor support. The **backend** is what parses, resolves, and runs Oneil. The **`oneil_runtime`** crate ties the backend together: it loads files, keeps results in memory, and is what the CLI and language server call into.
 
 **Data flow (simplified):** source text is parsed into an AST (**`oneil_ast`** / **`oneil_parser`**), names and imports are resolved into an intermediate representation (**`oneil_ir`** / **`oneil_resolver`**), expressions are evaluated to values (**`oneil_eval`** / **`oneil_output`**), and optional semantic checks run over IR (**`oneil_analysis`**). Standard units, prefixes, and builtins come from **`oneil_builtins`**. Optional Python interop is implemented in **`oneil_python`**. Cross-cutting types and helpers live in **`oneil_shared`**.
 

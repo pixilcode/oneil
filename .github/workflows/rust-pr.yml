@@ -60,15 +60,15 @@ jobs:
       - run: cargo install --root "${{ runner.tool_cache }}/cargo-fuzz" --version ${{ env.CARGO_FUZZ_VERSION }} cargo-fuzz --locked
 
       # Build and then run the fuzz target.
-      - run: cargo fuzz build ${{ matrix.target }} --fuzz-dir src-rs/${{ matrix.crate }}/fuzz
-      - run: cargo fuzz run ${{ matrix.target }} --fuzz-dir src-rs/${{ matrix.crate }}/fuzz -- -max_total_time=${{ env.FUZZ_TIME }}
+      - run: cargo fuzz build ${{ matrix.target }} --fuzz-dir src/${{ matrix.crate }}/fuzz
+      - run: cargo fuzz run ${{ matrix.target }} --fuzz-dir src/${{ matrix.crate }}/fuzz -- -max_total_time=${{ env.FUZZ_TIME }}
 
       # Upload fuzzing artifacts on failure for post-mortem debugging.
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: fuzzing-artifacts-${{ matrix.crate }}-${{ matrix.target }}-${{ github.sha }}
-          path: src-rs/${{ matrix.crate }}/fuzz/artifacts
+          path: src/${{ matrix.crate }}/fuzz/artifacts
 
   check-for-unused-dependencies:
     runs-on: ubuntu-latest

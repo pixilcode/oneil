@@ -54,7 +54,7 @@ if errorlevel 1 (
 call :require_c_toolchain
 if errorlevel 1 exit /b 1
 
-set "ONEIL_PKG=%SCRIPT_DIR%src-rs\oneil"
+set "ONEIL_PKG=%SCRIPT_DIR%src\oneil"
 if not exist "%ONEIL_PKG%\Cargo.toml" (
   echo Error: expected Cargo.toml at "%ONEIL_PKG%" 1>&2
   exit /b 1
