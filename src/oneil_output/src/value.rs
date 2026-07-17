@@ -264,44 +264,6 @@ impl Value {
         }
     }
 
-    /// Subtracts the right value from the left value. This does not apply the
-    /// standard rules of interval arithmetic. Instead, it subtracts the minimum
-    /// from the minimum and the maximum from the maximum.
-    ///
-    /// # Errors
-    ///
-    /// Returns `ValueError::InvalidType` if the right operand is not a number.
-    ///
-    /// Returns `ValueError::InvalidOperation` if the left operand is not a number.
-    pub fn checked_escaped_sub(self, rhs: Self) -> Result<Self, BinaryEvalError> {
-        match (self, rhs) {
-            (Self::Number(lhs), Self::Number(rhs)) => Ok(Self::Number(lhs - rhs)),
-            (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => {
-                lhs.checked_escaped_sub(&rhs).map(Self::MeasuredNumber)
-            }
-            (Self::Number(lhs), Self::MeasuredNumber(rhs)) if rhs.is_dimensionless() => {
-                let lhs_num = MeasuredNumber::from_number_and_unit(lhs, Unit::one());
-                lhs_num.checked_escaped_sub(&rhs).map(Self::MeasuredNumber)
-            }
-            (Self::MeasuredNumber(lhs), Self::Number(rhs)) if lhs.is_dimensionless() => {
-                let rhs_num = MeasuredNumber::from_number_and_unit(rhs, Unit::one());
-                lhs.checked_escaped_sub(&rhs_num).map(Self::MeasuredNumber)
-            }
-            (lhs @ (Self::Number(_) | Self::MeasuredNumber(_)), rhs) => Err({
-                BinaryEvalError::TypeMismatch {
-                    expected_type_from_lhs: ExpectedType::matching_value_type_ignoring_number_kind(
-                        &lhs.type_(),
-                    ),
-                    rhs_type: Box::new(rhs.type_()),
-                }
-            }),
-            (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
-                lhs_type: Box::new(lhs.type_()),
-            }),
-        }
-    }
-
     /// Multiplies two values.
     ///
     /// # Errors
@@ -350,40 +312,6 @@ impl Value {
             (Self::MeasuredNumber(lhs), Self::Number(rhs)) => Ok(Self::MeasuredNumber(lhs / rhs)),
             (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => {
                 lhs.checked_div(rhs).map(Self::MeasuredNumber)
-            }
-            (lhs @ (Self::Number(_) | Self::MeasuredNumber(_)), rhs) => Err({
-                BinaryEvalError::TypeMismatch {
-                    expected_type_from_lhs: ExpectedType::matching_value_type_ignoring_number_kind(
-                        &lhs.type_(),
-                    ),
-                    rhs_type: Box::new(rhs.type_()),
-                }
-            }),
-            (lhs, _rhs) => Err(BinaryEvalError::InvalidLhsType {
-                expected_type: ExpectedType::NumberOrMeasuredNumber { number_type: None },
-                lhs_type: Box::new(lhs.type_()),
-            }),
-        }
-    }
-
-    /// Divides the left value by the right value. This does not apply the
-    /// standard rules of interval arithmetic. Instead, it divides the minimum
-    /// by the minimum and the maximum by the maximum.
-    ///
-    /// # Errors
-    ///
-    /// Returns `ValueError::InvalidType` if the right operand is not a number.
-    ///
-    /// Returns `ValueError::InvalidOperation` if the left operand is not a number.
-    pub fn checked_escaped_div(self, rhs: Self) -> Result<Self, BinaryEvalError> {
-        match (self, rhs) {
-            (Self::Number(lhs), Self::Number(rhs)) => Ok(Self::Number(lhs / rhs)),
-            // if any of the numbers is not measured, it is implicitly coerced to a
-            // measured number with unit `1`
-            (Self::Number(lhs), Self::MeasuredNumber(rhs)) => Ok(Self::MeasuredNumber(lhs / rhs)),
-            (Self::MeasuredNumber(lhs), Self::Number(rhs)) => Ok(Self::MeasuredNumber(lhs / rhs)),
-            (Self::MeasuredNumber(lhs), Self::MeasuredNumber(rhs)) => {
-                lhs.checked_escaped_div(rhs).map(Self::MeasuredNumber)
             }
             (lhs @ (Self::Number(_) | Self::MeasuredNumber(_)), rhs) => Err({
                 BinaryEvalError::TypeMismatch {

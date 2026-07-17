@@ -21,8 +21,8 @@ use crate::{
         naming::identifier,
         symbol::{
             bang_equals, bar, caret, colon, comma, dot, equals_equals, greater_than,
-            greater_than_equals, less_than, less_than_equals, minus, minus_minus, paren_left,
-            paren_right, percent, plus, question, slash, slash_slash, star,
+            greater_than_equals, less_than, less_than_equals, minus, paren_left, paren_right,
+            percent, plus, question, slash, star,
         },
     },
     unit::parse as parse_unit,
@@ -104,8 +104,8 @@ pub fn parse_complete(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError>
 /// 4. NOT (`not`)
 /// 5. Comparison (`==`, `!=`, `<`, `<=`, `>`, `>=`)
 /// 6. Min/Max (`|`)
-/// 7. Addition/Subtraction (`+`, `-`, `--`)
-/// 8. Multiplication/Division (`*`, `/`, `//`, `%`)
+/// 7. Addition/Subtraction (`+`, `-`)
+/// 8. Multiplication/Division (`*`, `/`, `%`)
 /// 9. Exponentiation (`^`)
 /// 10. Negation (`-`)
 /// 11. Primary expressions (literals, variables, function calls, parentheses)
@@ -283,7 +283,6 @@ fn additive_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError> {
     let op = alt((
         plus.map(|token| token.into_node_with_value(BinaryOp::Add)),
         minus.map(|token| token.into_node_with_value(BinaryOp::Sub)),
-        minus_minus.map(|token| token.into_node_with_value(BinaryOp::EscapedSub)),
     ))
     .convert_errors();
 
@@ -295,7 +294,6 @@ fn multiplicative_expr(input: InputSpan<'_>) -> Result<'_, ExprNode, ParserError
     let op = alt((
         star.map(|token| token.into_node_with_value(BinaryOp::Mul)),
         slash.map(|token| token.into_node_with_value(BinaryOp::Div)),
-        slash_slash.map(|token| token.into_node_with_value(BinaryOp::EscapedDiv)),
         percent.map(|token| token.into_node_with_value(BinaryOp::Mod)),
     ))
     .convert_errors();
@@ -1040,6 +1038,20 @@ mod tests {
         let result = parse_complete(input);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn escaped_subtraction_is_rejected() {
+        let input = InputSpan::new_extra("5 -- 2", Config::default());
+
+        parse_complete(input).expect_err("escaped subtraction should be rejected");
+    }
+
+    #[test]
+    fn escaped_division_is_rejected() {
+        let input = InputSpan::new_extra("6 // 2", Config::default());
+
+        parse_complete(input).expect_err("escaped division should be rejected");
     }
 
     mod general_error {

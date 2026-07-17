@@ -66,7 +66,7 @@ hljs.registerLanguage("oneil", function (hljs) {
       // operators
       {
         scope: "operator",
-        match: /--|\/\/|<=|>=|==|!=|[+\-*/%^?<>|]/,
+        match: /<=|>=|==|!=|[+\-*/%^?<>|]/,
       },
 
       // function calls

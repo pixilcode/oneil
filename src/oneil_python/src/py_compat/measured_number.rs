@@ -489,48 +489,6 @@ impl PyMeasuredNumber {
         )
     }
 
-    /// Escaped subtraction (min-min, max-max). Raises if units do not match.
-    fn escaped_sub<'py>(
-        &self,
-        other: &Bound<'py, PyAny>,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        if let Some(rhs) = py_any_to_measured_number_exact(other) {
-            let inner = self
-                .inner
-                .clone()
-                .checked_escaped_sub(&rhs)
-                .map_err(binary_eval_error_to_py_err)?;
-            Bound::new(py, Self { inner }).map(|b| b.into_any())
-        } else if self.inner.is_dimensionless()
-            && let Ok(rhs_num) = py_any_to_number(other)
-        {
-            let rhs_mn = MeasuredNumber::from_number_and_unit(rhs_num, Unit::one());
-            let inner = self
-                .inner
-                .clone()
-                .checked_escaped_sub(&rhs_mn)
-                .map_err(binary_eval_error_to_py_err)?;
-            Bound::new(py, Self { inner }).map(|b| b.into_any())
-        } else if self.inner.is_dimensionless() {
-            Err(PyErr::new::<PyValueError, _>("expected number"))
-        } else {
-            Err(PyErr::new::<PyValueError, _>("expected MeasuredNumber"))
-        }
-    }
-
-    /// Escaped division (min/min, max/max). Raises if units do not match.
-    fn escaped_div(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        let rhs = py_any_to_measured_number(other)
-            .ok_or_else(|| PyErr::new::<PyValueError, _>("expected MeasuredNumber"))?;
-
-        self.inner
-            .clone()
-            .checked_escaped_div(rhs)
-            .map(|inner| Self { inner })
-            .map_err(binary_eval_error_to_py_err)
-    }
-
     /// Returns the tightest enclosing interval of this and the other measured number. Raises if units do not match.
     fn min_max<'py>(
         &self,

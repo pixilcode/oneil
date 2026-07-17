@@ -260,20 +260,6 @@ impl PyInterval {
         }
     }
 
-    /// Escaped subtraction (min-min, max-max); not standard interval arithmetic.
-    fn escaped_sub(&self, other: &Bound<'_, Self>) -> Self {
-        Self {
-            inner: self.inner.escaped_sub(other.borrow().inner),
-        }
-    }
-
-    /// Escaped division (min/min, max/max); not standard interval arithmetic.
-    fn escaped_div(&self, other: &Bound<'_, Self>) -> Self {
-        Self {
-            inner: self.inner.escaped_div(other.borrow().inner),
-        }
-    }
-
     fn __add__<'py>(
         &self,
         other: &Bound<'_, PyAny>,

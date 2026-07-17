@@ -212,21 +212,6 @@ impl MeasuredNumber {
         })
     }
 
-    /// Subtracts two dimensional numbers. This does not apply the
-    /// standard rules of interval arithmetic. Instead, it subtracts the minimum
-    /// from the minimum and the maximum from the maximum.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(ValueError::InvalidUnit)` if the dimensions don't match.
-    pub fn checked_escaped_sub(self, rhs: &Self) -> Result<Self, BinaryEvalError> {
-        self.check_units(rhs)?;
-        Ok(Self {
-            normalized_value: self.normalized_value.escaped_sub(rhs.normalized_value),
-            unit: self.unit,
-        })
-    }
-
     /// Multiplies two dimensional numbers.
     ///
     /// # Errors
@@ -247,20 +232,6 @@ impl MeasuredNumber {
     pub fn checked_div(self, rhs: Self) -> Result<Self, BinaryEvalError> {
         Ok(Self {
             normalized_value: self.normalized_value / rhs.normalized_value,
-            unit: self.unit / rhs.unit,
-        })
-    }
-
-    /// Divides two dimensional numbers. This does not apply the
-    /// standard rules of interval arithmetic. Instead, it divides the minimum
-    /// by the minimum and the maximum by the maximum.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(ValueError::InvalidUnit)` if the dimensions don't match.
-    pub fn checked_escaped_div(self, rhs: Self) -> Result<Self, BinaryEvalError> {
-        Ok(Self {
-            normalized_value: self.normalized_value.escaped_div(rhs.normalized_value),
             unit: self.unit / rhs.unit,
         })
     }

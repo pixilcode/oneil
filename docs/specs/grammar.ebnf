@@ -78,9 +78,9 @@ NotExpr = [ "not", ], NotExpr | ComparisonExpr ;
 ComparisonExpr = AdditiveExpr, { ComparisonOp, AdditiveExpr } ;
 ComparisonOp = "<" | ">" | "<=" | ">=" | "==" | "!=" ;
 AdditiveExpr = [ AdditiveExpr, AdditiveOp, ], MultiplicativeExpr ;
-AdditiveOp = "+" | "-" | "--" ;
+AdditiveOp = "+" | "-" ;
 MultiplicativeExpr = [ MultiplicativeExpr, MultiplicativeOp, ], ExponentialExpr ;
-MultiplicativeOp = "*" | "/" | "//" | "%" ;
+MultiplicativeOp = "*" | "/" | "%" ;
 ExponentialExpr = NegExpr, [ "^", ExponentialExpr ] ;  (* right associative *)
 NegExpr = ( "-", NegExpr ) | PrimaryExpr ;
 PrimaryExpr = NumberLiteral | StringLiteral | BooleanLiteral | Identifier [ ".", Identifier ] | FunctionCall | UnitCast | ( "(", Expr, ")" ) ;

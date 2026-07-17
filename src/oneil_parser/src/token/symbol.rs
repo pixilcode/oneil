@@ -168,15 +168,6 @@ pub fn minus(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     .parse(input)
 }
 
-/// Parses the '--' symbol token.
-pub fn minus_minus(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
-    token(
-        tag("--"),
-        TokenError::expected_symbol(ExpectSymbol::MinusMinus),
-    )
-    .parse(input)
-}
-
 /// Parses the '(' symbol token.
 pub fn paren_left(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     token(
@@ -241,15 +232,6 @@ pub fn slash(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
     token(
         char('/').and(next_char_is_not('/')),
         TokenError::expected_symbol(ExpectSymbol::Slash),
-    )
-    .parse(input)
-}
-
-/// Parses the '//' symbol token.
-pub fn slash_slash(input: InputSpan<'_>) -> Result<'_, Token<'_>, TokenError> {
-    token(
-        tag("//"),
-        TokenError::expected_symbol(ExpectSymbol::SlashSlash),
     )
     .parse(input)
 }
@@ -407,26 +389,10 @@ mod tests {
         }
 
         #[test]
-        fn minus_minus_symbol() {
-            let input = InputSpan::new_extra("-- rest", Config::default());
-            let (rest, matched) = minus_minus(input).expect("should parse '--' symbol");
-            assert_eq!(matched.lexeme_str, "--");
-            assert_eq!(rest.fragment(), &"rest");
-        }
-
-        #[test]
         fn star_star_symbol() {
             let input = InputSpan::new_extra("** rest", Config::default());
             let (rest, matched) = star_star(input).expect("should parse '**' symbol");
             assert_eq!(matched.lexeme_str, "**");
-            assert_eq!(rest.fragment(), &"rest");
-        }
-
-        #[test]
-        fn slash_slash_symbol() {
-            let input = InputSpan::new_extra("// rest", Config::default());
-            let (rest, matched) = slash_slash(input).expect("should parse '//' symbol");
-            assert_eq!(matched.lexeme_str, "//");
             assert_eq!(rest.fragment(), &"rest");
         }
 

@@ -61,22 +61,6 @@ impl NormalizedNumber {
         }
     }
 
-    /// Subtracts two normalized numbers. This does not apply the
-    /// standard rules of interval arithmetic. Instead, it subtracts the minimum
-    /// from the minimum and the maximum from the maximum.
-    #[must_use]
-    pub fn escaped_sub(self, rhs: Self) -> Self {
-        Self(self.0.escaped_sub(rhs.0))
-    }
-
-    /// Divides two normalized numbers. This does not apply the
-    /// standard rules of interval arithmetic. Instead, it divides the minimum
-    /// by the minimum and the maximum by the maximum.
-    #[must_use]
-    pub fn escaped_div(self, rhs: Self) -> Self {
-        Self(self.0.escaped_div(rhs.0))
-    }
-
     /// Raises a normalized number to the power of another.
     #[must_use]
     pub fn pow(self, exponent: Number) -> Self {

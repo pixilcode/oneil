@@ -229,10 +229,8 @@ fn resolve_binary_op(op: &ast::BinaryOpNode) -> ir::BinaryOp {
     match &**op {
         ast::BinaryOp::Add => ir::BinaryOp::Add,
         ast::BinaryOp::Sub => ir::BinaryOp::Sub,
-        ast::BinaryOp::EscapedSub => ir::BinaryOp::EscapedSub,
         ast::BinaryOp::Mul => ir::BinaryOp::Mul,
         ast::BinaryOp::Div => ir::BinaryOp::Div,
-        ast::BinaryOp::EscapedDiv => ir::BinaryOp::EscapedDiv,
         ast::BinaryOp::Mod => ir::BinaryOp::Mod,
         ast::BinaryOp::Pow => ir::BinaryOp::Pow,
         ast::BinaryOp::And => ir::BinaryOp::And,
@@ -867,10 +865,8 @@ mod tests {
         let operations = vec![
             (ast::BinaryOp::Add, ir::BinaryOp::Add),
             (ast::BinaryOp::Sub, ir::BinaryOp::Sub),
-            (ast::BinaryOp::EscapedSub, ir::BinaryOp::EscapedSub),
             (ast::BinaryOp::Mul, ir::BinaryOp::Mul),
             (ast::BinaryOp::Div, ir::BinaryOp::Div),
-            (ast::BinaryOp::EscapedDiv, ir::BinaryOp::EscapedDiv),
             (ast::BinaryOp::Mod, ir::BinaryOp::Mod),
             (ast::BinaryOp::Pow, ir::BinaryOp::Pow),
             (ast::BinaryOp::And, ir::BinaryOp::And),

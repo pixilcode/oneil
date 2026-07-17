@@ -139,11 +139,6 @@ Arithmetic and comparison: `+`, `-`, `*`, `/`, `%`, `**`, unary `+`/`-`, and `==
 
 Math methods (return new `Interval`): **`sqrt`**, **`ln`**, **`log10`**, **`log2`**, **`abs`**, **`sign`**, **`sin`**, **`cos`**, **`tan`**, **`asin`**, **`acos`**, **`atan`**, **`floor`**, **`ceiling`**, **`pow(exponent)`** (exponent is an `Interval`).
 
-Specialized (interval) operations:
-
-- **`escaped_sub(other)`** — subtract using (min−min, max−max).
-- **`escaped_div(other)`** — divide using (min/min, max/max).
-
 ---
 
 ## `oneil.MeasuredNumber`
@@ -172,7 +167,6 @@ Other:
 
 - **`min()`**, **`max()`** — minimum/maximum as measured numbers.
 - **`min_max(other)`** — tightest enclosing measured number of this and `other`.
-- **`escaped_sub(other)`**, **`escaped_div(other)`** — escaped subtraction and division (units must match).
 
 ---
 

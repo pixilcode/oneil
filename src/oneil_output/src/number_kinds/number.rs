@@ -68,40 +68,6 @@ impl Number {
         }
     }
 
-    /// Subtracts two number values. This does not apply the
-    /// standard rules of interval arithmetic. Instead, it subtracts the minimum
-    /// from the minimum and the maximum from the maximum.
-    #[must_use]
-    pub fn escaped_sub(self, rhs: Self) -> Self {
-        match (self, rhs) {
-            (Self::Scalar(lhs), Self::Scalar(rhs)) => Self::Scalar(lhs - rhs),
-            (Self::Scalar(lhs), Self::Interval(rhs)) => {
-                Self::Interval(Interval::from(lhs).escaped_sub(rhs))
-            }
-            (Self::Interval(lhs), Self::Scalar(rhs)) => {
-                Self::Interval(lhs.escaped_sub(Interval::from(rhs)))
-            }
-            (Self::Interval(lhs), Self::Interval(rhs)) => Self::Interval(lhs.escaped_sub(rhs)),
-        }
-    }
-
-    /// Divides two number values. This does not apply the
-    /// standard rules of interval arithmetic. Instead, it divides the minimum
-    /// by the minimum and the maximum by the maximum.
-    #[must_use]
-    pub fn escaped_div(self, rhs: Self) -> Self {
-        match (self, rhs) {
-            (Self::Scalar(lhs), Self::Scalar(rhs)) => Self::Scalar(lhs / rhs),
-            (Self::Scalar(lhs), Self::Interval(rhs)) => {
-                Self::Interval(Interval::from(lhs).escaped_div(rhs))
-            }
-            (Self::Interval(lhs), Self::Scalar(rhs)) => {
-                Self::Interval(lhs.escaped_div(Interval::from(rhs)))
-            }
-            (Self::Interval(lhs), Self::Interval(rhs)) => Self::Interval(lhs.escaped_div(rhs)),
-        }
-    }
-
     /// Raises a number value to the power of another.
     #[must_use]
     pub fn pow(self, exponent: Self) -> Self {

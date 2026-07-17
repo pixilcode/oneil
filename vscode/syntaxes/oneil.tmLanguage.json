@@ -296,7 +296,7 @@
       "patterns": [
         {
           "name": "keyword.operator.oneil",
-          "match": "--|//|<=|>=|==|!="
+          "match": "<=|>=|==|!="
         },
         {
           "name": "keyword.operator.oneil",

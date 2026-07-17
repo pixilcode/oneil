@@ -284,7 +284,7 @@ the implementation code.
 
 <!-- TODO: figure out the best way to make these details accessible -->
 
-#### Escaping the interval arithmetic implementation
+#### Interval precision
 
 Oneil's implementation of interval arithmetic intends to be arithmetically correct.
 That is to say, if you were to replace every interval in an expression with a value
@@ -305,20 +305,11 @@ it isn't as precise as we would expect.
 This problem is known as the
 [dependency problem](https://en.wikipedia.org/wiki/Interval_arithmetic#Dependency_problem).
 
-If more precision is needed (such as in geometry, where relationships such as `a - a = 0`
-are important), you can "escape" interval arithmetic using `min(i)` and
-`max(i)` functions, which get the minimum and maximum values of an interval. This allows
-users to operate on scalar values until they are ready to return to interval arithmetic
-using the bar operator. For example, instead of `a - a`, a user could use
-`min(a) - min(a) | max(a) - max(a)` in order to get a more precise result.
-
-To simplify this escape, Oneil provides the `--` and `//` operators,
-which behave as follows:
-
-| Operator | Equivalent To                        |
-|----------|--------------------------------------|
-| `a -- b` | `min(a) - min(b) \| max(a) - max(b)` |
-| `a // b` | `min(a) / min(b) \| max(a) / max(b)` |
+If more precision is needed (such as in geometry, where relationships such as
+`a - a = 0` are important), use `min(i)` and `max(i)` to operate on scalar
+bounds until returning to interval arithmetic with the bar operator. For
+example, instead of `a - a`, use
+`min(a) - min(a) | max(a) - max(a)` to get a more precise result.
 
 #### Comparison
 

@@ -67,7 +67,7 @@ For more detail on interval operators, see the
 [interval arithmetic paper review](../../research/2025-11-13-interval-arithmetic-paper-review.md)
 or the implementation in the codebase.
 
-### Escaping and relationships
+### Precision and relationships
 
 Oneil’s interval arithmetic aims to satisfy the
 [_inclusion property_](../../research/2025-11-13-interval-arithmetic-paper-review.md#inclusion-property):
@@ -82,17 +82,9 @@ a` to be `0` for any `a`. If `a` is `0 | 1`, interval subtraction yields `-1 |
 [dependency problem](https://en.wikipedia.org/wiki/Interval_arithmetic#Dependency_problem).
 
 When you need tighter results (for example in geometry, where identities like
-`a - a = 0` matter), you can leave “pure” interval arithmetic by using
-`min(i)` and `max(i)` to work on scalars, then build a new interval with `|`.
-For instance, instead of `a - a`, you can use
+`a - a = 0` matter), use `min(i)` and `max(i)` to work on scalar bounds, then
+build a new interval with `|`. For instance, instead of `a - a`, use
 `min(a) - min(a) | max(a) - max(a)`.
-
-For common cases, Oneil provides `--` and `//`:
-
-| Operator | Equivalent to                        |
-|----------|--------------------------------------|
-| `a -- b` | `min(a) - min(b) \| max(a) - max(b)` |
-| `a // b` | `min(a) / min(b) \| max(a) / max(b)` |
 
 ## Comparison Operators
 

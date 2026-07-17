@@ -124,8 +124,6 @@ pub enum ExpectSymbol {
     LessThanEquals,
     /// Expected '-' symbol
     Minus,
-    /// Expected '--' symbol
-    MinusMinus,
     /// Expected '(' symbol
     ParenLeft,
     /// Expected ')' symbol
@@ -142,8 +140,6 @@ pub enum ExpectSymbol {
     StarStar,
     /// Expected '/' symbol
     Slash,
-    /// Expected '//' symbol
-    SlashSlash,
 }
 
 /// The different kinds of incomplete input that could have been expected

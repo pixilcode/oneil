@@ -211,14 +211,10 @@ pub enum BinaryOp {
     Add,
     /// Subtraction operator (-)
     Sub,
-    /// Escaped subtraction operator (--)
-    EscapedSub,
     /// Multiplication operator (*)
     Mul,
     /// Division operator (/)
     Div,
-    /// Escaped division operator (//)
-    EscapedDiv,
     /// Modulo operator (%)
     Mod,
     /// Power operator (**)
@@ -247,12 +243,6 @@ impl BinaryOp {
         Self::Sub
     }
 
-    /// Creates an escaped subtraction operator
-    #[must_use]
-    pub const fn escaped_sub() -> Self {
-        Self::EscapedSub
-    }
-
     /// Creates a multiplication operator
     #[must_use]
     pub const fn mul() -> Self {
@@ -263,12 +253,6 @@ impl BinaryOp {
     #[must_use]
     pub const fn div() -> Self {
         Self::Div
-    }
-
-    /// Creates an escaped division operator
-    #[must_use]
-    pub const fn escaped_div() -> Self {
-        Self::EscapedDiv
     }
 
     /// Creates a modulo operator
