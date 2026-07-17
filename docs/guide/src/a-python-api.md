@@ -177,7 +177,7 @@ Represents a dimensional unit (dimensions, magnitude, optional decibel flag, and
 ### `oneil.Unit` constructor
 
 - **`Unit(*, dimensions=None, magnitude=None, is_db=None, display_unit)`**  
-  - **`dimensions`** — optional dict mapping dimension keys to exponents (e.g. `{"m": 1, "s": -1}`). Valid keys: `"kg"`, `"m"`, `"s"`, `"K"`, `"A"`, `"b"`, `"$"`, `"mol"`, `"cd"`.
+  - **`dimensions`** — optional dict mapping dimension keys to exponents (e.g. `{"m": 1, "s": -1}`). Valid keys: `"kg"`, `"m"`, `"s"`, `"K"`, `"A"`, `"b"`, `"$"`, `"mol"`, `"cd"`, `"cycle"`.
   - **`magnitude`** — optional scale (default 1.0).
   - **`is_db`** — optional decibel flag (default `False`).
   - **`display_unit`** — required string used as the display name (single unit, exponent 1).

@@ -169,17 +169,17 @@ Units are specified after a second colon with the "^" operator for exponents and
 ``` { .on }
 Mass (0, 100000000): m = 1e6 :kg
 Cylinder diameter: D = 0.5 :km
-Angular position: theta_p = pi/2
+Angular position: theta_p = pi/2 :rad
 Window count: n_w = 20
 Rotation rate: omega = 1 :deg/min
 Amplifier efficiency (0, 1): eta = 0.5|0.7
 Boltzmann's constant: C_b = 1.380649e-23 :m^2*kg/s^2/K
 Cylinder radius: r = D/2 :km
-Artificial gravity: g_a = r*omega^2 :m/s^2
+Artificial gravity: g_a = r*(omega/(1:rad))^2 :m/s^2
 Temperature: T = temperature(D) :K
 ```
 
-You can review supported units using the [CLI builtin units command](#builtins). If a unit isn't supported, you can specify it in terms of base units: `kg`, `m`, `s`, `K`, `A`, `b`, `$`.
+You can review supported units using the [CLI builtin units command](#builtins). If a unit isn't supported, you can specify it in terms of base units: `kg`, `m`, `s`, `K`, `A`, `b`, `$`, `mol`, `cd`, and `cycle`.
 
 Oneil supports `dB` as a nonlinear display unit. When any unit is specified with prefix `dB`, Oneil internally converts the parameter to the corresponding linear value, performs all calculations in linear terms, and reconverts the value to dB for display. This means that equations that contain parameters with dB units should use linear math. For example, when calculating the signal to noise ratio by hand, you might subtract the noise (dB) from the signal (dB), but in oneil, you divide the signal by the noise:
 
@@ -192,7 +192,9 @@ Signal-to-noise ratio: S_N = P_s/P_n
 While [limits](#preamble-syntax) are typically specified in the parameter's units, limits only support linear values. Parameters with dB units should typically not specify a limit (other than the default 0-inf) since negative linear values would lead to imaginary dB values.
 
 > [!IMPORTANT]
-> Oneil handles nearly all unit conversion in the background, but there is a [major exception with frequencies (Hz) and angular frequencies (rad/s)](#something-funny-is-happening-with-angular-frequencies-and-frequencies).
+> Rotation is a distinct dimension whose base unit is the cycle. Therefore, `Hz`
+> is equivalent to `cycle/s`, while `rad/s` is automatically converted using
+> `1 cycle = 2*pi rad`.
 
 ### Arithmetic
 
@@ -670,11 +672,13 @@ Adhere to the following best practices in Oneil:
 
 ## Troubleshooting
 
-### Something funny is happening with angular frequencies and frequencies
+### Frequencies and angular frequencies
 
-The funny thing about Hz and rad/s is that `1 Hz != 1 rad/s` even though `1 Hz = 1/s` and `1 rad/s = 1/s`. You can [thank the International System of Units for this madness](https://iopscience.iop.org/article/10.1088/1681-7575/ac0240). To escape this, Oneil doesn't recognize the SI definition of Hz. If you specify Hz as a unit, Oneil will internally convert it to rad/s by multiplying by 2 pi. If you want to use a frequency in an equation that expects Hz, you need to make sure the equation converts your frequency (rad/s) to Hz. For example, instead of `c=lambda*f` for the speed of light, you would use `c=lambda*f/(2*pi)`.
-
-> As a side note, some people have suggested that this problem is solved if you use `cycles` as a base unit and let `Hz = 1 cycle/s`, but this quickly becomes messy as cycles will get propagated throughout your model where you don't want it. It's much cleaner to convert rad/s to Hz in equations that expect it.
+Oneil tracks rotation as a dimension with `cycle` as its base unit. This makes
+`1 Hz` equal to `1 cycle/s` and `2*pi rad/s`. Hertz and radians per second are
+compatible and convert automatically, but neither is compatible with `1/s`.
+Quantities such as wavelength therefore retain the rotation dimension:
+`(c/f)` has units of distance per cycle.
 
 ### TexMaker works, but VS Code doesn't
 

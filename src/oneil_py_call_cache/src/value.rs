@@ -94,12 +94,12 @@ pub struct Interval {
     pub max: f64,
 }
 
-/// Physical dimensions as exponents on base SI symbols (e.g. `m`, `kg`, `s`).
+/// Physical dimensions as exponents on base unit symbols (e.g. `m`, `kg`, `cycle`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Unit {
     /// Dimension exponents keyed by base unit symbol.
     pub dimensions: BTreeMap<String, f64>,
-    /// Overall scale factor relative to the dimensioned SI form.
+    /// Overall scale factor relative to the dimensioned base-unit form.
     pub magnitude: f64,
     /// Whether this quantity uses decibel representation.
     pub is_db: bool,
@@ -265,6 +265,7 @@ const fn dimension_to_cache_key(dim: Dimension) -> &'static str {
         Dimension::Currency => "$",
         Dimension::Substance => "mol",
         Dimension::LuminousIntensity => "cd",
+        Dimension::Rotation => "cycle",
     }
 }
 
@@ -280,6 +281,7 @@ fn cache_key_to_dimension(key: &str) -> Result<Dimension, CacheValueConversionEr
         "$" => Ok(Dimension::Currency),
         "mol" => Ok(Dimension::Substance),
         "cd" => Ok(Dimension::LuminousIntensity),
+        "cycle" => Ok(Dimension::Rotation),
         _ => Err(CacheValueConversionError::UnknownDimension {
             key: key.to_string(),
         }),
@@ -359,6 +361,16 @@ mod tests {
         let c = CacheValue::from(v.clone());
         let back = Value::from(c);
         assert_eq!(back, v);
+    }
+
+    #[test]
+    fn rotation_dimension_cache_key_round_trip() {
+        let key = dimension_to_cache_key(Dimension::Rotation);
+        assert_eq!(key, "cycle");
+        assert_eq!(
+            cache_key_to_dimension(key).expect("rotation dimension"),
+            Dimension::Rotation
+        );
     }
 
     #[test]

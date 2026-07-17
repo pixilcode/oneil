@@ -21,7 +21,7 @@ impl PyUnit {
     /// Creates a unit from keyword arguments.
     ///
     /// - `dimensions`: optional dict mapping dimension keys to exponents (str -> float).
-    ///   Valid keys: `"kg"`, `"m"`, `"s"`, `"K"`, `"A"`, `"b"`, `"$"`, `"mol"`, `"cd"`.
+    ///   Valid keys: `"kg"`, `"m"`, `"s"`, `"K"`, `"A"`, `"b"`, `"$"`, `"mol"`, `"cd"`, `"cycle"`.
     /// - `magnitude`: optional magnitude (default 1.0).
     /// - `is_db`: optional decibel flag (default false).
     /// - `display_unit`: required display name (used as a single unit with exponent 1).
@@ -70,7 +70,7 @@ impl PyUnit {
 
     /// Returns the dimensions as a dict mapping dimension keys to exponents (str -> float).
     ///
-    /// Keys are the same as for the constructor: `"kg"`, `"m"`, `"s"`, `"K"`, `"A"`, `"b"`, `"$"`, `"mol"`, `"cd"`.
+    /// Keys are the same as for the constructor: `"kg"`, `"m"`, `"s"`, `"K"`, `"A"`, `"b"`, `"$"`, `"mol"`, `"cd"`, `"cycle"`.
     fn get_dimensions<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
 
@@ -214,6 +214,7 @@ fn dimension_from_key(key: &str) -> Option<Dimension> {
         "$" => Some(Dimension::Currency),
         "mol" => Some(Dimension::Substance),
         "cd" => Some(Dimension::LuminousIntensity),
+        "cycle" => Some(Dimension::Rotation),
         _ => None,
     }
 }
@@ -230,6 +231,7 @@ const fn dimension_to_key(dim: Dimension) -> &'static str {
         Dimension::Currency => "$",
         Dimension::Substance => "mol",
         Dimension::LuminousIntensity => "cd",
+        Dimension::Rotation => "cycle",
     }
 }
 

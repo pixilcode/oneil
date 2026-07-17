@@ -50,8 +50,9 @@ depending on the context. For more details, see the implementation in
 ## Unit Handling
 
 Numbers in Oneil are represented as a `MeasuredNumber`, which has a `Unit` and
-a `Number`. A unit is a map of 7 dimensions, as defined in the `Dimension` enum
-in [`value/unit.rs`](src/value/unit.rs), with associated *base units*.
+a `Number`. A unit is a map of dimensions, as defined in the `Dimension` enum
+in [`oneil_output/src/unit.rs`](../oneil_output/src/unit.rs), with associated
+*base units*.
 
 | Dimension                      | Base Unit |
 |--------------------------------|-----------|
@@ -64,6 +65,7 @@ in [`value/unit.rs`](src/value/unit.rs), with associated *base units*.
 | `Dimension::Currency`          | USD       |
 | `Dimension::Substance`         | mole      |
 | `Dimension::LuminousIntensity` | candela   |
+| `Dimension::Rotation`          | cycle     |
 
 The unit map associates each `Dimension` with an `f64` that represents the
 exponent value. So, for example, the dimension `kg*m/s^2` would be

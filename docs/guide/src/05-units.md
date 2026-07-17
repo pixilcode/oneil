@@ -51,12 +51,13 @@ unit.
 - currency: `$` (USD)
 - substance: `mole`
 - luminous intensity: `candela`
+- rotation: `cycle`
 
 _Base units_ convey a single dimension, like the unit `kilometer` with its
 dimension `distance`. Derived units convey 0 to many dimensions, like the unit
-`degree` which is dimensionless or the unit `Joule` with its dimensions of of
-`mass`, `distance^2`, and `time^-2`. Dimensionless units are discussed in more
-detail [later in this chapter](#dimensionless-units).
+`percent` which is dimensionless or the unit `Joule` with its
+dimensions of `mass`, `distance^2`, and `time^-2`. Dimensionless units are
+discussed in more detail [later in this chapter](#dimensionless-units).
 
 Each unit has 0 or more dimensions associated with it. The kilometer is defined
 as having a dimension of `distance`, while a `Joule` would have the dimensions
@@ -485,42 +486,34 @@ oneil eval empty.on \
 
 ### Angular Units
 
-The lack of distinction between dimensionless values and unitless values is
-especially important when it comes to units involving _radians_. The
-International System of Units treats radians as dimensionless, and Oneil has
-opted to follow this convention. Therefore, all angular units (such as
-`radians`, `degrees`, and `revolutions`) are specified in radians. Therefore,
-when adding a unitless number to an angular value, the unitless number is
-treated as if it is specified in `radians`.
+Angular units use the `rotation` dimension, whose base unit is the `cycle`.
+Radians, degrees, and revolutions are compatible units of rotation, but they
+are not compatible with unitless values. One full cycle equals `2*pi` radians
+or 360 degrees.
 
 ```bash
 oneil eval empty.on \
-  -x "(1:rad) == 1" \
-  -x "(360:deg) == 2*pi" \
-  -x "(1:rad) + 1" \
-  -x "(360:deg) + 2*pi"
+  -x "(1:cycle) == (2*pi:rad)" \
+  -x "(360:deg) == (2*pi:rad)" \
+  -x "((1:cycle) :deg)"
 ```
 
 ```oneil-eval-output
-(1:rad) == 1 = true
-(360:deg) == 2*pi = true
-(1:rad) + 1 = 2
-(360:deg) + 2*pi = 720 :deg
+(1:cycle) == (2*pi:rad) = true
+(360:deg) == (2*pi:rad) = true
+((1:cycle) :deg) = 360 :deg
 ```
 
-## `Hz` and `rad/s`
+Trigonometric functions accept rotation values and convert them to radians
+before evaluation. Inverse trigonometric functions return radians.
 
-There is one place where Oneil's automatic conversions might cause confusion.
-That is with the `Hz` unit. In order to solve the problem described
-[in this article](https://iopscience.iop.org/article/10.1088/1681-7575/ac0240)
-and make `Hz` compatible with `rad/s`, Oneil defines `Hz` as
+## `Hz`, `cycle/s`, and `rad/s`
+
+Oneil defines Hertz in terms of the rotation dimension:
 
 ```text
 1 Hz == 1 cycle/s == 2*pi rad/s.
 ```
-
-Note that both `cycles` and `radians` are both dimensionless values, but
-`1 cycle == 2*pi radians`.
 
 ```oneil
 # freq.on
@@ -540,17 +533,16 @@ f = 1 :Hz
 (f :rad/s) = 6.283 :rad/s
 ```
 
-By default, Oneil treats dimensionless values as if they are in `radians`.
-Because of this, anytime you would like dimensionless values to be in `cycles`,
-you need to manually convert from `radians` to `cycles` by dividing by `2*pi`.
+Because rotation is a distinct dimension, `Hz` is not compatible with `1/s`.
+Equations that consume a frequency must account for its rotation dimension.
+For example, wavelength is distance per cycle:
 
 ```oneil
 # freq2.on
 Frequency: f = 5 :GHz
 Speed of light: c = 299792458 :m/s
 
-$ Wavelength: lambda = c/(f/2*pi) :cm
-#                          ^^^^^ Need to divide by 2*pi to convert radians to cycles
+$ Wavelength: lambda = c/f :cm/cycle
 ```
 
 ```bash
@@ -558,5 +550,5 @@ oneil eval freq2.on
 ```
 
 ```oneil-eval-output
-lambda = 0.6075 :cm  # Wavelength
+lambda = 5.996 :cm/cycle  # Wavelength
 ```

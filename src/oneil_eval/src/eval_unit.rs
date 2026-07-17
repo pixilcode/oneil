@@ -343,11 +343,17 @@ mod test {
             // check sized unit
             // dBW: Mass, Distance^2, Time^-3
             // m^-2: Distance^-2
-            // Hz^-1: Time^1 (since Hz has Time^-1)
-            // Result: Mass, Time^-2
-            // Magnitude: 1 / (2π) because Hz has magnitude 2π, so Hz^-1 contributes 1/(2π)
-            assert_is_close!(1.0 / (2.0 * PI), unit.magnitude);
-            assert_units_dimensionally_eq!([(Dimension::Mass, 1.0), (Dimension::Time, -2.0)], unit);
+            // Hz^-1: Rotation^-1, Time^1
+            // Result: Mass, Time^-2, Rotation^-1
+            assert_is_close!(1.0, unit.magnitude);
+            assert_units_dimensionally_eq!(
+                [
+                    (Dimension::Mass, 1.0),
+                    (Dimension::Time, -2.0),
+                    (Dimension::Rotation, -1.0)
+                ],
+                unit
+            );
             assert!(unit.is_db);
         }
 
@@ -394,9 +400,11 @@ mod test {
             let (unit, _unit_span) = eval_unit(&ir_unit, &context);
 
             // check sized unit
-            // Hz has magnitude 2π, so GHz = 1e9 * 2π
-            assert_is_close!(1e9 * (2.0 * PI), unit.magnitude);
-            assert_units_dimensionally_eq!([(Dimension::Time, -1.0)], unit);
+            assert_is_close!(1e9, unit.magnitude);
+            assert_units_dimensionally_eq!(
+                [(Dimension::Rotation, 1.0), (Dimension::Time, -1.0)],
+                unit
+            );
             assert!(!unit.is_db);
         }
 
@@ -411,9 +419,11 @@ mod test {
             let (unit, _unit_span) = eval_unit(&ir_unit, &context);
 
             // check sized unit
-            // Hz has magnitude 2π, so kHz = 1e3 * 2π
-            assert_is_close!(1e3 * (2.0 * PI), unit.magnitude);
-            assert_units_dimensionally_eq!([(Dimension::Time, -1.0)], unit);
+            assert_is_close!(1e3, unit.magnitude);
+            assert_units_dimensionally_eq!(
+                [(Dimension::Rotation, 1.0), (Dimension::Time, -1.0)],
+                unit
+            );
             assert!(!unit.is_db);
         }
 
@@ -428,9 +438,11 @@ mod test {
             let (unit, _unit_span) = eval_unit(&ir_unit, &context);
 
             // check sized unit
-            // Hz has magnitude 2π, so MHz = 1e6 * 2π
-            assert_is_close!(1e6 * (2.0 * PI), unit.magnitude);
-            assert_units_dimensionally_eq!([(Dimension::Time, -1.0)], unit);
+            assert_is_close!(1e6, unit.magnitude);
+            assert_units_dimensionally_eq!(
+                [(Dimension::Rotation, 1.0), (Dimension::Time, -1.0)],
+                unit
+            );
             assert!(!unit.is_db);
         }
 
@@ -684,9 +696,12 @@ mod test {
             let (unit, _unit_span) = eval_unit(&ir_unit, &context);
 
             // check sized unit
-            // rpm has magnitude 2π/60 (radians per second)
-            assert_is_close!(2.0 * PI / 60.0, unit.magnitude);
-            assert_units_dimensionally_eq!([(Dimension::Time, -1.0)], unit);
+            // rpm has magnitude 1/60 (cycles per second)
+            assert_is_close!(1.0 / 60.0, unit.magnitude);
+            assert_units_dimensionally_eq!(
+                [(Dimension::Rotation, 1.0), (Dimension::Time, -1.0)],
+                unit
+            );
             assert!(!unit.is_db);
         }
 
@@ -701,9 +716,9 @@ mod test {
             let (unit, _unit_span) = eval_unit(&ir_unit, &context);
 
             // check sized unit
-            // deg is dimensionless with magnitude π/180 (conversion to radians)
-            assert_is_close!(PI / 180.0, unit.magnitude);
-            assert_units_dimensionally_eq!([], unit);
+            // deg has magnitude 1/360 (conversion to cycles)
+            assert_is_close!(1.0 / 360.0, unit.magnitude);
+            assert_units_dimensionally_eq!([(Dimension::Rotation, 1.0)], unit);
             assert!(!unit.is_db);
         }
 
@@ -1093,19 +1108,38 @@ mod test {
         }
 
         #[test]
-        fn eval_hertz_are_per_second() {
+        fn eval_hertz_are_cycles_per_second() {
             let hertz_unit = ir_composite_unit([UnitSpec::new(Some("Hz"), None, false, 1.0)]);
+            let cycles_per_second_unit = ir_composite_unit([
+                UnitSpec::new(Some("cycle"), None, false, 1.0),
+                UnitSpec::new(Some("s"), None, false, -1.0),
+            ]);
             let per_second_unit = ir_composite_unit([UnitSpec::new(Some("s"), None, false, -1.0)]);
             let mut external = TestExternalContext::new();
             let context = EvalContext::new(&mut external);
 
             let (hertz_unit, _) = eval_unit(&hertz_unit, &context);
+            let (cycles_per_second_unit, _) = eval_unit(&cycles_per_second_unit, &context);
             let (per_second_unit, _) = eval_unit(&per_second_unit, &context);
 
-            assert_is_close!(per_second_unit.magnitude, hertz_unit.magnitude / (2.0 * PI));
-            assert!(hertz_unit.dimensionally_eq(&per_second_unit));
+            assert!(hertz_unit.numerically_eq(&cycles_per_second_unit));
+            assert!(!hertz_unit.dimensionally_eq(&per_second_unit));
             assert!(!hertz_unit.is_db);
-            assert!(!per_second_unit.is_db);
+        }
+
+        #[test]
+        fn eval_cycle_is_one_full_rotation() {
+            let cycle_unit = ir_composite_unit([UnitSpec::new(Some("cycle"), None, false, 1.0)]);
+            let radian_unit = ir_composite_unit([UnitSpec::new(Some("rad"), None, false, 1.0)]);
+            let mut external = TestExternalContext::new();
+            let context = EvalContext::new(&mut external);
+
+            let (cycle_unit, _) = eval_unit(&cycle_unit, &context);
+            let (radian_unit, _) = eval_unit(&radian_unit, &context);
+
+            assert_is_close!(1.0, cycle_unit.magnitude);
+            assert_is_close!(1.0 / (2.0 * PI), radian_unit.magnitude);
+            assert!(cycle_unit.dimensionally_eq(&radian_unit));
         }
     }
 }

@@ -175,6 +175,8 @@ pub enum Dimension {
     Substance,
     /// Base unit is 'candela'
     LuminousIntensity,
+    /// Base unit is 'cycle'
+    Rotation,
 }
 
 /// A map of dimensions and their exponents.

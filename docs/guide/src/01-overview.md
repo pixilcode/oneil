@@ -71,7 +71,7 @@ Any value between `min` and `max` is a valid parameter value.
 
 ```oneil
 Battery efficiency (0, 1): eta = 0.90
-Azimuth look angle (0, 2*pi): psi = pi
+Azimuth look angle (0, 2*pi): psi = pi :rad
 ```
 
 Discrete limits are specified with the syntax `[value1, ..., valueN]`. Only the
@@ -95,7 +95,7 @@ Cylinder radius: r = d/2 :km
 
     ~ Distance from the center to the inner rim.
 
-Artificial gravity: g_a = r*omega^2 :m/s^2
+Artificial gravity: g_a = r*(omega/(1:rad))^2 :m/s^2
 
     ~~~
     The position of a point on the rim of a rotating cylinder is:
