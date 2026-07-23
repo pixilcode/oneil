@@ -51,6 +51,20 @@ test: V <= V_max
     ~ Pack voltage must stay within the bus limit
 ```
 
+## Roadmap
+
+* [ ] LSP: Go to references
+* [ ] LSP: Rename
+* [ ] LSP: Document highlighting
+* [ ] Typed python imports
+  * Allows for type checking to be seperate from evaluation
+  * Don't need to carry around unit information during evaluation
+* [ ] Separate type checking and evaluation
+* [ ] "Designs" redesign
+* [ ] "use" -> "submodel"
+* [ ] Remove references?
+* [ ] Custom dimensions
+
 ## Contributing
 
 If you've found a bug or would like to request a feature, feel free to [submit an issue](https://github.com/careweather/oneil/issues)!
