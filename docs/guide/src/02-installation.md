@@ -16,7 +16,7 @@ Optional, for full functionality:
   - Install on Fedora/RHEL: `sudo dnf install python3-devel`
   - Install on Debian/Ubuntu: `sudo apt install python3-dev`
 
-## Option 1: Download a release from GitHub (NOT AVAILABLE YET)
+## Option 1: Download a release from GitHub
 
 Pre-built binaries are published on the [Releases](https://github.com/careweather/oneil/releases) page for:
 
