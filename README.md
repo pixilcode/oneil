@@ -9,6 +9,20 @@ Traditional approaches to system engineering are too cumbersome for non-system e
 
 Oneil enables specification of a system *model*, which is a collection of *parameters*, or attributes of the system. The model can be used to evaluate any corresponding *design* (which is a collection of value assignments for the parameters of the model).
 
+## Features
+
+Oneil makes it easier than ever to build, debug, explore, and version-control models and designs of complex systems.
+
+* Fully-updated design with every modification (no more passing results back and forth)
+* Seamless background unit handling (say goodbye to conversions).
+* Single source of truth for equations (united documentation and code).
+* Automatic calculation of extreme range of possibilities.
+* Built-in tests and reality checks.
+* Python extensibility.
+* VSCode highlighting and linting.
+
+To learn more about how to write syntax, see [the guide](https://pixilcode.github.io/oneil/).
+
 ## Examples
 
 A model is a list of parameters. Independent parameters hold values (with optional units); dependent parameters are equations that reference other parameters:
@@ -36,20 +50,6 @@ $ Pack voltage: V = n * V_cell :V
 test: V <= V_max
     ~ Pack voltage must stay within the bus limit
 ```
-
-## Features
-
-Oneil makes it easier than ever to build, debug, explore, and version-control models and designs of complex systems.
-
-* Fully-updated design with every modification (no more passing results back and forth)
-* Seamless background unit handling (say goodbye to conversions).
-* Single source of truth for equations (united documentation and code).
-* Automatic calculation of extreme range of possibilities.
-* Built-in tests and reality checks.
-* Python extensibility.
-* VSCode highlighting and linting.
-
-To learn more about how to write syntax, see [the guide](https://pixilcode.github.io/oneil/).
 
 ## Contributing
 
